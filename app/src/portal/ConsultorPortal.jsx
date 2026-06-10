@@ -13,7 +13,8 @@ export default function ConsultorPortal() {
   ];
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
-      <h1 className="text-3xl font-extrabold tracking-tight">Zona de consultores</h1>
+      <p className="eyebrow">Operaciones Consultify</p>
+      <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Zona de consultores</h1>
       <nav className="mt-6 flex gap-6 border-b border-navy-100 text-sm">
         {tabs.map(t => (
           <NavLink key={t.to} to={t.to} end={t.end} className={({isActive}) => `pb-3 ${isActive ? 'tab-active' : 'tab-idle'}`}>{t.label}</NavLink>

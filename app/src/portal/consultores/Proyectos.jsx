@@ -4,7 +4,7 @@ import { NORMAS, NORMA_BY_ID, MODELO_IDS, calcular, fmtEUR } from '../../lib/cal
 
 const ESTADOS = ['implantación', 'activo', 'pausado', 'cerrado'];
 const COLOR_ESTADO = { activo: 'bg-green-100 text-green-800', 'implantación': 'bg-brand-orange/20 text-brand-orangeDark', pausado: 'bg-navy-100 text-navy-500', cerrado: 'bg-navy-50 text-navy-300' };
-const VACIO = { cliente_id: '', normas: [], modelo: 'Implicación', consultor_id: '', estado: 'implantación', fecha_inicio: '', fecha_auditoria: '', notas: '' };
+const VACIO = { cliente_id: '', normas: ['9001'], modelo: 'Implicación', consultor_id: '', estado: 'implantación', fecha_inicio: '', fecha_auditoria: '', notas: '' };
 
 export default function Proyectos() {
   const [proyectos, setProyectos] = useState(null);
@@ -86,15 +86,16 @@ export default function Proyectos() {
           </div>
 
           <div>
-            <p className="label">Normas del proyecto</p>
+            <p className="label">Normas del proyecto <span className="normal-case text-navy-300">(ISO 9001 siempre incluida)</span></p>
             <div className="flex flex-wrap gap-2">
               {NORMAS.map(n => {
                 const on = form.normas.includes(n.id);
+                const fija = n.id === '9001';
                 return (
-                  <button type="button" key={n.id}
-                    onClick={() => setForm({ ...form, normas: on ? form.normas.filter(x => x !== n.id) : [...form.normas, n.id], consultor_id: '' })}
-                    className={`chip border transition ${on ? 'border-brand-orange bg-brand-orange/15 text-navy-900' : 'border-navy-200 bg-white text-navy-400 hover:border-navy-400'}`}>
-                    {n.nombre}
+                  <button type="button" key={n.id} aria-disabled={fija}
+                    onClick={() => { if (fija) return; setForm({ ...form, normas: on ? form.normas.filter(x => x !== n.id) : [...form.normas, n.id], consultor_id: '' }); }}
+                    className={`chip border transition ${fija ? 'border-navy-800 bg-navy-800 text-white cursor-default' : on ? 'border-brand-orange bg-brand-orange/15 text-navy-900' : 'border-navy-200 bg-white text-navy-400 hover:border-navy-400'}`}>
+                    {n.nombre}{fija ? ' ✓' : ''}
                   </button>
                 );
               })}
@@ -102,7 +103,7 @@ export default function Proyectos() {
           </div>
 
           {calc && (
-            <div className="rounded-xl bg-navy-900 p-4 text-white">
+            <div className="rounded-2xl bg-navy-900 p-4 text-white">
               <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
                 <p className="text-2xl font-extrabold">{fmtEUR(calc.precioCatalogo)}<span className="text-sm font-bold text-white/60">{calc.tipo === 'mes' ? '/mes' : ' único'}</span></p>
                 <p className="font-semibold text-white/70">{calc.hTotal} h{calc.tipo === 'mes' ? '/mes' : ''} · J2 {calc.horas.J2} h · J3 {calc.horas.J3} h · Senior {calc.horas.Senior} h</p>
@@ -158,7 +159,7 @@ export default function Proyectos() {
                 <td className="px-5 py-3"><span className={`chip ${COLOR_ESTADO[p.estado] || COLOR_ESTADO.pausado}`}>{p.estado}</span></td>
                 <td className="px-5 py-3 text-right font-extrabold">{p.precio_mes ? `${fmtEUR(p.precio_mes)}/mes` : p.precio_total ? fmtEUR(p.precio_total) : '—'}</td>
                 <td className="px-5 py-3 text-right">
-                  <button onClick={() => setForm({ ...VACIO, ...p, normas: p.normas || [], consultor_id: p.consultor_id || '', cliente_id: p.cliente_id || '' })} className="font-bold text-navy-700 hover:underline">Editar</button>
+                  <button onClick={() => setForm({ ...VACIO, ...p, normas: [...new Set(['9001', ...(p.normas || [])])], consultor_id: p.consultor_id || '', cliente_id: p.cliente_id || '' })} className="font-bold text-navy-700 hover:underline">Editar</button>
                   <button onClick={() => borrar(p.id)} className="ml-4 font-bold text-red-600 hover:underline">Eliminar</button>
                 </td>
               </tr>

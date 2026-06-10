@@ -8,7 +8,8 @@ const PASOS = ['Normas', 'Modelo', 'Tu precio'];
 export default function Calculadora() {
   const { user } = useAuth();
   const [paso, setPaso] = useState(0);
-  const [sel, setSel] = useState([]);
+  // ISO 9001 es la base de todo sistema de gestión: siempre incluida, no deseleccionable
+  const [sel, setSel] = useState(['9001']);
   const [modelo, setModelo] = useState('Implicación');
   const [comparar, setComparar] = useState(false);
   const [lead, setLead] = useState({ nombre: '', empresa: '', email: user?.email || '', telefono: '', consent: false });
@@ -17,7 +18,10 @@ export default function Calculadora() {
   const res = useMemo(() => sel.length ? calcular(sel, modelo) : null, [sel, modelo]);
   const comparativa = useMemo(() => sel.length ? compararModelos(sel) : [], [sel]);
 
-  const toggle = (id) => setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
+  const toggle = (id) => {
+    if (id === '9001') return; // base obligatoria de todo sistema de gestión
+    setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
+  };
 
   async function enviarLead(e) {
     e.preventDefault();
@@ -46,7 +50,7 @@ export default function Calculadora() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
       <div className="mb-8 max-w-2xl">
-        <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-brand-orangeDark">Calculadora de precios</p>
+        <p className="eyebrow">Calculadora de precios</p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight md:text-4xl">Tu sistema de gestión, con precio cerrado en 60 segundos</h1>
         <p className="mt-3 text-navy-400 font-medium">Elige tus normas, elige cuánto quieres que hagamos nosotros, y mira el precio. Sin sorpresas: lo que ves es lo que firmas.</p>
       </div>
@@ -68,15 +72,17 @@ export default function Calculadora() {
           {paso === 0 && (
             <section>
               <h2 className="mb-4 text-lg font-extrabold">¿Qué normas necesitas?</h2>
+              <p className="mb-4 text-sm font-medium text-navy-400">ISO 9001 es la columna vertebral de todo sistema de gestión Consultify: va siempre incluida. Añade las normas que quieras integrar sobre ella.</p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {NORMAS.map(n => {
                   const on = sel.includes(n.id);
+                  const fija = n.id === '9001';
                   return (
-                    <button key={n.id} onClick={() => toggle(n.id)}
-                      className={`card text-left transition ${on ? '!border-brand-orange ring-2 ring-brand-orange/30' : 'hover:border-navy-300'}`}>
+                    <button key={n.id} onClick={() => toggle(n.id)} aria-disabled={fija}
+                      className={`card text-left transition ${on ? '!border-brand-orange ring-2 ring-brand-orange/30' : 'hover:border-navy-300'} ${fija ? 'cursor-default' : ''}`}>
                       <div className="flex items-start justify-between">
                         <span className="font-extrabold">{n.nombre}</span>
-                        <span className={`chip ${on ? 'bg-brand-orange text-navy-900' : 'bg-navy-50 text-navy-300'}`}>{on ? '✓' : '+'}</span>
+                        <span className={`chip ${fija ? 'bg-navy-800 text-white' : on ? 'bg-brand-orange text-navy-900' : 'bg-navy-50 text-navy-300'}`}>{fija ? 'Incluida siempre' : on ? '✓' : '+'}</span>
                       </div>
                       <p className="mt-1 text-sm font-medium text-navy-400">{n.desc}</p>
                     </button>
@@ -193,8 +199,8 @@ export default function Calculadora() {
 
         {/* Panel de precio en vivo */}
         <aside className="lg:sticky lg:top-24 h-fit">
-          <div className="rounded-2xl bg-navy-900 p-6 text-white shadow-xl">
-            <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-brand-orange">Tu precio en vivo</p>
+          <div className="rounded-[22px] bg-navy-900 p-6 text-white shadow-xl">
+            <p className="eyebrow !text-brand-orange">Tu precio en vivo</p>
             {res ? (
               <>
                 <p className="mt-3 text-4xl font-extrabold tracking-tight">{fmtEUR(res.precioCatalogo)}<span className="text-base font-bold text-white/60">{res.tipo === 'mes' ? ' /mes' : ' pago único'}</span></p>
