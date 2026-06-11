@@ -12,8 +12,8 @@ export const NORMAS = [
   { id: '27001',    nombre: 'ISO 27001', desc: 'Seguridad de la información',    nivel: 'J2', hApoyo: 81 },
   { id: '42001',    nombre: 'ISO 42001', desc: 'Inteligencia artificial',        nivel: 'J3', hApoyo: 42 },
   { id: '56001',    nombre: 'ISO 56001', desc: 'Gestión de la innovación',       nivel: 'J3', hApoyo: 75 },
-  { id: '21001',    nombre: 'ISO 21001', desc: 'Organizaciones educativas',      nivel: 'J3', hApoyo: 38 },
-  { id: '9004',     nombre: 'ISO 9004',  desc: 'Calidad sostenible',             nivel: 'J3', hApoyo: 22 },
+  { id: '21001',    nombre: 'ISO 21001', desc: 'Organizaciones educativas · complementaria a ISO 9001', nivel: 'J3', hApoyo: 19, solape9001: 0.5 },
+  { id: '9004',     nombre: 'ISO 9004',  desc: 'Calidad sostenible · complementaria a ISO 9001', nivel: 'J3', hApoyo: 11, solape9001: 0.5 },
   { id: 'une93200', nombre: 'UNE 93200', desc: 'Cartas de Servicios',            nivel: 'J3', hApoyo: 25 },
 ];
 
@@ -84,7 +84,7 @@ export function calcular(normaIds, modeloId) {
   if (m.tipo === 'bolsa') {
     for (const n of normas) raw[n.nivel] += n.hApoyo;
   } else {
-    for (const n of normas) raw[n.nivel] += m.hSist;
+    for (const n of normas) raw[n.nivel] += m.hSist * (n.solape9001 ?? 1);
     if (m.hPres > 0) {
       const lider = normas.some(n => n.nivel === 'J3') ? 'J3' : 'J2';
       raw[lider] += m.hPres; // por cliente, no por sistema

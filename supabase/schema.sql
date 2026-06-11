@@ -96,6 +96,7 @@ create table if not exists proyectos (
   precio_mes      int,
   precio_total    int,
   notas           text,
+  plan            jsonb,
   creado          timestamptz default now(),
   updated_at      timestamptz default now()
 );

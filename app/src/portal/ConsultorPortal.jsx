@@ -2,12 +2,14 @@ import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import Dashboard from './consultores/Dashboard.jsx';
 import Equipo from './consultores/Equipo.jsx';
 import Proyectos from './consultores/Proyectos.jsx';
+import Planificacion from './consultores/Planificacion.jsx';
 import Clientes from './consultores/Clientes.jsx';
 
 export default function ConsultorPortal() {
   const tabs = [
     { to: '', end: true, label: 'Dashboard' },
     { to: 'proyectos', label: 'Proyectos' },
+    { to: 'planificacion', label: 'Planificación' },
     { to: 'equipo', label: 'Equipo' },
     { to: 'clientes', label: 'Clientes' },
   ];
@@ -24,6 +26,7 @@ export default function ConsultorPortal() {
         <Routes>
           <Route index element={<Dashboard />} />
           <Route path="proyectos" element={<Proyectos />} />
+          <Route path="planificacion" element={<Planificacion />} />
           <Route path="equipo" element={<Equipo />} />
           <Route path="clientes" element={<Clientes />} />
           <Route path="*" element={<Navigate to="." replace />} />
