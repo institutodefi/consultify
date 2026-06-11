@@ -1,0 +1,501 @@
+import { useEffect, useMemo, useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts';
+import { listTable } from '../../lib/data.js';
+import {
+  YEAR_AGENDA, MESES, TOPE_ANUAL, MAX_HORAS_DIA, DIAS_VACACIONES,
+  toISO, hoyISO, diasDelMes, esLaborable, horasDia, resumenAnual,
+  getFestivos, getVacaciones, toggleVacacion,
+  getTareasAgenda, crearTareaAgenda, actualizarTareaAgenda, borrarTareaAgenda,
+} from '../../lib/agenda.js';
+
+const NAVY = '#0A2A6C', ORANGE = '#F5A623';
+const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const r1 = (n) => Math.round(n * 10) / 10;
+
+// ════════════════ RELOJ ANUAL (gauge SVG 270°) ════════════════
+function RelojAnual({ previstas, reales, proyeccion, ritmo }) {
+  const R = 92, RI = 74, CX = 120, CY = 120, START = 135, SWEEP = 270;
+  const ang = (h) => START + SWEEP * Math.min(h / TOPE_ANUAL, 1.12) / 1.12;
+  const polar = (deg, r) => { const a = (deg * Math.PI) / 180; return [CX + r * Math.cos(a), CY + r * Math.sin(a)]; };
+  const arco = (d1, d2, r) => {
+    const [x1, y1] = polar(d1, r), [x2, y2] = polar(d2, r);
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${d2 - d1 > 180 ? 1 : 0} 1 ${x2} ${y2}`;
+  };
+  const [nx, ny] = polar(ang(proyeccion), RI - 12);
+  const [t1x, t1y] = polar(ang(TOPE_ANUAL), R - 10);
+  const [t2x, t2y] = polar(ang(TOPE_ANUAL), R + 10);
+  const sobre = proyeccion > TOPE_ANUAL;
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg viewBox="0 0 240 200" className="w-full max-w-[280px]">
+        <path d={arco(START, START + SWEEP, R)} fill="none" stroke="#D8E0F2" strokeWidth="12" strokeLinecap="round" />
+        <path d={arco(START, START + SWEEP, RI)} fill="none" stroke="#EEF2FA" strokeWidth="9" strokeLinecap="round" />
+        {previstas > 0 && <path d={arco(START, ang(previstas), R)} fill="none" stroke={ORANGE} strokeWidth="12" strokeLinecap="round" />}
+        {reales > 0 && <path d={arco(START, ang(reales), RI)} fill="none" stroke="#061B45" strokeWidth="9" strokeLinecap="round" />}
+        <line x1={t1x} y1={t1y} x2={t2x} y2={t2y} stroke="#DC2626" strokeWidth="3" />
+        <line x1={CX} y1={CY} x2={nx} y2={ny} stroke="#4C6BB4" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="3 2" />
+        <circle cx={CX} cy={CY} r="5" fill="#4C6BB4" />
+        <text x={CX} y={CY + 32} textAnchor="middle" fontSize="20" fontWeight="800" fill="#0A1530">
+          {Math.round(reales).toLocaleString('es-ES')} h
+        </text>
+        <text x={CX} y={CY + 47} textAnchor="middle" fontSize="9.5" fill="#5B6680">
+          reales · {Math.round((reales / TOPE_ANUAL) * 100)}% de {TOPE_ANUAL.toLocaleString('es-ES')} h
+        </text>
+      </svg>
+      <div className="grid w-full grid-cols-2 gap-2 text-center text-xs">
+        <div className="rounded-xl bg-brand-orange/10 px-2 py-1.5">
+          <p className="font-extrabold text-brand-orangeDark">{Math.round(previstas).toLocaleString('es-ES')} h</p>
+          <p className="font-semibold text-navy-400">previstas · {Math.round((previstas / TOPE_ANUAL) * 100)}%</p>
+        </div>
+        <div className={`rounded-xl px-2 py-1.5 ${sobre ? 'bg-red-50' : 'bg-navy-50'}`}>
+          <p className={`font-extrabold ${sobre ? 'text-red-700' : 'text-navy-800'}`}>{Math.round(proyeccion).toLocaleString('es-ES')} h</p>
+          <p className={`font-semibold ${sobre ? 'text-red-600' : 'text-navy-400'}`}>proyección · {Math.round((proyeccion / TOPE_ANUAL) * 100)}%</p>
+        </div>
+      </div>
+      {sobre && <p className="mt-1.5 text-xs font-bold text-red-600">La proyección supera el tope del convenio</p>}
+      <p className="mt-1 text-xs font-medium text-navy-400">Ritmo real: {ritmo.toFixed(1)} h imputadas por día laborable transcurrido</p>
+    </div>
+  );
+}
+
+// ════════════════ MODAL DE TAREA ════════════════
+function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, clientes, tareasDelDia, onGuardar, onBorrar, onCerrar }) {
+  const editando = Boolean(tarea?.id);
+  const [f, setF] = useState({
+    consultor_id: tarea?.consultor_id ?? consultorId,
+    titulo: tarea?.titulo ?? '',
+    descripcion: tarea?.descripcion ?? '',
+    fecha_prevista: tarea?.fecha_prevista ?? fecha,
+    horas_previstas: tarea?.horas_previstas ?? 2,
+    fecha_efectiva: tarea?.fecha_efectiva ?? '',
+    horas_reales: tarea?.horas_reales ?? '',
+    proyecto_id: tarea?.proyecto_id ?? '',
+    estado: tarea?.estado ?? 'pendiente',
+  });
+  const [guardando, setGuardando] = useState(false);
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+
+  const suma = (campoF, campoH, fechaV, horasV) =>
+    tareasDelDia.filter((t) => t.id !== tarea?.id && t[campoF] === fechaV)
+      .reduce((s, t) => s + Number(t[campoH] || 0), 0) + Number(horasV || 0);
+  const totalPrev = suma('fecha_prevista', 'horas_previstas', f.fecha_prevista, f.horas_previstas);
+  const totalReal = f.fecha_efectiva ? suma('fecha_efectiva', 'horas_reales', f.fecha_efectiva, f.horas_reales) : 0;
+
+  const copiar = () => setF((x) => ({ ...x, fecha_efectiva: x.fecha_prevista, horas_reales: x.horas_previstas, estado: 'completada' }));
+
+  async function guardar() {
+    if (!f.titulo.trim() || !f.fecha_prevista || Number(f.horas_previstas) <= 0) return;
+    setGuardando(true);
+    try {
+      await onGuardar({
+        consultor_id: f.consultor_id,
+        titulo: f.titulo.trim(),
+        descripcion: f.descripcion || null,
+        fecha_prevista: f.fecha_prevista,
+        horas_previstas: Number(f.horas_previstas),
+        fecha_efectiva: f.fecha_efectiva || null,
+        horas_reales: f.horas_reales ? Number(f.horas_reales) : null,
+        proyecto_id: f.proyecto_id || null,
+        estado: f.estado,
+      }, tarea?.id);
+    } finally { setGuardando(false); }
+  }
+
+  const nombreProyecto = (p) => {
+    const cl = clientes.find((c) => String(c.id) === String(p.cliente_id));
+    return `${cl?.empresa || 'Cliente'} · ${p.modelo}`;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/50 p-4" onClick={onCerrar}>
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[22px] bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-extrabold">{editando ? 'Editar tarea' : 'Nueva tarea'}</h3>
+          <button onClick={onCerrar} className="rounded-full px-2.5 py-1 text-navy-300 hover:bg-navy-50 hover:text-navy-700" aria-label="Cerrar">✕</button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="label">Título *</label>
+            <input className="input" value={f.titulo} onChange={set('titulo')} autoFocus placeholder="Ej.: Auditoría interna ISO 9001 — Cliente X" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Responsable *</label>
+              <select className="input" value={f.consultor_id} onChange={set('consultor_id')}>
+                {consultores.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {c.nivel}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Proyecto</label>
+              <select className="input" value={f.proyecto_id} onChange={set('proyecto_id')}>
+                <option value="">— Sin proyecto —</option>
+                {proyectos.map((p) => <option key={p.id} value={p.id}>{nombreProyecto(p)}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Planificado */}
+          <div className="rounded-2xl border border-brand-orange/40 bg-brand-orange/5 p-4">
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-brand-orangeDark">Planificado</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Fecha prevista *</label>
+                <input type="date" className="input" value={f.fecha_prevista} onChange={set('fecha_prevista')} />
+              </div>
+              <div>
+                <label className="label">Horas programadas *</label>
+                <input type="number" min="0.5" max="9" step="0.5" className="input" value={f.horas_previstas} onChange={set('horas_previstas')} />
+              </div>
+            </div>
+            {totalPrev > MAX_HORAS_DIA && (
+              <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                El plan de ese día suma {totalPrev} h; el convenio limita a {MAX_HORAS_DIA} h ordinarias/día.
+              </p>
+            )}
+          </div>
+
+          {/* Real */}
+          <div className="rounded-2xl border border-green-300 bg-green-50/40 p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-green-700">Ejecución real</p>
+              <button type="button" onClick={copiar} className="chip border border-green-300 bg-white text-green-700 hover:bg-green-100">
+                ⤵ Copiar previsto → real
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Fecha efectiva</label>
+                <input type="date" className="input" value={f.fecha_efectiva} onChange={set('fecha_efectiva')} />
+              </div>
+              <div>
+                <label className="label">Horas reales</label>
+                <input type="number" min="0.5" max="9" step="0.5" className="input" placeholder="—" value={f.horas_reales} onChange={set('horas_reales')} />
+              </div>
+            </div>
+            {totalReal > MAX_HORAS_DIA && (
+              <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                Lo real de ese día suma {totalReal} h; el convenio limita a {MAX_HORAS_DIA} h ordinarias/día.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="label">Estado</label>
+            <div className="flex gap-2">
+              {[['pendiente', 'Pendiente'], ['en_curso', 'En curso'], ['completada', 'Completada']].map(([v, l]) => (
+                <button key={v} type="button" onClick={() => setF((x) => ({ ...x, estado: v }))}
+                  className={`chip flex-1 justify-center border transition ${
+                    f.estado === v ? 'border-navy-800 bg-navy-800 text-white' : 'border-navy-200 bg-white text-navy-400 hover:border-navy-400'
+                  }`}>{l}</button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Descripción</label>
+            <textarea className="input" rows={2} value={f.descripcion ?? ''} onChange={set('descripcion')} />
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center justify-between">
+          {editando
+            ? <button onClick={() => onBorrar(tarea.id)} className="text-sm font-bold text-red-600 hover:underline">Eliminar tarea</button>
+            : <span />}
+          <div className="flex gap-2">
+            <button onClick={onCerrar} className="btn-ghost">Cancelar</button>
+            <button onClick={guardar} disabled={guardando || !f.titulo.trim()} className="btn-orange">
+              {guardando ? 'Guardando…' : 'Guardar tarea'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════ CALENDARIO MENSUAL ════════════════
+function Calendario({ year, mes, onCambiarMes, festivosMap, vacacionesSet, tareas, modoVacaciones, onToggleVacacion, onNuevaTarea, onEditarTarea }) {
+  const hoy = hoyISO();
+  const dias = diasDelMes(year, mes);
+  const offset = (dias[0].getDay() + 6) % 7;
+  const festivosSet = new Set(festivosMap.keys());
+  const pref = `${year}-${String(mes + 1).padStart(2, '0')}-`;
+
+  const porDia = {};
+  for (const t of tareas) {
+    if (t.fecha_prevista?.startsWith(pref)) (porDia[t.fecha_prevista] ??= []).push({ t, tipo: 'prev' });
+    if (t.fecha_efectiva && t.horas_reales && t.fecha_efectiva.startsWith(pref) && t.fecha_efectiva !== t.fecha_prevista)
+      (porDia[t.fecha_efectiva] ??= []).push({ t, tipo: 'real' });
+  }
+  const estilo = {
+    pendiente: 'bg-brand-orange/15 text-navy-800',
+    en_curso: 'bg-navy-100 text-navy-800',
+    completada: 'bg-green-100 text-green-800',
+  };
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <button onClick={() => onCambiarMes(-1)} disabled={mes === 0} className="btn-ghost !px-3 !py-1.5 disabled:opacity-30" aria-label="Mes anterior">‹</button>
+        <h3 className="font-extrabold">{MESES[mes]} {year}</h3>
+        <button onClick={() => onCambiarMes(1)} disabled={mes === 11} className="btn-ghost !px-3 !py-1.5 disabled:opacity-30" aria-label="Mes siguiente">›</button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {DOW.map((d) => <div key={d} className="pb-1 text-center text-[11px] font-bold uppercase tracking-wider text-navy-300">{d}</div>)}
+        {Array.from({ length: offset }).map((_, i) => <div key={`v${i}`} />)}
+
+        {dias.map((d) => {
+          const iso = toISO(d);
+          const laborable = esLaborable(d, festivosSet);
+          const festivo = festivosMap.get(iso);
+          const vacacion = vacacionesSet.has(iso);
+          const entradas = porDia[iso] ?? [];
+          const hPrev = entradas.filter((e) => e.tipo === 'prev').reduce((s, e) => s + Number(e.t.horas_previstas), 0);
+          const hReal = tareas.filter((t) => t.fecha_efectiva === iso && t.horas_reales).reduce((s, t) => s + Number(t.horas_reales), 0);
+          const exceso = hPrev > MAX_HORAS_DIA || hReal > MAX_HORAS_DIA;
+          const esHoy = iso === hoy;
+
+          let base = 'border-navy-100 bg-white';
+          if (!laborable && !festivo) base = 'border-navy-50 bg-navy-50/60 text-navy-300';
+          if (festivo) base = 'border-red-200 bg-red-50';
+          if (vacacion) base = 'border-navy-300 bg-navy-50';
+
+          return (
+            <div key={iso}
+              onClick={() => {
+                if (modoVacaciones) { if (laborable) onToggleVacacion(iso); return; }
+                if (laborable && !vacacion) onNuevaTarea(iso);
+              }}
+              className={`group min-h-[88px] rounded-xl border p-1.5 transition ${base}
+                ${esHoy ? 'ring-2 ring-brand-orange' : ''}
+                ${laborable && (modoVacaciones || !vacacion) ? 'cursor-pointer hover:border-navy-400' : ''}`}>
+              <div className="flex items-start justify-between">
+                <span className={`text-xs font-bold ${esHoy ? 'text-brand-orangeDark' : ''}`}>{d.getDate()}</span>
+                {laborable && !vacacion && (
+                  <span className={`text-[10px] font-bold ${exceso ? 'text-red-600' : 'text-navy-300'}`}>
+                    {hPrev > 0 || hReal > 0
+                      ? <>{hPrev > 0 && `${hPrev}h`}{hReal > 0 && <span className="text-green-600"> ✓{hReal}h</span>}</>
+                      : `· ${horasDia(d)}h`}
+                  </span>
+                )}
+                {vacacion && <span className="text-[10px]" title="Vacaciones">✈</span>}
+              </div>
+              {festivo && <p className="mt-0.5 truncate text-[10px] leading-tight text-red-600">{festivo}</p>}
+              {exceso && <p className="text-[10px] font-bold text-red-600">&gt;9h/día</p>}
+              <div className="mt-1 space-y-0.5">
+                {entradas.slice(0, 3).map(({ t, tipo }) => {
+                  const hechaAqui = tipo === 'prev' && t.fecha_efectiva === t.fecha_prevista && t.horas_reales;
+                  return (
+                    <button key={`${t.id}-${tipo}`} type="button"
+                      onClick={(e) => { e.stopPropagation(); onEditarTarea(t); }}
+                      title={`${t.titulo} · prev ${t.horas_previstas}h${t.horas_reales ? ` · real ${t.horas_reales}h` : ''}`}
+                      className={`block w-full truncate rounded-md px-1 py-0.5 text-left text-[10px] font-bold
+                        ${tipo === 'real' ? 'border border-green-300 bg-white text-green-700' : estilo[t.estado] ?? estilo.pendiente}`}>
+                      {tipo === 'real' ? <>✓{t.horas_reales}h · {t.titulo}</> : <>{hechaAqui ? `✓${t.horas_reales}` : t.horas_previstas}h · {t.titulo}</>}
+                    </button>
+                  );
+                })}
+                {entradas.length > 3 && <p className="text-[10px] font-semibold text-navy-300">+{entradas.length - 3} más</p>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-navy-400">
+        <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded bg-red-200 align-middle" />Festivo</span>
+        <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded bg-navy-200 align-middle" />Vacaciones</span>
+        <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded bg-brand-orange/30 align-middle" />Pendiente</span>
+        <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded bg-navy-100 align-middle" />En curso</span>
+        <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded bg-green-200 align-middle" />Completada</span>
+        <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded border border-green-300 bg-white align-middle" />✓ Real en otro día</span>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════ PÁGINA PRINCIPAL ════════════════
+export default function Agenda() {
+  const YEAR = YEAR_AGENDA;
+  const [consultores, setConsultores] = useState([]);
+  const [proyectos, setProyectos] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [consultorId, setConsultorId] = useState('');
+  const [mes, setMes] = useState(new Date().getFullYear() === YEAR ? new Date().getMonth() : 0);
+  const [festivos, setFestivos] = useState([]);
+  const [vacaciones, setVacaciones] = useState([]);
+  const [tareas, setTareas] = useState([]);
+  const [modoVacaciones, setModoVacaciones] = useState(false);
+  const [modal, setModal] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    listTable('consultores').then((c) => {
+      const act = c.filter((x) => x.activo !== false);
+      setConsultores(act);
+      if (act.length) setConsultorId(String(act[0].id));
+    }).catch(() => setErr('No se pudieron cargar los consultores.'));
+    listTable('proyectos').then(setProyectos).catch(() => {});
+    listTable('clientes').then(setClientes).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!consultorId) return;
+    setErr(null);
+    Promise.all([getFestivos(YEAR), getVacaciones(consultorId, YEAR), getTareasAgenda(consultorId, YEAR)])
+      .then(([f, v, t]) => { setFestivos(f); setVacaciones(v); setTareas(t); })
+      .catch(() => setErr('No se pudo cargar la agenda. ¿Has ejecutado supabase/agenda.sql en el proyecto consultify?'));
+  }, [consultorId]);
+
+  const festivosMap = useMemo(() => new Map(festivos.map((f) => [f.fecha, f.nombre])), [festivos]);
+  const festivosSet = useMemo(() => new Set(festivos.map((f) => f.fecha)), [festivos]);
+  const vacacionesSet = useMemo(() => new Set(vacaciones.map((v) => v.fecha)), [vacaciones]);
+
+  const anual = useMemo(() => resumenAnual(YEAR, festivosSet, vacacionesSet, tareas), [festivosSet, vacacionesSet, tareas]);
+  const rMes = anual.meses[mes];
+  const vacRestantes = DIAS_VACACIONES - anual.total.diasVacaciones;
+  const desvMes = r1(rMes.reales - rMes.previstas);
+
+  const grafico = anual.meses.map((m) => ({
+    nombre: m.nombre.slice(0, 3),
+    Objetivo: Math.round(m.objetivo),
+    Previstas: r1(m.previstas),
+    Reales: r1(m.reales),
+  }));
+
+  async function onToggleVacacion(iso) {
+    try {
+      const añadida = await toggleVacacion(consultorId, iso);
+      setVacaciones((v) => añadida ? [...v, { id: `t-${iso}`, consultor_id: consultorId, fecha: iso }] : v.filter((x) => x.fecha !== iso));
+    } catch { setErr('No se pudo guardar el día de vacaciones.'); }
+  }
+
+  async function guardarTarea(datos, id) {
+    try {
+      if (id) {
+        const t = await actualizarTareaAgenda(id, datos);
+        setTareas((ts) => String(t.consultor_id) === String(consultorId)
+          ? ts.map((x) => (x.id === id ? t : x))
+          : ts.filter((x) => x.id !== id)); // reasignada a otro responsable
+      } else {
+        const t = await crearTareaAgenda(datos);
+        if (String(t.consultor_id) === String(consultorId)) setTareas((ts) => [...ts, t]);
+      }
+      setModal(null);
+    } catch { setErr('No se pudo guardar la tarea.'); }
+  }
+
+  async function borrarTarea(id) {
+    try { await borrarTareaAgenda(id); setTareas((ts) => ts.filter((x) => x.id !== id)); setModal(null); }
+    catch { setErr('No se pudo eliminar la tarea.'); }
+  }
+
+  const consultor = consultores.find((c) => String(c.id) === String(consultorId));
+
+  const Kpi = ({ label, value, sub, alerta }) => (
+    <div className="card !p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy-300">{label}</p>
+      <p className={`mt-1 text-xl font-extrabold ${alerta ? 'text-red-600' : 'text-navy-900'}`}>{value}</p>
+      {sub && <p className={`text-[11px] font-semibold ${alerta ? 'text-red-500' : 'text-navy-400'}`}>{sub}</p>}
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Selector + modo vacaciones */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <label className="label">Consultor</label>
+          <select className="input !w-auto min-w-[220px]" value={consultorId} onChange={(e) => setConsultorId(e.target.value)}>
+            {consultores.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {c.nivel}</option>)}
+          </select>
+        </div>
+        <button onClick={() => setModoVacaciones((m) => !m)}
+          className={modoVacaciones ? 'btn-primary' : 'btn-ghost'}>
+          ✈ {modoVacaciones ? 'Marcando vacaciones — clic en los días' : 'Marcar vacaciones'}
+        </button>
+      </div>
+
+      {err && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{err}</div>}
+
+      {/* KPIs del mes */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Kpi label={`Objetivo ${MESES[mes]}`} value={`${Math.round(rMes.objetivo)} h`}
+          sub={`${rMes.laborables} laborables${mes === 7 ? ' · intensiva 36 h/sem' : ''}`} />
+        <Kpi label="Previstas (mes)" value={`${r1(rMes.previstas)} h`}
+          sub={rMes.previstas > rMes.objetivo ? 'Por encima del objetivo' : undefined}
+          alerta={rMes.previstas > rMes.objetivo} />
+        <Kpi label="Reales (mes)" value={`${r1(rMes.reales)} h`}
+          sub={rMes.reales > 0 ? `Desviación ${desvMes > 0 ? '+' : ''}${desvMes} h vs plan` : 'Sin horas imputadas'}
+          alerta={desvMes > 0} />
+        <Kpi label="Disponibles (mes)" value={`${r1(rMes.disponibles)} h`} />
+        <Kpi label="Vacaciones" value={`${anual.total.diasVacaciones} / ${DIAS_VACACIONES} días`}
+          sub={vacRestantes >= 0 ? `Quedan ${vacRestantes}` : `Exceso de ${-vacRestantes} días`}
+          alerta={vacRestantes < 0} />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="card lg:col-span-2">
+          <Calendario
+            year={YEAR} mes={mes} onCambiarMes={(d) => setMes((m) => Math.min(11, Math.max(0, m + d)))}
+            festivosMap={festivosMap} vacacionesSet={vacacionesSet} tareas={tareas}
+            modoVacaciones={modoVacaciones}
+            onToggleVacacion={onToggleVacacion}
+            onNuevaTarea={(fecha) => setModal({ fecha })}
+            onEditarTarea={(tarea) => setModal({ tarea })}
+          />
+        </div>
+
+        <div className="card">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy-300">
+            Reloj anual · {consultor?.nombre ?? ''} {YEAR}
+          </p>
+          <div className="mt-2">
+            <RelojAnual previstas={anual.total.previstas} reales={anual.total.reales} proyeccion={anual.proyeccion} ritmo={anual.ritmo} />
+          </div>
+          <div className="mt-3 space-y-1 border-t border-navy-50 pt-3 text-xs font-medium text-navy-400">
+            <p>Horas de convenio {YEAR} (tras festivos): <strong className="text-navy-800">{Math.round(anual.total.horasConvenio)} h</strong></p>
+            <p>Objetivo tras vacaciones: <strong className="text-navy-800">{Math.round(anual.total.objetivo)} h</strong> (tope legal {TOPE_ANUAL} h)</p>
+            <p>Desviación anual real vs plan: <strong className="text-navy-800">{r1(anual.total.reales - anual.total.previstas)} h</strong></p>
+            {anual.excesoSobreTope > 0 && (
+              <p className="font-bold text-red-600">⚠ El calendario supera el tope en {Math.round(anual.excesoSobreTope)} h: añade días de libre disposición o ajusta festivos.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy-300">Horas por mes · objetivo de convenio vs. previstas vs. reales</p>
+        <div className="mt-3 h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={grafico} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#EEF2FA" />
+              <XAxis dataKey="nombre" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <ReferenceLine y={TOPE_ANUAL / 12} stroke="#DC2626" strokeDasharray="4 4"
+                label={{ value: 'Media 150h', fontSize: 10, fill: '#DC2626', position: 'right' }} />
+              <Bar dataKey="Objetivo" fill="#AFC0E3" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Previstas" fill={ORANGE} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Reales" fill={NAVY} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {modal && (
+        <ModalTarea
+          tarea={modal.tarea} fecha={modal.fecha ?? modal.tarea?.fecha_prevista}
+          consultorId={consultorId} consultores={consultores}
+          proyectos={proyectos} clientes={clientes} tareasDelDia={tareas}
+          onGuardar={guardarTarea} onBorrar={borrarTarea} onCerrar={() => setModal(null)}
+        />
+      )}
+    </div>
+  );
+}
