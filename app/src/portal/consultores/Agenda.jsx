@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts';
 import { listTable } from '../../lib/data.js';
 import {
-  YEAR_AGENDA, MESES, TOPE_ANUAL, MAX_HORAS_DIA, DIAS_VACACIONES,
+  YEAR_AGENDA, FESTIVOS_2026, MESES, TOPE_ANUAL, MAX_HORAS_DIA, DIAS_VACACIONES,
   toISO, hoyISO, diasDelMes, esLaborable, horasDia, resumenAnual,
   getFestivos, getVacaciones, toggleVacacion,
   getTareasAgenda, crearTareaAgenda, actualizarTareaAgenda, borrarTareaAgenda,
@@ -346,9 +346,18 @@ export default function Agenda() {
   useEffect(() => {
     if (!consultorId) return;
     setErr(null);
-    Promise.all([getFestivos(YEAR), getVacaciones(consultorId, YEAR), getTareasAgenda(consultorId, YEAR)])
-      .then(([f, v, t]) => { setFestivos(f); setVacaciones(v); setTareas(t); })
-      .catch(() => setErr('No se pudo cargar la agenda. ¿Has ejecutado supabase/agenda.sql en el proyecto consultify?'));
+    (async () => {
+      const fallos = [];
+      try { setFestivos(await getFestivos(YEAR)); }
+      catch (e) { console.error('festivos', e); setFestivos(FESTIVOS_2026); fallos.push(`festivos: ${e.message || e.code}`); }
+      try { setVacaciones(await getVacaciones(consultorId, YEAR)); }
+      catch (e) { console.error('vacaciones', e); setVacaciones([]); fallos.push(`vacaciones: ${e.message || e.code}`); }
+      try { setTareas(await getTareasAgenda(consultorId, YEAR)); }
+      catch (e) { console.error('agenda_tareas', e); setTareas([]); fallos.push(`agenda_tareas: ${e.message || e.code}`); }
+      if (fallos.length) {
+        setErr(`Error cargando la agenda → ${fallos.join(' · ')}. Si las tablas no existen, ejecuta supabase/agenda.sql en el proyecto consultify (SQL Editor → Run).`);
+      }
+    })();
   }, [consultorId]);
 
   const festivosMap = useMemo(() => new Map(festivos.map((f) => [f.fecha, f.nombre])), [festivos]);
