@@ -53,6 +53,8 @@ create table if not exists agenda_tareas (
   horas_reales    numeric(4,1) check (horas_reales > 0 and horas_reales <= 9),
   titulo          text not null,
   descripcion     text,
+  tipo            text not null default 'produccion'
+                  check (tipo in ('produccion','gestion','coordinacion')),
   estado          text not null default 'pendiente'
                   check (estado in ('pendiente','en_curso','completada')),
   creado          timestamptz not null default now()
@@ -79,3 +81,13 @@ create policy vacaciones_team_all on vacaciones for all
 drop policy if exists agenda_tareas_team_all on agenda_tareas;
 create policy agenda_tareas_team_all on agenda_tareas for all
   using (mi_rol() in ('consultor','admin')) with check (mi_rol() in ('consultor','admin'));
+
+-- ─── 6 · UPGRADE: columna tipo (si la tabla ya existía sin ella) ──
+alter table agenda_tareas add column if not exists tipo text not null default 'produccion';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'agenda_tareas_tipo_check') then
+    alter table agenda_tareas add constraint agenda_tareas_tipo_check
+      check (tipo in ('produccion','gestion','coordinacion'));
+  end if;
+end $$;

@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Refe
 import { listTable } from '../../lib/data.js';
 import {
   YEAR_AGENDA, FESTIVOS_2026, MESES, TOPE_ANUAL, MAX_HORAS_DIA, DIAS_VACACIONES,
+  PCT_PRODUCTIVO, PCT_GESTION, PCT_COORDINACION, TIPOS_TAREA, TIPO_BY_ID,
   toISO, hoyISO, diasDelMes, esLaborable, horasDia, resumenAnual,
   getFestivos, getVacaciones, toggleVacacion,
   getTareasAgenda, crearTareaAgenda, actualizarTareaAgenda, borrarTareaAgenda,
@@ -13,18 +14,19 @@ const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const r1 = (n) => Math.round(n * 10) / 10;
 
 // ════════════════ RELOJ ANUAL (gauge SVG 270°) ════════════════
-function RelojAnual({ previstas, reales, proyeccion, ritmo }) {
+function RelojAnual({ previstas, reales, proyeccion, ritmo, capacidad }) {
   const R = 92, RI = 74, CX = 120, CY = 120, START = 135, SWEEP = 270;
-  const ang = (h) => START + SWEEP * Math.min(h / TOPE_ANUAL, 1.12) / 1.12;
+  const MAXG = capacidad > 0 ? capacidad : 1;
+  const ang = (h) => START + SWEEP * Math.min(h / MAXG, 1.12) / 1.12;
   const polar = (deg, r) => { const a = (deg * Math.PI) / 180; return [CX + r * Math.cos(a), CY + r * Math.sin(a)]; };
   const arco = (d1, d2, r) => {
     const [x1, y1] = polar(d1, r), [x2, y2] = polar(d2, r);
     return `M ${x1} ${y1} A ${r} ${r} 0 ${d2 - d1 > 180 ? 1 : 0} 1 ${x2} ${y2}`;
   };
   const [nx, ny] = polar(ang(proyeccion), RI - 12);
-  const [t1x, t1y] = polar(ang(TOPE_ANUAL), R - 10);
-  const [t2x, t2y] = polar(ang(TOPE_ANUAL), R + 10);
-  const sobre = proyeccion > TOPE_ANUAL;
+  const [t1x, t1y] = polar(ang(MAXG), R - 10);
+  const [t2x, t2y] = polar(ang(MAXG), R + 10);
+  const sobre = proyeccion > MAXG;
 
   return (
     <div className="flex flex-col items-center">
@@ -40,20 +42,20 @@ function RelojAnual({ previstas, reales, proyeccion, ritmo }) {
           {Math.round(reales).toLocaleString('es-ES')} h
         </text>
         <text x={CX} y={CY + 47} textAnchor="middle" fontSize="9.5" fill="#5B6680">
-          reales · {Math.round((reales / TOPE_ANUAL) * 100)}% de {TOPE_ANUAL.toLocaleString('es-ES')} h
+          reales · {Math.round((reales / MAXG) * 100)}% de {Math.round(MAXG).toLocaleString('es-ES')} h productivas
         </text>
       </svg>
       <div className="grid w-full grid-cols-2 gap-2 text-center text-xs">
         <div className="rounded-xl bg-brand-orange/10 px-2 py-1.5">
           <p className="font-extrabold text-brand-orangeDark">{Math.round(previstas).toLocaleString('es-ES')} h</p>
-          <p className="font-semibold text-navy-400">previstas · {Math.round((previstas / TOPE_ANUAL) * 100)}%</p>
+          <p className="font-semibold text-navy-400">previstas · {Math.round((previstas / MAXG) * 100)}%</p>
         </div>
         <div className={`rounded-xl px-2 py-1.5 ${sobre ? 'bg-red-50' : 'bg-navy-50'}`}>
           <p className={`font-extrabold ${sobre ? 'text-red-700' : 'text-navy-800'}`}>{Math.round(proyeccion).toLocaleString('es-ES')} h</p>
-          <p className={`font-semibold ${sobre ? 'text-red-600' : 'text-navy-400'}`}>proyección · {Math.round((proyeccion / TOPE_ANUAL) * 100)}%</p>
+          <p className={`font-semibold ${sobre ? 'text-red-600' : 'text-navy-400'}`}>proyección · {Math.round((proyeccion / MAXG) * 100)}%</p>
         </div>
       </div>
-      {sobre && <p className="mt-1.5 text-xs font-bold text-red-600">La proyección supera el tope del convenio</p>}
+      {sobre && <p className="mt-1.5 text-xs font-bold text-red-600">La proyección supera la capacidad productiva</p>}
       <p className="mt-1 text-xs font-medium text-navy-400">Ritmo real: {ritmo.toFixed(1)} h imputadas por día laborable transcurrido</p>
     </div>
   );
@@ -71,6 +73,7 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
     fecha_efectiva: tarea?.fecha_efectiva ?? '',
     horas_reales: tarea?.horas_reales ?? '',
     proyecto_id: tarea?.proyecto_id ?? '',
+    tipo: tarea?.tipo ?? 'produccion',
     estado: tarea?.estado ?? 'pendiente',
   });
   const [guardando, setGuardando] = useState(false);
@@ -97,6 +100,7 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
         fecha_efectiva: f.fecha_efectiva || null,
         horas_reales: f.horas_reales ? Number(f.horas_reales) : null,
         proyecto_id: f.proyecto_id || null,
+        tipo: f.tipo,
         estado: f.estado,
       }, tarea?.id);
     } finally { setGuardando(false); }
@@ -135,6 +139,19 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
                 {proyectos.map((p) => <option key={p.id} value={p.id}>{nombreProyecto(p)}</option>)}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="label">Tipo de horas</label>
+            <div className="flex gap-2">
+              {TIPOS_TAREA.map((t) => (
+                <button key={t.id} type="button" onClick={() => setF((x) => ({ ...x, tipo: t.id }))}
+                  className={`chip flex-1 justify-center border transition ${
+                    f.tipo === t.id ? 'border-navy-800 bg-navy-800 text-white' : 'border-navy-200 bg-white text-navy-400 hover:border-navy-400'
+                  }`}>{t.nombre}</button>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] font-medium text-navy-300">Cada tipo consume su bolsa de jornada: producción {PCT_PRODUCTIVO * 100} % · gestión {PCT_GESTION * 100} % · coordinación {PCT_COORDINACION * 100} %.</p>
           </div>
 
           {/* Planificado */}
@@ -292,9 +309,10 @@ function Calendario({ year, mes, onCambiarMes, festivosMap, vacacionesSet, tarea
                   return (
                     <button key={`${t.id}-${tipo}`} type="button"
                       onClick={(e) => { e.stopPropagation(); onEditarTarea(t); }}
-                      title={`${t.titulo} · prev ${t.horas_previstas}h${t.horas_reales ? ` · real ${t.horas_reales}h` : ''}`}
+                      title={`${TIPO_BY_ID[t.tipo || 'produccion'].nombre} · ${t.titulo} · prev ${t.horas_previstas}h${t.horas_reales ? ` · real ${t.horas_reales}h` : ''}`}
                       className={`block w-full truncate rounded-md px-1 py-0.5 text-left text-[10px] font-bold
                         ${tipo === 'real' ? 'border border-green-300 bg-white text-green-700' : estilo[t.estado] ?? estilo.pendiente}`}>
+                      {(t.tipo === 'gestion' || t.tipo === 'coordinacion') && <span className="mr-0.5 rounded bg-navy-800 px-0.5 text-[8px] text-white">{t.tipo === 'gestion' ? 'G' : 'C'}</span>}
                       {tipo === 'real' ? <>✓{t.horas_reales}h · {t.titulo}</> : <>{hechaAqui ? `✓${t.horas_reales}` : t.horas_previstas}h · {t.titulo}</>}
                     </button>
                   );
@@ -371,10 +389,12 @@ export default function Agenda() {
 
   const grafico = anual.meses.map((m) => ({
     nombre: m.nombre.slice(0, 3),
-    Objetivo: Math.round(m.objetivo),
+    Jornada: Math.round(m.objetivo),
+    Productivas: Math.round(m.productivas),
     Previstas: r1(m.previstas),
     Reales: r1(m.reales),
   }));
+  const mediaProductiva = Math.round(anual.capProductiva / 12);
 
   async function onToggleVacacion(iso) {
     try {
@@ -432,12 +452,14 @@ export default function Agenda() {
       {err && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{err}</div>}
 
       {/* KPIs del mes */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Kpi label={`Objetivo ${MESES[mes]}`} value={`${Math.round(rMes.objetivo)} h`}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+        <Kpi label={`Jornada ${MESES[mes]}`} value={`${Math.round(rMes.objetivo)} h`}
           sub={`${rMes.laborables} laborables${mes === 7 ? ' · intensiva 36 h/sem' : ''}`} />
+        <Kpi label="Productivas (70 %)" value={`${Math.round(rMes.productivas)} h`}
+          sub={`Gestión ${Math.round(rMes.gestion)} h · Coord. ${Math.round(rMes.coordinacion)} h`} />
         <Kpi label="Previstas (mes)" value={`${r1(rMes.previstas)} h`}
-          sub={rMes.previstas > rMes.objetivo ? 'Por encima del objetivo' : undefined}
-          alerta={rMes.previstas > rMes.objetivo} />
+          sub={`P ${r1(rMes.prevTipo.produccion)} · G ${r1(rMes.prevTipo.gestion)} · C ${r1(rMes.prevTipo.coordinacion)}`}
+          alerta={rMes.prevTipo.produccion > rMes.productivas} />
         <Kpi label="Reales (mes)" value={`${r1(rMes.reales)} h`}
           sub={rMes.reales > 0 ? `Desviación ${desvMes > 0 ? '+' : ''}${desvMes} h vs plan` : 'Sin horas imputadas'}
           alerta={desvMes > 0} />
@@ -464,21 +486,43 @@ export default function Agenda() {
             Reloj anual · {consultor?.nombre ?? ''} {YEAR}
           </p>
           <div className="mt-2">
-            <RelojAnual previstas={anual.total.previstas} reales={anual.total.reales} proyeccion={anual.proyeccion} ritmo={anual.ritmo} />
+            <RelojAnual previstas={anual.total.previstas} reales={anual.total.reales}
+              proyeccion={anual.proyeccion} ritmo={anual.ritmo} capacidad={anual.capProductiva} />
           </div>
           <div className="mt-3 space-y-1 border-t border-navy-50 pt-3 text-xs font-medium text-navy-400">
-            <p>Horas de convenio {YEAR} (tras festivos): <strong className="text-navy-800">{Math.round(anual.total.horasConvenio)} h</strong></p>
-            <p>Objetivo tras vacaciones: <strong className="text-navy-800">{Math.round(anual.total.objetivo)} h</strong> (tope legal {TOPE_ANUAL} h)</p>
-            <p>Desviación anual real vs plan: <strong className="text-navy-800">{r1(anual.total.reales - anual.total.previstas)} h</strong></p>
-            {anual.excesoSobreTope > 0 && (
-              <p className="font-bold text-red-600">⚠ El calendario supera el tope en {Math.round(anual.excesoSobreTope)} h: añade días de libre disposición o ajusta festivos.</p>
+            <p>Calendario {YEAR} tras festivos y vacaciones: <strong className="text-navy-800">{Math.round(anual.total.horasConvenio - anual.total.horasVacaciones)} h</strong></p>
+            <p>Jornada anual ajustada al tope: <strong className="text-navy-800">{Math.round(anual.total.objetivo)} h</strong> (máx. {TOPE_ANUAL} h)</p>
+            {anual.ajusteTope > 0 && (
+              <p>Ajuste al tope (libre disposición): <strong className="text-navy-800">−{Math.round(anual.ajusteTope)} h</strong>, prorrateado entre meses</p>
             )}
+            <p>Reparto: <strong className="text-navy-800">{Math.round(anual.total.productivas)} h</strong> productivas ({PCT_PRODUCTIVO * 100} %) · {Math.round(anual.total.gestion)} h gestión ({PCT_GESTION * 100} %) · {Math.round(anual.total.coordinacion)} h coordinación ({PCT_COORDINACION * 100} %)</p>
+            <p>Desviación anual real vs plan: <strong className="text-navy-800">{r1(anual.total.reales - anual.total.previstas)} h</strong></p>
+          </div>
+          <div className="mt-3 space-y-2 border-t border-navy-50 pt-3">
+            {[
+              ['Producción', anual.total.prevTipo.produccion, anual.total.productivas, '#F5A623'],
+              ['Gestión', anual.total.prevTipo.gestion, anual.total.gestion, '#4C6BB4'],
+              ['Coordinación', anual.total.prevTipo.coordinacion, anual.total.coordinacion, '#061B45'],
+            ].map(([nombre, usado, bolsa, color]) => {
+              const pct = bolsa > 0 ? Math.round((usado / bolsa) * 100) : 0;
+              return (
+                <div key={nombre}>
+                  <div className="flex justify-between text-[11px] font-bold">
+                    <span className="text-navy-500">{nombre}</span>
+                    <span className={pct > 100 ? 'text-red-600' : 'text-navy-400'}>{Math.round(usado)} / {Math.round(bolsa)} h · {pct}%</span>
+                  </div>
+                  <div className="mt-0.5 h-1.5 rounded-full bg-navy-50">
+                    <div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: pct > 100 ? '#DC2626' : color }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
 
       <div className="card">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy-300">Horas por mes · objetivo de convenio vs. previstas vs. reales</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy-300">Horas por mes · jornada, capacidad productiva (70 %), previstas y reales</p>
         <div className="mt-3 h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={grafico} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
@@ -487,9 +531,10 @@ export default function Agenda() {
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <ReferenceLine y={TOPE_ANUAL / 12} stroke="#DC2626" strokeDasharray="4 4"
-                label={{ value: 'Media 150h', fontSize: 10, fill: '#DC2626', position: 'right' }} />
-              <Bar dataKey="Objetivo" fill="#AFC0E3" radius={[4, 4, 0, 0]} />
+              <ReferenceLine y={mediaProductiva} stroke="#DC2626" strokeDasharray="4 4"
+                label={{ value: `Media prod. ${mediaProductiva}h`, fontSize: 10, fill: '#DC2626', position: 'right' }} />
+              <Bar dataKey="Jornada" fill="#D8E0F2" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Productivas" fill="#4C6BB4" radius={[4, 4, 0, 0]} />
               <Bar dataKey="Previstas" fill={ORANGE} radius={[4, 4, 0, 0]} />
               <Bar dataKey="Reales" fill={NAVY} radius={[4, 4, 0, 0]} />
             </BarChart>

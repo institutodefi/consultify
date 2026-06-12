@@ -16,6 +16,19 @@ export const HORAS_DIA_AGOSTO = 7.2;
 export const DIAS_VACACIONES = 23;
 export const YEAR_AGENDA = 2026; // año de ajuste
 
+// Reparto de la jornada (sobre el objetivo de convenio ya ajustado al tope):
+export const PCT_PRODUCTIVO   = 0.70; // horas facturables a cliente (tareas)
+export const PCT_GESTION      = 0.20; // gestión interna
+export const PCT_COORDINACION = 0.10; // coordinación
+
+// Tipos de tarea: cada una consume su bolsa de jornada
+export const TIPOS_TAREA = [
+  { id: 'produccion',   nombre: 'Producción / Proyecto', pct: PCT_PRODUCTIVO },
+  { id: 'gestion',      nombre: 'Gestión',               pct: PCT_GESTION },
+  { id: 'coordinacion', nombre: 'Coordinación',          pct: PCT_COORDINACION },
+];
+export const TIPO_BY_ID = Object.fromEntries(TIPOS_TAREA.map(t => [t.id, t]));
+
 export const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 // Festivos 2026 Madrid capital — fallback si la tabla `festivos` está
@@ -70,15 +83,18 @@ export function resumenMes(year, month, festivosSet, vacacionesSet, tareas) {
     if (vacacionesSet.has(toISO(d))) { horasVacaciones += h; diasVacacionesN += 1; }
   }
   let previstas = 0, reales = 0;
+  const prev = { produccion: 0, gestion: 0, coordinacion: 0 };
+  const real = { produccion: 0, gestion: 0, coordinacion: 0 };
   for (const t of tareas) {
-    if (enMes(t.fecha_prevista, year, month)) previstas += Number(t.horas_previstas);
-    if (t.horas_reales && enMes(t.fecha_efectiva, year, month)) reales += Number(t.horas_reales);
+    const tipo = t.tipo || 'produccion';
+    if (enMes(t.fecha_prevista, year, month)) { previstas += Number(t.horas_previstas); prev[tipo] += Number(t.horas_previstas); }
+    if (t.horas_reales && enMes(t.fecha_efectiva, year, month)) { reales += Number(t.horas_reales); real[tipo] += Number(t.horas_reales); }
   }
-  const objetivo = horasConvenio - horasVacaciones;
+  const objetivoBruto = horasConvenio - horasVacaciones;
   return {
     laborables, horasConvenio, horasVacaciones, diasVacaciones: diasVacacionesN,
-    objetivo, previstas, reales,
-    disponibles: Math.max(0, objetivo - previstas),
+    objetivoBruto, previstas, reales,
+    prevTipo: prev, realTipo: real,
     desviacion: reales - previstas,
   };
 }
@@ -88,19 +104,49 @@ export function resumenAnual(year, festivosSet, vacacionesSet, tareas) {
   for (let m = 0; m < 12; m++) {
     meses.push({ mes: m, nombre: MESES[m], ...resumenMes(year, m, festivosSet, vacacionesSet, tareas) });
   }
+
+  // ── Ajuste al tope del convenio: nunca más de 1.800 h/año ──
+  // El recorte se prorratea entre los meses en proporción a sus horas.
+  const brutoTotal = meses.reduce((a, m) => a + m.objetivoBruto, 0);
+  const factor = brutoTotal > 0 ? Math.min(1, TOPE_ANUAL / brutoTotal) : 1;
+  for (const m of meses) {
+    m.objetivo     = m.objetivoBruto * factor;
+    m.productivas  = m.objetivo * PCT_PRODUCTIVO;   // facturable a cliente
+    m.gestion      = m.objetivo * PCT_GESTION;
+    m.coordinacion = m.objetivo * PCT_COORDINACION;
+    m.disponibles  = Math.max(0, m.productivas - m.prevTipo.produccion); // hueco facturable
+  }
+  const ajusteTope = Math.max(0, brutoTotal - TOPE_ANUAL); // h de libre disposición
+
   const total = meses.reduce((a, m) => ({
     horasConvenio: a.horasConvenio + m.horasConvenio,
     horasVacaciones: a.horasVacaciones + m.horasVacaciones,
     diasVacaciones: a.diasVacaciones + m.diasVacaciones,
     objetivo: a.objetivo + m.objetivo,
+    productivas: a.productivas + m.productivas,
+    gestion: a.gestion + m.gestion,
+    coordinacion: a.coordinacion + m.coordinacion,
     previstas: a.previstas + m.previstas,
     reales: a.reales + m.reales,
-  }), { horasConvenio: 0, horasVacaciones: 0, diasVacaciones: 0, objetivo: 0, previstas: 0, reales: 0 });
+    prevTipo: {
+      produccion: a.prevTipo.produccion + m.prevTipo.produccion,
+      gestion: a.prevTipo.gestion + m.prevTipo.gestion,
+      coordinacion: a.prevTipo.coordinacion + m.prevTipo.coordinacion,
+    },
+    realTipo: {
+      produccion: a.realTipo.produccion + m.realTipo.produccion,
+      gestion: a.realTipo.gestion + m.realTipo.gestion,
+      coordinacion: a.realTipo.coordinacion + m.realTipo.coordinacion,
+    },
+  }), { horasConvenio: 0, horasVacaciones: 0, diasVacaciones: 0, objetivo: 0, productivas: 0, gestion: 0, coordinacion: 0, previstas: 0, reales: 0,
+        prevTipo: { produccion: 0, gestion: 0, coordinacion: 0 }, realTipo: { produccion: 0, gestion: 0, coordinacion: 0 } });
 
-  // Proyección = reales + previsto sin cerrar + ritmo real × laborables futuros sin tarea
+  // Proyección de PRODUCCIÓN = reales prod. + previsto prod. sin cerrar
+  //   + ritmo real de producción × laborables futuros sin tarea de producción
   const hoy = hoyISO();
+  const tareasProd = tareas.filter((t) => (t.tipo || 'produccion') === 'produccion');
   const diasOcupados = new Set();
-  for (const t of tareas) {
+  for (const t of tareasProd) {
     if (t.fecha_prevista) diasOcupados.add(t.fecha_prevista);
     if (t.fecha_efectiva) diasOcupados.add(t.fecha_efectiva);
   }
@@ -113,17 +159,18 @@ export function resumenAnual(year, festivosSet, vacacionesSet, tareas) {
       else if (!diasOcupados.has(iso)) labFuturosLibres += 1;
     }
   }
-  let realesTotal = 0, previstoSinCerrar = 0;
-  for (const t of tareas) {
-    if (t.horas_reales) realesTotal += Number(t.horas_reales);
+  let realesProd = 0, previstoSinCerrar = 0;
+  for (const t of tareasProd) {
+    if (t.horas_reales) realesProd += Number(t.horas_reales);
     else previstoSinCerrar += Number(t.horas_previstas);
   }
-  const ritmo = labPasados > 0 ? realesTotal / labPasados : 0;
-  const proyeccion = realesTotal + previstoSinCerrar + ritmo * labFuturosLibres;
+  const ritmo = labPasados > 0 ? realesProd / labPasados : 0;
+  const proyeccion = realesProd + previstoSinCerrar + ritmo * labFuturosLibres;
 
   return {
     meses, total, tope: TOPE_ANUAL,
-    excesoSobreTope: Math.max(0, total.objetivo - TOPE_ANUAL),
+    ajusteTope,                                   // h recortadas para no superar 1.800
+    capProductiva: total.productivas,             // referencia para tareas y reloj
     ritmo, proyeccion,
   };
 }
