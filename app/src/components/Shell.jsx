@@ -1,13 +1,17 @@
 import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
+import { ROL_LABEL, can } from '../lib/permisos.js';
 
 export default function Shell({ children }) {
-  const { user, role, logout, demo } = useAuth();
+  const { user, role, realRole, logout, demo, verEconomico } = useAuth();
   const navItem = ({ isActive }) =>
     isActive ? 'text-navy-900' : 'text-navy-900/75 hover:text-navy-700 transition';
+
+  const esEquipo = can.esEquipo(role);
+  const esCliente = role === 'cliente';
+
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Cabecera espejo de la landing: logo 36px, enlaces al 75%, botones píldora */}
       <header className="sticky top-0 z-40 border-b border-[rgba(10,21,48,0.10)] bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-[68px] max-w-7xl items-center justify-between gap-6 px-4">
           <div className="flex items-center gap-8">
@@ -16,20 +20,30 @@ export default function Shell({ children }) {
             </a>
             <nav className="hidden gap-6 text-sm font-semibold md:flex">
               <a href="/" className="text-navy-900/75 transition hover:text-navy-700">Web</a>
-              <NavLink to="/calculadora" className={navItem}>Calculadora</NavLink>
-              {user && (role === 'cliente' || role === 'admin') && (
-                <NavLink to="/clientes" className={navItem}>Zona clientes</NavLink>
-              )}
-              {user && (role === 'consultor' || role === 'admin') && (
-                <NavLink to="/consultores" className={navItem}>Zona consultores</NavLink>
-              )}
+              {/* La calculadora es económica: solo superadmin (o sin login, para captar leads) */}
+              {(!user || verEconomico) && <NavLink to="/calculadora" className={navItem}>Calculadora</NavLink>}
+              {user && esCliente && <NavLink to="/clientes" className={navItem}>Zona clientes</NavLink>}
+              {user && esEquipo && <NavLink to="/consultores" className={navItem}>Zona interna</NavLink>}
             </nav>
           </div>
           <div className="flex items-center gap-3">
             {demo && <span className="chip bg-brand-orange/15 text-brand-orangeDark hidden sm:inline-flex">Modo demo</span>}
             {user ? (
               <>
-                <span className="hidden text-xs font-semibold text-brand-muted sm:inline">{user.email}</span>
+                {/* Perfil: nombre/email + rol (con aviso si el superadmin está simulando) */}
+                <div className="hidden text-right sm:block">
+                  <p className="text-xs font-bold text-navy-900 leading-tight">{user.email}</p>
+                  <p className="text-[11px] font-semibold leading-tight text-brand-muted">
+                    {ROL_LABEL[role] || role}
+                    {realRole === 'superadmin' && role !== 'superadmin' && (
+                      <span className="ml-1 text-brand-orangeDark">· viendo como</span>
+                    )}
+                  </p>
+                </div>
+                {/* Avatar con inicial */}
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-900 text-sm font-extrabold text-white" title={user.email}>
+                  {(user.email || '?').charAt(0).toUpperCase()}
+                </span>
                 <button onClick={logout} className="btn-ghost !px-4 !py-2">Salir</button>
               </>
             ) : (
@@ -39,7 +53,6 @@ export default function Shell({ children }) {
         </div>
       </header>
       <main className="flex-1">{children}</main>
-      {/* Pie espejo de la landing: navy-900, texto translúcido, enlaces naranja al hover */}
       <footer className="border-t border-white/10 bg-navy-900 py-8 text-center text-xs text-white/55">
         <img src="/logo_white.png" alt="" className="mx-auto mb-3 h-7 w-auto opacity-90" />
         <p>Consultify · Instituto de Excelencia Europea S.L. · CIF B87063076 · Madrid</p>

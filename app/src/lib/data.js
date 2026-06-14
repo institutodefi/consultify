@@ -1,9 +1,14 @@
 import { supabase, DEMO, demoClone } from './supabase';
+import { catalogoFilas } from './catalogoTareas';
 
 // Capa de datos: misma API en modo demo y con Supabase real.
 let demoState = null;
 function demo() {
-  if (!demoState) demoState = { consultores: demoClone('consultores'), clientes: demoClone('clientes'), proyectos: demoClone('proyectos'), presupuestos: demoClone('presupuestos') };
+  if (!demoState) demoState = {
+    consultores: demoClone('consultores'), clientes: demoClone('clientes'),
+    proyectos: demoClone('proyectos'), presupuestos: demoClone('presupuestos'),
+    tareas_catalogo: catalogoFilas(), agenda_tareas: [], vacaciones: [], festivos: [],
+  };
   return demoState;
 }
 const uid = () => Math.random().toString(36).slice(2, 10);
