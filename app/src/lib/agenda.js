@@ -2,7 +2,8 @@
 // AGENDA DEL CONSULTOR · XIX Convenio Consultorías 2025-2027
 //   · 1.800 h de trabajo efectivo en cómputo anual (tope legal)
 //   · 40 h/semana (8 h/día) · máx. 9 h ordinarias/día
-//   · Agosto: jornada intensiva 36 h/semana (7,2 h/día)
+//   · Verano (1 jul–15 sep): jornada intensiva 7 h/día (35 h/sem)
+//   · Tope 1.800 h = MÁXIMO legal: la jornada real no se infla a 1.800
 //   · Vacaciones: 23 días laborables (22 si ≥2 meses de intensiva)
 // Tareas: fecha/horas PREVISTAS (plan) y EFECTIVAS/REALES (ejecución)
 // Capa de datos con el mismo patrón DEMO que lib/data.js.
@@ -12,8 +13,16 @@ import { supabase, DEMO } from './supabase';
 export const TOPE_ANUAL = 1800;
 export const MAX_HORAS_DIA = 9;
 export const HORAS_DIA_ESTANDAR = 8;
-export const HORAS_DIA_AGOSTO = 7.2;
-export const DIAS_VACACIONES = 23;
+export const HORAS_DIA_VERANO = 7;          // jornada intensiva de verano
+// Jornada intensiva Consultify: 1 julio – 15 septiembre a 7 h/día (35 h/sem,
+// dentro del tope de 36 h/sem del art. 20.2). 2+ meses ⇒ 22 días vacaciones.
+export const VERANO_INI = '07-01';
+export const VERANO_FIN = '09-15';
+export const esVerano = (date) => {
+  const md = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return md >= VERANO_INI && md <= VERANO_FIN;
+};
+export const DIAS_VACACIONES = 22;  // 2+ meses de intensiva ⇒ 22 días (art. 21 convenio)
 export const YEAR_AGENDA = 2026; // año de ajuste
 
 // Reparto de la jornada (sobre el objetivo de convenio ya ajustado al tope):
@@ -60,7 +69,7 @@ export function esLaborable(date, festivosSet) {
   return !festivosSet.has(toISO(date));
 }
 
-export const horasDia = (date) => (date.getMonth() === 7 ? HORAS_DIA_AGOSTO : HORAS_DIA_ESTANDAR);
+export const horasDia = (date) => (esVerano(date) ? HORAS_DIA_VERANO : HORAS_DIA_ESTANDAR);
 
 export function diasDelMes(year, month) {
   const out = [];
@@ -105,18 +114,20 @@ export function resumenAnual(year, festivosSet, vacacionesSet, tareas) {
     meses.push({ mes: m, nombre: MESES[m], ...resumenMes(year, m, festivosSet, vacacionesSet, tareas) });
   }
 
-  // ── Ajuste al tope del convenio: nunca más de 1.800 h/año ──
-  // El recorte se prorratea entre los meses en proporción a sus horas.
+  // ── Tope de 1.800 h = MÁXIMO legal (art. 20.1), no objetivo a clavar ──
+  // La jornada real = horas de convenio − vacaciones. Solo se recorta
+  // (prorrateando) en el caso de que el calendario supere el tope.
   const brutoTotal = meses.reduce((a, m) => a + m.objetivoBruto, 0);
-  const factor = brutoTotal > 0 ? Math.min(1, TOPE_ANUAL / brutoTotal) : 1;
+  const factor = brutoTotal > TOPE_ANUAL ? TOPE_ANUAL / brutoTotal : 1; // solo si excede
   for (const m of meses) {
-    m.objetivo     = m.objetivoBruto * factor;
+    m.objetivo     = m.objetivoBruto * factor;      // jornada real del mes
     m.productivas  = m.objetivo * PCT_PRODUCTIVO;   // facturable a cliente
     m.gestion      = m.objetivo * PCT_GESTION;
     m.coordinacion = m.objetivo * PCT_COORDINACION;
     m.disponibles  = Math.max(0, m.productivas - m.prevTipo.produccion); // hueco facturable
   }
-  const ajusteTope = Math.max(0, brutoTotal - TOPE_ANUAL); // h de libre disposición
+  const ajusteTope = Math.max(0, brutoTotal - TOPE_ANUAL); // h recortadas si excede el tope
+  const margenTope = Math.max(0, TOPE_ANUAL - brutoTotal); // h libres hasta el tope legal
 
   const total = meses.reduce((a, m) => ({
     horasConvenio: a.horasConvenio + m.horasConvenio,
@@ -169,7 +180,8 @@ export function resumenAnual(year, festivosSet, vacacionesSet, tareas) {
 
   return {
     meses, total, tope: TOPE_ANUAL,
-    ajusteTope,                                   // h recortadas para no superar 1.800
+    ajusteTope,                                   // h recortadas si se supera el tope
+    margenTope,                                   // h libres hasta 1.800
     capProductiva: total.productivas,             // referencia para tareas y reloj
     ritmo, proyeccion,
   };

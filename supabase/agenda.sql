@@ -91,3 +91,18 @@ begin
       check (tipo in ('produccion','gestion','coordinacion'));
   end if;
 end $$;
+
+-- ─── 7 · CAMPOS DE CONSULTOR (apellidos, email) y tipo de tarea ──
+-- Idempotente: añade columnas que falten sin tocar datos.
+alter table consultores add column if not exists apellidos text;
+alter table consultores add column if not exists email text;
+alter table agenda_tareas add column if not exists tipo text not null default 'produccion';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'agenda_tareas_tipo_check') then
+    alter table agenda_tareas add constraint agenda_tareas_tipo_check
+      check (tipo in ('produccion','gestion','coordinacion'));
+  end if;
+end $$;
+-- Hora de inicio prevista para volcar al calendario (HH:MM); por defecto 09:00
+alter table agenda_tareas add column if not exists hora_inicio text default '09:00';

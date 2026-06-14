@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts';
 import { listTable } from '../../lib/data.js';
+import { descargarTareaICS, descargarAgendaICS } from '../../lib/ics.js';
 import {
   YEAR_AGENDA, FESTIVOS_2026, MESES, TOPE_ANUAL, MAX_HORAS_DIA, DIAS_VACACIONES,
   PCT_PRODUCTIVO, PCT_GESTION, PCT_COORDINACION, TIPOS_TAREA, TIPO_BY_ID,
@@ -74,6 +75,7 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
     horas_reales: tarea?.horas_reales ?? '',
     proyecto_id: tarea?.proyecto_id ?? '',
     tipo: tarea?.tipo ?? 'produccion',
+    hora_inicio: tarea?.hora_inicio ?? '09:00',
     estado: tarea?.estado ?? 'pendiente',
   });
   const [guardando, setGuardando] = useState(false);
@@ -101,6 +103,7 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
         horas_reales: f.horas_reales ? Number(f.horas_reales) : null,
         proyecto_id: f.proyecto_id || null,
         tipo: f.tipo,
+        hora_inicio: f.hora_inicio || '09:00',
         estado: f.estado,
       }, tarea?.id);
     } finally { setGuardando(false); }
@@ -167,6 +170,11 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
                 <input type="number" min="0.5" max="9" step="0.5" className="input" value={f.horas_previstas} onChange={set('horas_previstas')} />
               </div>
             </div>
+            <div className="mt-3 w-1/2 pr-1.5">
+              <label className="label">Hora de inicio</label>
+              <input type="time" className="input" value={f.hora_inicio} onChange={set('hora_inicio')} />
+              <p className="mt-1 text-[11px] font-medium text-navy-300">Se usa al descargar la tarea a tu calendario.</p>
+            </div>
             {totalPrev > MAX_HORAS_DIA && (
               <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
                 El plan de ese día suma {totalPrev} h; el convenio limita a {MAX_HORAS_DIA} h ordinarias/día.
@@ -223,6 +231,10 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
             : <span />}
           <div className="flex gap-2">
             <button onClick={onCerrar} className="btn-ghost">Cancelar</button>
+            {f.titulo.trim() && (
+              <button type="button" onClick={() => descargarTareaICS({ ...f, id: tarea?.id }, '')}
+                className="btn-ghost" title="Descargar esta tarea (.ics) para tu calendario">⤓ Calendario</button>
+            )}
             <button onClick={guardar} disabled={guardando || !f.titulo.trim()} className="btn-orange">
               {guardando ? 'Guardando…' : 'Guardar tarea'}
             </button>
@@ -443,10 +455,17 @@ export default function Agenda() {
             {consultores.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {c.nivel}</option>)}
           </select>
         </div>
-        <button onClick={() => setModoVacaciones((m) => !m)}
-          className={modoVacaciones ? 'btn-primary' : 'btn-ghost'}>
-          ✈ {modoVacaciones ? 'Marcando vacaciones — clic en los días' : 'Marcar vacaciones'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => descargarAgendaICS(tareas, consultor?.nombre ? `${consultor.nombre} ${consultor.apellidos || ''}`.trim() : '', `${consultor?.nombre || 'agenda'}-${YEAR}`)}
+            disabled={!tareas.length} className="btn-ghost disabled:opacity-40"
+            title="Descargar todas las tareas como .ics para importar en tu calendario">
+            ⤓ Descargar a calendario
+          </button>
+          <button onClick={() => setModoVacaciones((m) => !m)}
+            className={modoVacaciones ? 'btn-primary' : 'btn-ghost'}>
+            ✈ {modoVacaciones ? 'Marcando vacaciones — clic en los días' : 'Marcar vacaciones'}
+          </button>
+        </div>
       </div>
 
       {err && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{err}</div>}
@@ -491,9 +510,12 @@ export default function Agenda() {
           </div>
           <div className="mt-3 space-y-1 border-t border-navy-50 pt-3 text-xs font-medium text-navy-400">
             <p>Calendario {YEAR} tras festivos y vacaciones: <strong className="text-navy-800">{Math.round(anual.total.horasConvenio - anual.total.horasVacaciones)} h</strong></p>
-            <p>Jornada anual ajustada al tope: <strong className="text-navy-800">{Math.round(anual.total.objetivo)} h</strong> (máx. {TOPE_ANUAL} h)</p>
+            <p>Jornada anual real (con intensiva verano): <strong className="text-navy-800">{Math.round(anual.total.objetivo)} h</strong> de máx. {TOPE_ANUAL} h</p>
+            {anual.margenTope > 0 && (
+              <p>Margen hasta el tope legal: <strong className="text-navy-800">{Math.round(anual.margenTope)} h</strong></p>
+            )}
             {anual.ajusteTope > 0 && (
-              <p>Ajuste al tope (libre disposición): <strong className="text-navy-800">−{Math.round(anual.ajusteTope)} h</strong>, prorrateado entre meses</p>
+              <p className="font-bold text-red-600">⚠ El calendario supera el tope en {Math.round(anual.ajusteTope)} h; revisar festivos o intensiva.</p>
             )}
             <p>Reparto: <strong className="text-navy-800">{Math.round(anual.total.productivas)} h</strong> productivas ({PCT_PRODUCTIVO * 100} %) · {Math.round(anual.total.gestion)} h gestión ({PCT_GESTION * 100} %) · {Math.round(anual.total.coordinacion)} h coordinación ({PCT_COORDINACION * 100} %)</p>
             <p>Desviación anual real vs plan: <strong className="text-navy-800">{r1(anual.total.reales - anual.total.previstas)} h</strong></p>
