@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts';
 import { listTable } from '../../lib/data.js';
 import { descargarTareaICS, descargarAgendaICS } from '../../lib/ics.js';
+import { EFICIENCIA } from '../../lib/calcEngine.js';
 import {
   YEAR_AGENDA, FESTIVOS_2026, MESES, TOPE_ANUAL, MAX_HORAS_DIA, DIAS_VACACIONES,
   PCT_PRODUCTIVO, PCT_GESTION, PCT_COORDINACION, TIPOS_TAREA, TIPO_BY_ID,
@@ -76,8 +77,13 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
     proyecto_id: tarea?.proyecto_id ?? '',
     tipo: tarea?.tipo ?? 'produccion',
     hora_inicio: tarea?.hora_inicio ?? '09:00',
+    horas_base: tarea?.horas_base ?? '',
     estado: tarea?.estado ?? 'pendiente',
   });
+  const nivelResp = consultores.find((c) => String(c.id) === String(f.consultor_id))?.nivel || 'J2';
+  const coef = EFICIENCIA[nivelResp] ?? 1;
+  // Si hay horas_base, las horas previstas se derivan por eficiencia del nivel
+  const horasDerivadas = f.horas_base ? Math.round(Number(f.horas_base) * coef * 10) / 10 : null;
   const [guardando, setGuardando] = useState(false);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
 
@@ -98,7 +104,8 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
         titulo: f.titulo.trim(),
         descripcion: f.descripcion || null,
         fecha_prevista: f.fecha_prevista,
-        horas_previstas: Number(f.horas_previstas),
+        horas_base: f.horas_base ? Number(f.horas_base) : null,
+        horas_previstas: horasDerivadas ?? Number(f.horas_previstas),
         fecha_efectiva: f.fecha_efectiva || null,
         horas_reales: f.horas_reales ? Number(f.horas_reales) : null,
         proyecto_id: f.proyecto_id || null,
@@ -166,8 +173,24 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
                 <input type="date" className="input" value={f.fecha_prevista} onChange={set('fecha_prevista')} />
               </div>
               <div>
+                <label className="label">Horas base (tarea tipo)</label>
+                <input type="number" min="0.5" step="0.5" className="input" placeholder="opcional" value={f.horas_base} onChange={set('horas_base')} />
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
                 <label className="label">Horas programadas *</label>
-                <input type="number" min="0.5" max="9" step="0.5" className="input" value={f.horas_previstas} onChange={set('horas_previstas')} />
+                <input type="number" min="0.5" max="9" step="0.5" className="input"
+                  value={horasDerivadas ?? f.horas_previstas}
+                  onChange={set('horas_previstas')} disabled={!!horasDerivadas} />
+              </div>
+              <div className="flex items-end">
+                {horasDerivadas != null && (
+                  <p className="text-[11px] font-semibold text-navy-400">
+                    {nivelResp} aplica {Math.round(coef * 100)}% → {horasDerivadas} h
+                    {horasDerivadas > 9 && <span className="text-red-600"> (supera 9h/día)</span>}
+                  </p>
+                )}
               </div>
             </div>
             <div className="mt-3 w-1/2 pr-1.5">
@@ -394,7 +417,9 @@ export default function Agenda() {
   const festivosSet = useMemo(() => new Set(festivos.map((f) => f.fecha)), [festivos]);
   const vacacionesSet = useMemo(() => new Set(vacaciones.map((v) => v.fecha)), [vacaciones]);
 
-  const anual = useMemo(() => resumenAnual(YEAR, festivosSet, vacacionesSet, tareas), [festivosSet, vacacionesSet, tareas]);
+  const consultorSel = consultores.find((c) => String(c.id) === String(consultorId));
+  const pctJornada = consultorSel?.pct_jornada ?? 100;
+  const anual = useMemo(() => resumenAnual(YEAR, festivosSet, vacacionesSet, tareas, pctJornada), [festivosSet, vacacionesSet, tareas, pctJornada]);
   const rMes = anual.meses[mes];
   const vacRestantes = DIAS_VACACIONES - anual.total.diasVacaciones;
   const desvMes = r1(rMes.reales - rMes.previstas);

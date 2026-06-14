@@ -5,6 +5,7 @@ import Proyectos from './consultores/Proyectos.jsx';
 import Planificacion from './consultores/Planificacion.jsx';
 import Clientes from './consultores/Clientes.jsx';
 import Agenda from './consultores/Agenda.jsx';
+import ControlSistema from './consultores/ControlSistema.jsx';
 
 export default function ConsultorPortal() {
   const tabs = [
@@ -12,6 +13,7 @@ export default function ConsultorPortal() {
     { to: 'proyectos', label: 'Proyectos' },
     { to: 'planificacion', label: 'Planificación' },
     { to: 'agenda', label: 'Agenda' },
+    { to: 'sistemas', label: 'Control por sistema' },
     { to: 'equipo', label: 'Equipo' },
     { to: 'clientes', label: 'Clientes' },
   ];
@@ -30,6 +32,7 @@ export default function ConsultorPortal() {
           <Route path="proyectos" element={<Proyectos />} />
           <Route path="planificacion" element={<Planificacion />} />
           <Route path="agenda" element={<Agenda />} />
+          <Route path="sistemas" element={<ControlSistema />} />
           <Route path="equipo" element={<Equipo />} />
           <Route path="clientes" element={<Clientes />} />
           <Route path="*" element={<Navigate to="." replace />} />

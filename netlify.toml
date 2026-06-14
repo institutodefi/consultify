@@ -3,6 +3,12 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# Feed .ics suscribible de la agenda
+[[redirects]]
+  from = "/api/agenda-feed"
+  to = "/.netlify/functions/agenda-feed"
+  status = 200
+
 # SPA: cualquier ruta bajo /app/ sirve la app React
 [[redirects]]
   from = "/app/*"

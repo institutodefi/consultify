@@ -24,6 +24,21 @@ export const MARGEN = 0.60;
 export const IVA = 0.21;
 export const ACOMPANAMIENTO_AUDITORIA_DIA = 600; // €/jornada, siempre aparte
 
+// ── Eficiencia por categoría (coeficiente de tiempo sobre tarea base) ──
+// Una tarea "tipo" de N horas le cuesta a cada nivel: N × COEF.
+// J1 emplea el 100%, J2 el 75%, J3 el 50%, Senior el 40%.
+export const EFICIENCIA = { J1: 1.00, J2: 0.75, J3: 0.50, Senior: 0.40 };
+// Rendimiento = horas productivas equivalentes por hora real (1/coef).
+export const RENDIMIENTO = {
+  J1: 1 / EFICIENCIA.J1, J2: 1 / EFICIENCIA.J2, J3: 1 / EFICIENCIA.J3, Senior: 1 / EFICIENCIA.Senior,
+};
+
+// Reparto de jornada (coherente con la Agenda)
+export const PCT_PRODUCTIVO = 0.70;
+
+// Horas que le cuesta a un nivel una tarea cuya base son `horasBase`
+export const horasPorNivel = (horasBase, nivel) => horasBase * (EFICIENCIA[nivel] ?? 1);
+
 export const MODELOS = {
   Apoyo: {
     id: 'Apoyo', tipo: 'bolsa', hSist: null, hPres: 0, paso: 100, suelo: 0,

@@ -108,7 +108,7 @@ export function resumenMes(year, month, festivosSet, vacacionesSet, tareas) {
   };
 }
 
-export function resumenAnual(year, festivosSet, vacacionesSet, tareas) {
+export function resumenAnual(year, festivosSet, vacacionesSet, tareas, pctJornada = 100) {
   const meses = [];
   for (let m = 0; m < 12; m++) {
     meses.push({ mes: m, nombre: MESES[m], ...resumenMes(year, m, festivosSet, vacacionesSet, tareas) });
@@ -119,9 +119,10 @@ export function resumenAnual(year, festivosSet, vacacionesSet, tareas) {
   // (prorrateando) en el caso de que el calendario supere el tope.
   const brutoTotal = meses.reduce((a, m) => a + m.objetivoBruto, 0);
   const factor = brutoTotal > TOPE_ANUAL ? TOPE_ANUAL / brutoTotal : 1; // solo si excede
+  const jor = (pctJornada ?? 100) / 100;          // fracción de jornada del consultor
   for (const m of meses) {
-    m.objetivo     = m.objetivoBruto * factor;      // jornada real del mes
-    m.productivas  = m.objetivo * PCT_PRODUCTIVO;   // facturable a cliente
+    m.objetivo     = m.objetivoBruto * factor * jor; // jornada real del mes según % dedicación
+    m.productivas  = m.objetivo * PCT_PRODUCTIVO;    // facturable a cliente
     m.gestion      = m.objetivo * PCT_GESTION;
     m.coordinacion = m.objetivo * PCT_COORDINACION;
     m.disponibles  = Math.max(0, m.productivas - m.prevTipo.produccion); // hueco facturable
