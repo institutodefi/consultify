@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { listTable } from '../../lib/data.js';
 import { NORMA_BY_ID, fmtEUR, calcular } from '../../lib/calcEngine.js';
+import { useAuth } from '../../lib/auth.jsx';
 
 const NAVY = '#0A2A6C', ORANGE = '#F5A623';
 const PIE_COLORS = ['#0A2A6C', '#2B4A93', '#4C6BB4', '#7E97CE', '#F5A623'];
 
 export default function Dashboard() {
+  const { verEconomico } = useAuth();
   const [consultores, setConsultores] = useState([]);
   const [proyectos, setProyectos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -39,25 +41,41 @@ export default function Dashboard() {
       .sort((a, b) => b.proyectos - a.proyectos);
   }, [activos]);
 
-  const carga = useMemo(() => consultores.filter(c => c.activo).map(c => {
+  const equipoConsultores = useMemo(() => consultores.filter(c => c.activo && (c.tipo_equipo || 'consultor') === 'consultor'), [consultores]);
+  const equipoComercial = useMemo(() => consultores.filter(c => c.activo && c.tipo_equipo === 'gestion' && c.subtipo === 'comercial'), [consultores]);
+  const equipoGestion = useMemo(() => consultores.filter(c => c.activo && c.tipo_equipo === 'gestion'), [consultores]);
+
+  const carga = useMemo(() => equipoConsultores.map(c => {
     const asignados = activos.filter(p => p.consultor_id === c.id);
     const horas = asignados.reduce((s, p) => {
       if (p.modelo === 'Apoyo') return s;
       const r = calcular(p.normas || [], p.modelo);
       return s + (r?.hTotal || 0);
     }, 0);
-    return { ...c, nProyectos: asignados.length, horas, pct: c.capacidad_clientes ? Math.min(100, Math.round(asignados.length / c.capacidad_clientes * 100)) : 0 };
-  }), [consultores, activos]);
+    const capProd = Math.round(150 * (c.pct_jornada ?? 100) / 100 * 0.7);
+    return { ...c, nProyectos: asignados.length, horas, capProd, pct: capProd ? Math.min(100, Math.round(horas / capProd * 100)) : 0 };
+  }), [equipoConsultores, activos]);
 
   if (!ready) return <p className="font-semibold text-navy-400">Cargando…</p>;
 
   return (
     <div className="space-y-8">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="MRR (cuotas activas)" value={fmtEUR(kpis.mrr)} sub={`ARR ${fmtEUR(kpis.arr)}`} />
-        <Kpi label="Bolsas Apoyo vendidas" value={fmtEUR(kpis.bolsas)} sub="pago único" />
-        <Kpi label="Proyectos en cartera" value={kpis.nProyectos} sub={`${kpis.nClientes} clientes`} />
-        <Kpi label="Objetivo 2027" value="3 M€" sub={`MRR necesario ≈ ${fmtEUR(250000)}`} accent />
+        {verEconomico ? (
+          <>
+            <Kpi label="MRR (cuotas activas)" value={fmtEUR(kpis.mrr)} sub={`ARR ${fmtEUR(kpis.arr)}`} />
+            <Kpi label="Bolsas Apoyo vendidas" value={fmtEUR(kpis.bolsas)} sub="pago único" />
+            <Kpi label="Proyectos en cartera" value={kpis.nProyectos} sub={`${kpis.nClientes} clientes`} />
+            <Kpi label="Objetivo 2027" value="3 M€" sub={`MRR necesario ≈ ${fmtEUR(250000)}`} accent />
+          </>
+        ) : (
+          <>
+            <Kpi label="Proyectos en cartera" value={kpis.nProyectos} sub={`${kpis.nClientes} clientes`} />
+            <Kpi label="Consultores activos" value={equipoConsultores.length} sub="equipo de entrega" />
+            <Kpi label="Equipo de gestión" value={equipoGestion.length} sub={`${equipoComercial.length} comercial(es)`} />
+            <Kpi label="Sistemas activos" value={porNorma.length} sub="normas en cartera" accent />
+          </>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -90,14 +108,41 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="card">
+          <h3 className="font-extrabold">Equipo de consultoría <span className="chip ml-1 bg-navy-50 text-navy-500">{equipoConsultores.length}</span></h3>
+          <div className="mt-3 space-y-2">
+            {equipoConsultores.map(c => (
+              <div key={c.id} className="flex items-center justify-between border-b border-navy-50 pb-2 text-sm last:border-0">
+                <span className="font-bold">{c.nombre} {c.apellidos || ''}</span>
+                <span className="chip bg-navy-50 text-navy-600">{c.nivel} · {c.pct_jornada ?? 100}%</span>
+              </div>
+            ))}
+            {!equipoConsultores.length && <p className="text-sm font-medium text-navy-400">Sin consultores. Añádelos en Equipo.</p>}
+          </div>
+        </div>
+        <div className="card">
+          <h3 className="font-extrabold">Equipo de gestión <span className="chip ml-1 bg-navy-50 text-navy-500">{equipoGestion.length}</span></h3>
+          <div className="mt-3 space-y-2">
+            {equipoGestion.map(c => (
+              <div key={c.id} className="flex items-center justify-between border-b border-navy-50 pb-2 text-sm last:border-0">
+                <span className="font-bold">{c.nombre} {c.apellidos || ''}</span>
+                <span className="chip bg-brand-orange/15 text-brand-orangeDark capitalize">{c.subtipo || 'gestión'}</span>
+              </div>
+            ))}
+            {!equipoGestion.length && <p className="text-sm font-medium text-navy-400">Sin equipo de gestión. Añádelo en Equipo.</p>}
+          </div>
+        </div>
+      </div>
+
       <div className="card">
-        <h3 className="font-extrabold">Carga del equipo</h3>
+        <h3 className="font-extrabold">Carga del equipo de consultoría</h3>
         <div className="mt-4 space-y-4">
           {carga.map(c => (
             <div key={c.id}>
               <div className="flex items-baseline justify-between text-sm">
                 <p className="font-bold">{c.nombre} <span className="chip ml-1 bg-navy-50 text-navy-500">{c.nivel}</span></p>
-                <p className="font-semibold text-navy-400">{c.nProyectos}/{c.capacidad_clientes} clientes · ~{c.horas} h/mes</p>
+                <p className="font-semibold text-navy-400">{c.nProyectos} proyectos · ~{c.horas}/{c.capProd} h productivas/mes</p>
               </div>
               <div className="mt-1.5 h-2.5 rounded-full bg-navy-50">
                 <div className="h-2.5 rounded-full transition-all" style={{ width: `${c.pct}%`, background: c.pct > 90 ? '#DC2626' : c.pct > 70 ? ORANGE : NAVY }} />

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID, MODELO_IDS, calcular, fmtEUR } from '../../lib/calcEngine.js';
+import { useAuth } from '../../lib/auth.jsx';
 
 const ESTADOS = ['implantación', 'activo', 'pausado', 'cerrado'];
 const COLOR_ESTADO = { activo: 'bg-green-100 text-green-800', 'implantación': 'bg-brand-orange/20 text-brand-orangeDark', pausado: 'bg-navy-100 text-navy-500', cerrado: 'bg-navy-50 text-navy-300' };
 const VACIO = { cliente_id: '', normas: ['9001'], modelo: 'Implicación', consultor_id: '', estado: 'implantación', fecha_inicio: '', fecha_auditoria: '', notas: '' };
 
 export default function Proyectos() {
+  const { verEconomico } = useAuth();
   const [proyectos, setProyectos] = useState(null);
   const [clientes, setClientes] = useState([]);
   const [consultores, setConsultores] = useState([]);
@@ -102,7 +104,7 @@ export default function Proyectos() {
             </div>
           </div>
 
-          {calc && (
+          {calc && verEconomico && (
             <div className="rounded-2xl bg-navy-900 p-4 text-white">
               <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
                 <p className="text-2xl font-extrabold">{fmtEUR(calc.precioCatalogo)}<span className="text-sm font-bold text-white/60">{calc.tipo === 'mes' ? '/mes' : ' único'}</span></p>
@@ -147,7 +149,7 @@ export default function Proyectos() {
       <div className="card overflow-x-auto !p-0">
         <table className="w-full min-w-[860px] text-sm">
           <thead><tr className="border-b border-navy-100 text-left text-xs font-bold uppercase tracking-wider text-navy-300">
-            <th className="px-5 py-3">Cliente</th><th className="px-5 py-3">Normas</th><th className="px-5 py-3">Modelo</th><th className="px-5 py-3">Consultor</th><th className="px-5 py-3">Estado</th><th className="px-5 py-3 text-right">Precio</th><th className="px-5 py-3 text-right">Acciones</th>
+            <th className="px-5 py-3">Cliente</th><th className="px-5 py-3">Normas</th><th className="px-5 py-3">Modelo</th><th className="px-5 py-3">Consultor</th><th className="px-5 py-3">Estado</th>{verEconomico && <th className="px-5 py-3 text-right">Precio</th>}<th className="px-5 py-3 text-right">Acciones</th>
           </tr></thead>
           <tbody className="divide-y divide-navy-50">
             {proyectos.map(p => (
@@ -157,7 +159,7 @@ export default function Proyectos() {
                 <td className="px-5 py-3 font-semibold">{p.modelo}</td>
                 <td className="px-5 py-3 font-medium">{nombreConsultor(p.consultor_id)}</td>
                 <td className="px-5 py-3"><span className={`chip ${COLOR_ESTADO[p.estado] || COLOR_ESTADO.pausado}`}>{p.estado}</span></td>
-                <td className="px-5 py-3 text-right font-extrabold">{p.precio_mes ? `${fmtEUR(p.precio_mes)}/mes` : p.precio_total ? fmtEUR(p.precio_total) : '—'}</td>
+                {verEconomico && <td className="px-5 py-3 text-right font-extrabold">{p.precio_mes ? `${fmtEUR(p.precio_mes)}/mes` : p.precio_total ? fmtEUR(p.precio_total) : '—'}</td>}
                 <td className="px-5 py-3 text-right">
                   <button onClick={() => setForm({ ...VACIO, ...p, normas: [...new Set(['9001', ...(p.normas || [])])], consultor_id: p.consultor_id || '', cliente_id: p.cliente_id || '' })} className="font-bold text-navy-700 hover:underline">Editar</button>
                   <button onClick={() => borrar(p.id)} className="ml-4 font-bold text-red-600 hover:underline">Eliminar</button>

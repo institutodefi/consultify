@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
 
-const VACIO = { codigo: '', empresa: '', contacto: '', email: '', telefono: '' };
+const VACIO = { codigo: '', empresa: '', contacto: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
 
 export default function Clientes() {
   const [clientes, setClientes] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [centros, setCentros] = useState([]);
   const [normasEmp, setNormasEmp] = useState([]);
+  const [equipo, setEquipo] = useState([]);
   const [form, setForm] = useState(VACIO);
   const [abierto, setAbierto] = useState(null); // cliente_id expandido
   const [msg, setMsg] = useState(null);
@@ -18,13 +19,14 @@ export default function Clientes() {
     listTable('cliente_empresas').then(setEmpresas);
     listTable('empresa_centros').then(setCentros);
     listTable('empresa_normas').then(setNormasEmp);
+    listTable('consultores').then(setEquipo).catch(() => {});
   };
   useEffect(cargar, []);
 
   async function guardarCliente(e) {
     e.preventDefault(); setMsg(null);
     try {
-      const datos = { codigo: form.codigo, empresa: form.empresa, contacto: form.contacto, email: form.email, telefono: form.telefono };
+      const datos = { codigo: form.codigo, empresa: form.empresa, contacto: form.contacto, email: form.email, telefono: form.telefono, director_proyecto_id: form.director_proyecto_id || null, jefe_cuenta_id: form.jefe_cuenta_id || null };
       if (form.id) await updateRow('clientes', form.id, datos);
       else await insertRow('clientes', datos);
       setForm(VACIO); cargar();
@@ -80,12 +82,24 @@ export default function Clientes() {
       {/* Alta / edición de cliente */}
       <form onSubmit={guardarCliente} className="card">
         <h3 className="font-extrabold">{form.id ? `Editar · ${form.empresa}` : 'Nuevo cliente'}</h3>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           <div><label className="label" htmlFor="c-codigo">ID de cliente</label><input id="c-codigo" className="input" placeholder="CL-0001" value={form.codigo || ''} onChange={e => setForm({ ...form, codigo: e.target.value })} /></div>
           <div><label className="label" htmlFor="c-empresa">Nombre comercial</label><input id="c-empresa" required className="input" value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></div>
           <div><label className="label" htmlFor="c-contacto">Contacto</label><input id="c-contacto" className="input" value={form.contacto || ''} onChange={e => setForm({ ...form, contacto: e.target.value })} /></div>
           <div><label className="label" htmlFor="c-email">Email</label><input id="c-email" type="email" className="input" value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
           <div><label className="label" htmlFor="c-tel">Teléfono</label><input id="c-tel" className="input" value={form.telefono || ''} onChange={e => setForm({ ...form, telefono: e.target.value })} /></div>
+          <div><label className="label" htmlFor="c-dir">Director de Proyecto</label>
+            <select id="c-dir" className="input" value={form.director_proyecto_id || ''} onChange={e => setForm({ ...form, director_proyecto_id: e.target.value })}>
+              <option value="">Sin asignar</option>
+              {equipo.filter(c => (c.tipo_equipo || 'consultor') === 'consultor' && c.activo !== false).map(c => <option key={c.id} value={c.id}>{c.nombre} {c.apellidos || ''}</option>)}
+            </select>
+          </div>
+          <div><label className="label" htmlFor="c-jefe">Jefe de Cuenta</label>
+            <select id="c-jefe" className="input" value={form.jefe_cuenta_id || ''} onChange={e => setForm({ ...form, jefe_cuenta_id: e.target.value })}>
+              <option value="">Sin asignar</option>
+              {equipo.filter(c => c.tipo_equipo === 'gestion' && c.subtipo === 'comercial' && c.activo !== false).map(c => <option key={c.id} value={c.id}>{c.nombre} {c.apellidos || ''}</option>)}
+            </select>
+          </div>
         </div>
         <div className="mt-4 flex items-center gap-3">
           <button className="btn-primary">{form.id ? 'Guardar cambios' : 'Crear cliente'}</button>

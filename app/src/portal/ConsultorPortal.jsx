@@ -6,38 +6,46 @@ import Planificacion from './consultores/Planificacion.jsx';
 import Clientes from './consultores/Clientes.jsx';
 import Agenda from './consultores/Agenda.jsx';
 import ControlSistema from './consultores/ControlSistema.jsx';
+import BarraVerComo from '../components/BarraVerComo.jsx';
+import { useAuth } from '../lib/auth.jsx';
+import { tabsParaRol, can } from '../lib/permisos.js';
+
+// Guard: si el rol efectivo no puede ver la ruta, redirige al dashboard
+function Guard({ ok, children }) {
+  return ok ? children : <Navigate to="." replace />;
+}
 
 export default function ConsultorPortal() {
-  const tabs = [
-    { to: '', end: true, label: 'Dashboard' },
-    { to: 'proyectos', label: 'Proyectos' },
-    { to: 'planificacion', label: 'Planificación' },
-    { to: 'agenda', label: 'Agenda' },
-    { to: 'sistemas', label: 'Control por sistema' },
-    { to: 'equipo', label: 'Equipo' },
-    { to: 'clientes', label: 'Clientes' },
-  ];
+  const { role } = useAuth();
+  const tabs = tabsParaRol(role);
+  const verEquipo = can.gestionarEquipo(role);
+  const verPlanAgendaSist = ['superadmin', 'admin', 'consultor'].includes(role);
+  const verClientes = ['superadmin', 'admin', 'gestion'].includes(role);
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10">
-      <p className="eyebrow">Operaciones Consultify</p>
-      <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Zona de consultores</h1>
-      <nav className="mt-6 flex gap-6 border-b border-navy-100 text-sm">
-        {tabs.map(t => (
-          <NavLink key={t.to} to={t.to} end={t.end} className={({isActive}) => `pb-3 ${isActive ? 'tab-active' : 'tab-idle'}`}>{t.label}</NavLink>
-        ))}
-      </nav>
-      <div className="mt-8">
-        <Routes>
-          <Route index element={<Dashboard />} />
-          <Route path="proyectos" element={<Proyectos />} />
-          <Route path="planificacion" element={<Planificacion />} />
-          <Route path="agenda" element={<Agenda />} />
-          <Route path="sistemas" element={<ControlSistema />} />
-          <Route path="equipo" element={<Equipo />} />
-          <Route path="clientes" element={<Clientes />} />
-          <Route path="*" element={<Navigate to="." replace />} />
-        </Routes>
+    <>
+      <BarraVerComo />
+      <div className="mx-auto max-w-7xl px-4 py-10">
+        <p className="eyebrow">Operaciones Consultify</p>
+        <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Zona interna</h1>
+        <nav className="mt-6 flex flex-wrap gap-6 border-b border-navy-100 text-sm">
+          {tabs.map(t => (
+            <NavLink key={t.to} to={t.to} end={t.to === ''} className={({ isActive }) => `pb-3 ${isActive ? 'tab-active' : 'tab-idle'}`}>{t.label}</NavLink>
+          ))}
+        </nav>
+        <div className="mt-8">
+          <Routes>
+            <Route index element={<Dashboard />} />
+            <Route path="proyectos" element={<Proyectos />} />
+            <Route path="planificacion" element={<Guard ok={verPlanAgendaSist}><Planificacion /></Guard>} />
+            <Route path="agenda" element={<Guard ok={verPlanAgendaSist}><Agenda /></Guard>} />
+            <Route path="sistemas" element={<Guard ok={verPlanAgendaSist}><ControlSistema /></Guard>} />
+            <Route path="equipo" element={<Guard ok={verEquipo}><Equipo /></Guard>} />
+            <Route path="clientes" element={<Guard ok={verClientes}><Clientes /></Guard>} />
+            <Route path="*" element={<Navigate to="." replace />} />
+          </Routes>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
