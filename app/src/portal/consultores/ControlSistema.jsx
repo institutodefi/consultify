@@ -21,7 +21,9 @@ export default function ControlSistema() {
   const [edit, setEdit] = useState(null);   // fila en edición o nueva
   const [err, setErr] = useState(null);
 
-  const load = () => listTable('tareas_catalogo').then(setCatalogo).catch(() => setCatalogo([]));
+  const load = () => listTable('tareas_catalogo')
+    .then((d) => { setCatalogo(d || []); setErr(null); })
+    .catch((e) => { setCatalogo([]); setErr(`No se pudo cargar el catálogo: ${e.message || e.code || e}. Si la tabla no existe, ejecuta migracion-v8.sql y seed-tareas.sql en Supabase.`); });
   useEffect(() => { load(); }, []);
 
   const norma = NORMA_BY_ID[normaSel];
@@ -79,7 +81,17 @@ export default function ControlSistema() {
         </p>
       </div>
 
+      {err && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{err}</div>}
       {!catalogo && <p className="font-semibold text-navy-400">Cargando…</p>}
+
+      {catalogo && !catalogoNorma.length && !err && (
+        <div className="card text-center">
+          <p className="font-bold text-navy-700">No hay casuísticas cargadas para {norma?.nombre}.</p>
+          <p className="mt-1 text-sm font-medium text-navy-400">
+            Si esperabas ver el catálogo del Excel, ejecuta <code className="rounded bg-navy-50 px-1">seed-tareas.sql</code> en Supabase. También puedes añadir casuísticas a mano con «+ Añadir» en cada modelo.
+          </p>
+        </div>
+      )}
 
       {catalogo && MODELO_IDS.filter((m) => porModelo[m]?.length || true).map((modelo) => {
         const items = porModelo[modelo] || [];
