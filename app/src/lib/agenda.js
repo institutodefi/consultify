@@ -94,10 +94,15 @@ export function resumenMes(year, month, festivosSet, vacacionesSet, tareas) {
   let previstas = 0, reales = 0;
   const prev = { produccion: 0, gestion: 0, coordinacion: 0 };
   const real = { produccion: 0, gestion: 0, coordinacion: 0 };
+  // Para la CAPACIDAD del consultor cuentan las horas que la tarea le
+  // consume (horas_consultor, ya con eficiencia). Si no está, cae a
+  // horas_previstas (compatibilidad con tareas antiguas).
   for (const t of tareas) {
     const tipo = t.tipo || 'produccion';
-    if (enMes(t.fecha_prevista, year, month)) { previstas += Number(t.horas_previstas); prev[tipo] += Number(t.horas_previstas); }
-    if (t.horas_reales && enMes(t.fecha_efectiva, year, month)) { reales += Number(t.horas_reales); real[tipo] += Number(t.horas_reales); }
+    const hPrev = Number(t.horas_consultor ?? t.horas_previstas);
+    const hReal = Number(t.horas_reales);
+    if (enMes(t.fecha_prevista, year, month)) { previstas += hPrev; prev[tipo] += hPrev; }
+    if (t.horas_reales && enMes(t.fecha_efectiva, year, month)) { reales += hReal; real[tipo] += hReal; }
   }
   const objetivoBruto = horasConvenio - horasVacaciones;
   return {
@@ -174,7 +179,7 @@ export function resumenAnual(year, festivosSet, vacacionesSet, tareas, pctJornad
   let realesProd = 0, previstoSinCerrar = 0;
   for (const t of tareasProd) {
     if (t.horas_reales) realesProd += Number(t.horas_reales);
-    else previstoSinCerrar += Number(t.horas_previstas);
+    else previstoSinCerrar += Number(t.horas_consultor ?? t.horas_previstas);
   }
   const ritmo = labPasados > 0 ? realesProd / labPasados : 0;
   const proyeccion = realesProd + previstoSinCerrar + ritmo * labFuturosLibres;

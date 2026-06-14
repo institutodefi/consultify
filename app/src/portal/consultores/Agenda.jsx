@@ -82,8 +82,10 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
   });
   const nivelResp = consultores.find((c) => String(c.id) === String(f.consultor_id))?.nivel || 'J2';
   const coef = EFICIENCIA[nivelResp] ?? 1;
-  // Si hay horas_base, las horas previstas se derivan por eficiencia del nivel
-  const horasDerivadas = f.horas_base ? Math.round(Number(f.horas_base) * coef * 10) / 10 : null;
+  // Las horas de la tarea son el TOTAL (no se aplica eficiencia a la planificación).
+  // La eficiencia solo afecta a las horas que CONSUME el consultor de su capacidad.
+  const horasTarea = Number(f.horas_previstas) || 0;
+  const horasConsultor = Math.round(horasTarea * coef * 100) / 100;
   const [guardando, setGuardando] = useState(false);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
 
@@ -105,7 +107,8 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
         descripcion: f.descripcion || null,
         fecha_prevista: f.fecha_prevista,
         horas_base: f.horas_base ? Number(f.horas_base) : null,
-        horas_previstas: horasDerivadas ?? Number(f.horas_previstas),
+        horas_previstas: horasTarea,
+        horas_consultor: horasConsultor,
         fecha_efectiva: f.fecha_efectiva || null,
         horas_reales: f.horas_reales ? Number(f.horas_reales) : null,
         proyecto_id: f.proyecto_id || null,
@@ -173,24 +176,18 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
                 <input type="date" className="input" value={f.fecha_prevista} onChange={set('fecha_prevista')} />
               </div>
               <div>
-                <label className="label">Horas base (tarea tipo)</label>
-                <input type="number" min="0.5" step="0.5" className="input" placeholder="opcional" value={f.horas_base} onChange={set('horas_base')} />
+                <label className="label">Horas de la tarea *</label>
+                <input type="number" min="0.5" max="9" step="0.5" className="input"
+                  value={f.horas_previstas} onChange={set('horas_previstas')} />
               </div>
             </div>
+            <div className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-[11px] font-semibold text-navy-500">
+              {nivelResp} · eficiencia {Math.round(coef * 100)}% → consume <strong className="text-navy-800">{horasConsultor} h</strong> de su capacidad
+              {horasTarea > 9 && <span className="ml-1 text-red-600">· la tarea supera 9h/día</span>}
+            </div>
             <div className="mt-3 grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">Horas programadas *</label>
-                <input type="number" min="0.5" max="9" step="0.5" className="input"
-                  value={horasDerivadas ?? f.horas_previstas}
-                  onChange={set('horas_previstas')} disabled={!!horasDerivadas} />
-              </div>
               <div className="flex items-end">
-                {horasDerivadas != null && (
-                  <p className="text-[11px] font-semibold text-navy-400">
-                    {nivelResp} aplica {Math.round(coef * 100)}% → {horasDerivadas} h
-                    {horasDerivadas > 9 && <span className="text-red-600"> (supera 9h/día)</span>}
-                  </p>
-                )}
+                <p className="text-[11px] font-medium text-navy-300">Las horas de la tarea son su total; no varían por el nivel del consultor.</p>
               </div>
             </div>
             <div className="mt-3 w-1/2 pr-1.5">

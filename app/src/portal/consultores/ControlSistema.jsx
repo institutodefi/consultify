@@ -75,7 +75,7 @@ export default function ControlSistema() {
       <div>
         <h2 className="text-xl font-extrabold text-navy-900">{norma?.nombre} · tareas por norma</h2>
         <p className="text-sm font-medium text-navy-400">
-          Casuísticas del catálogo por modelo de relación. Edita nombre, descripción, horas mensuales y tipo; añade o elimina tareas. Esta es la plantilla que después se usa al planificar cada proyecto.
+          Casuísticas del catálogo por modelo de relación. Las horas son el total de cada tarea (no mensuales). Edita nombre, descripción, horas y tipo; añade o elimina tareas. Es la plantilla que se usa al planificar cada proyecto.
         </p>
       </div>
 
@@ -83,13 +83,13 @@ export default function ControlSistema() {
 
       {catalogo && MODELO_IDS.filter((m) => porModelo[m]?.length || true).map((modelo) => {
         const items = porModelo[modelo] || [];
-        const totalMes = r2(items.reduce((s, t) => s + Number(t.horas_base || 0), 0));
+        const totalHoras = r2(items.reduce((s, t) => s + Number(t.horas_base || 0), 0));
         return (
           <div key={modelo} className="card !p-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-navy-100 bg-navy-50/60 px-5 py-3">
               <div>
                 <h3 className="font-extrabold text-navy-800">Modelo {modelo}</h3>
-                <p className="text-xs font-semibold text-navy-400">{items.length} casuística(s) · {totalMes} h/mes base</p>
+                <p className="text-xs font-semibold text-navy-400">{items.length} casuística(s) · {totalMes} h</p>
               </div>
               <button onClick={() => setEdit(VACIA(normaSel, modelo))} className="btn-ghost !px-3 !py-1.5 text-sm">+ Añadir</button>
             </div>
@@ -97,7 +97,7 @@ export default function ControlSistema() {
               <table className="w-full min-w-[760px] text-sm">
                 <thead><tr className="border-b border-navy-100 text-left text-xs font-bold uppercase tracking-wider text-navy-300">
                   <th className="px-5 py-2.5">Proceso - Subproceso</th><th className="px-5 py-2.5">Descripción</th>
-                  <th className="px-5 py-2.5">Tipo</th><th className="px-5 py-2.5 text-right">Horas/mes</th><th className="px-5 py-2.5 text-right">Acciones</th>
+                  <th className="px-5 py-2.5">Tipo</th><th className="px-5 py-2.5 text-right">Horas</th><th className="px-5 py-2.5 text-right">Acciones</th>
                 </tr></thead>
                 <tbody className="divide-y divide-navy-50">
                   {items.map((c) => (
@@ -140,7 +140,7 @@ export default function ControlSistema() {
                   {TIPOS.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                 </select>
               </div>
-              <div><label className="label">Horas/mes base</label><input type="number" min="0" step="0.01" className="input" value={edit.horas_base ?? ''} onChange={(e) => setEdit({ ...edit, horas_base: e.target.value })} /></div>
+              <div><label className="label">Horas</label><input type="number" min="0" step="0.01" className="input" value={edit.horas_base ?? ''} onChange={(e) => setEdit({ ...edit, horas_base: e.target.value })} /></div>
             </div>
             {err && <p className="text-sm font-bold text-red-600">{err}</p>}
             <div className="flex justify-end gap-2">
