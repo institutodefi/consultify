@@ -30,18 +30,18 @@ export default function Shell({ children }) {
             {demo && <span className="chip bg-brand-orange/15 text-brand-orangeDark hidden sm:inline-flex">Modo demo</span>}
             {user ? (
               <>
-                {/* Perfil: nombre/email + rol (con aviso si el superadmin está simulando) */}
-                <div className="hidden text-right sm:block">
-                  <p className="text-xs font-bold text-navy-900 leading-tight">{user.email}</p>
-                  <p className="text-[11px] font-semibold leading-tight text-brand-muted">
+                {/* Perfil: email + rol SIEMPRE visible (también en móvil) */}
+                <div className="text-right">
+                  <p className="hidden text-xs font-bold text-navy-900 leading-tight sm:block">{user.email}</p>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-bold text-navy-700">
                     {ROL_LABEL[role] || role}
                     {realRole === 'superadmin' && role !== 'superadmin' && (
-                      <span className="ml-1 text-brand-orangeDark">· viendo como</span>
+                      <span className="text-brand-orangeDark">· viendo como</span>
                     )}
-                  </p>
+                  </span>
                 </div>
                 {/* Avatar con inicial */}
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-900 text-sm font-extrabold text-white" title={user.email}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-extrabold text-white" title={`${user.email} · ${ROL_LABEL[role] || role}`}>
                   {(user.email || '?').charAt(0).toUpperCase()}
                 </span>
                 <button onClick={logout} className="btn-ghost !px-4 !py-2">Salir</button>
