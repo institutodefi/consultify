@@ -1,7 +1,6 @@
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import Dashboard from './consultores/Dashboard.jsx';
 import Equipo from './consultores/Equipo.jsx';
-import Proyectos from './consultores/Proyectos.jsx';
 import Clientes from './consultores/Clientes.jsx';
 import Agenda from './consultores/Agenda.jsx';
 import PlanificadorTareas from '../pages/PlanificadorTareas.jsx';
@@ -35,7 +34,7 @@ export default function ConsultorPortal() {
         <div className="mt-8">
           <Routes>
             <Route index element={<Dashboard />} />
-            <Route path="proyectos" element={<Proyectos />} />
+            <Route path="proyectos" element={<Navigate to="../clientes" replace />} />
             <Route path="agenda" element={<Guard ok={verPlanAgendaSist}><Agenda /></Guard>} />
             <Route path="planificador" element={<Guard ok={verPlanAgendaSist}><PlanificadorTareas /></Guard>} />
             <Route path="equipo" element={<Guard ok={verEquipo}><Equipo /></Guard>} />
