@@ -5,6 +5,7 @@ import Proyectos from './consultores/Proyectos.jsx';
 import Clientes from './consultores/Clientes.jsx';
 import Agenda from './consultores/Agenda.jsx';
 import ControlSistema from './consultores/ControlSistema.jsx';
+import PlanificadorTareas from '../pages/PlanificadorTareas.jsx';
 import BarraVerComo from '../components/BarraVerComo.jsx';
 import { useAuth } from '../lib/auth.jsx';
 import { tabsParaRol, can } from '../lib/permisos.js';
@@ -38,6 +39,7 @@ export default function ConsultorPortal() {
             <Route path="proyectos" element={<Proyectos />} />
             <Route path="agenda" element={<Guard ok={verPlanAgendaSist}><Agenda /></Guard>} />
             <Route path="sistemas" element={<Guard ok={verPlanAgendaSist}><ControlSistema /></Guard>} />
+            <Route path="planificador" element={<Guard ok={verPlanAgendaSist}><PlanificadorTareas /></Guard>} />
             <Route path="equipo" element={<Guard ok={verEquipo}><Equipo /></Guard>} />
             <Route path="clientes" element={<Guard ok={verClientes}><Clientes /></Guard>} />
             <Route path="*" element={<Navigate to="." replace />} />

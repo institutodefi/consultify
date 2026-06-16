@@ -19,7 +19,7 @@ export function catalogoFilas() {
           id: `cat_${i}`, norma_id: norma, modelo,
           proceso: t.proceso, subproceso: t.subproceso,
           titulo: `${t.proceso} - ${t.subproceso}`,
-          horas_base: t.horas, descripcion: t.descripcion || '', orden,
+          horas_base: t.horas, reduccion_pct: 0, descripcion: t.descripcion || '', orden,
         });
       }
     }
