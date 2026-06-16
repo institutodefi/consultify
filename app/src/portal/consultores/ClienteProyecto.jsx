@@ -47,6 +47,7 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
   const [c2, setC2] = useState(cliente.consultor_2_id || '');
   const [catalogo, setCatalogo] = useState(null);
   const [tareas, setTareas] = useState([]);
+  const [festivos, setFestivos] = useState([]);
   const [msg, setMsg] = useState(null);
 
   const consultores = equipo.filter(c => (c.tipo_equipo || 'consultor') === 'consultor' && c.activo !== false);
@@ -54,6 +55,7 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
 
   const cargar = () => {
     listTable('tareas_catalogo').then(setCatalogo).catch(() => setCatalogo([]));
+    listTable('festivos').then(setFestivos).catch(() => setFestivos([]));
     listTable('cliente_tareas')
       .then(all => setTareas(all.filter(t => String(t.cliente_id) === String(cliente.id))
         .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))))
@@ -61,12 +63,14 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
   };
   useEffect(cargar, [cliente.id]);
 
+  const opcionesReparto = useMemo(() => ({ festivos }), [festivos]);
+
   // Propuesta de tareas según las normas del cliente (no se guarda hasta confirmar).
   const propuesta = useMemo(() => {
     if (!catalogo) return [];
     const base = tareasDeCliente(catalogo, normasCliente, modelo);
-    return repartirFechas(base, fechaIni, meses);
-  }, [catalogo, normasCliente, modelo, fechaIni, meses]);
+    return repartirFechas(base, fechaIni, meses, opcionesReparto);
+  }, [catalogo, normasCliente, modelo, fechaIni, meses, opcionesReparto]);
 
   async function guardarCabecera() {
     setMsg(null);
@@ -87,7 +91,7 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
   async function reescalarFechas() {
     if (!tareas.length) return 0;
     const base = tareas.map(t => ({ bloque: t.bloque, _id: t.id }));
-    const conFecha = repartirFechas(base, fechaIni, meses);
+    const conFecha = repartirFechas(base, fechaIni, meses, opcionesReparto);
     let n = 0;
     for (const t of conFecha) {
       const actual = tareas.find(x => x.id === t._id);
@@ -171,26 +175,6 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
       setMsg(`${tareas.length} tarea(s) reasignadas.`);
     } catch (e) { setMsg(e.message); }
   }
-
-  // Resincroniza el prefijo del título de todas las tareas si cambia el nombre del cliente.
-  // Se dispara automáticamente cuando cambia cliente.empresa.
-  useEffect(() => {
-    if (!cliente?.empresa || !tareas.length) return;
-    const desfasadas = tareas.filter(t => {
-      const esperado = [cliente.empresa, t.norma_id, t.proceso, t.subproceso].filter(Boolean).join(' - ');
-      return t.titulo !== esperado;
-    });
-    if (!desfasadas.length) return;
-    (async () => {
-      for (const t of desfasadas) {
-        const nuevo = [cliente.empresa, t.norma_id, t.proceso, t.subproceso].filter(Boolean).join(' - ');
-        await updateRow('cliente_tareas', t.id, { titulo: nuevo });
-        try { await sincronizarTareaAgenda({ ...t, titulo: nuevo }, c1 || null, equipo); } catch { /* noop */ }
-      }
-      cargar();
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cliente?.empresa]);
 
   // Totales y coordinación
   const totalHoras = tareas.reduce((s, t) => s + (Number(t.horas) || 0), 0);

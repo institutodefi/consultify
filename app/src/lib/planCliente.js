@@ -60,7 +60,70 @@ export function tareasDeCliente(catalogo, normaIds, modelo) {
  * tareas de ese bloque comparten la fecha de inicio de su ventana.
  * @returns el mismo array con `fecha_estimada` (YYYY-MM-DD) añadido.
  */
-export function repartirFechas(tareas, fechaInicioISO, meses = 3) {
+import { esLaborable, FESTIVOS_2026, toISO } from './agenda.js';
+
+// Máximo de horas de PROYECTO que se programan por día.
+export const MAX_HORAS_PROYECTO_DIA = 6;
+
+// Devuelve el primer día laborable (no finde, no festivo, no vacaciones) en/desde una fecha.
+function primerLaborable(date, festivosSet, vacacionesSet) {
+  const d = new Date(date);
+  for (let i = 0; i < 400; i++) {
+    if (esLaborable(d, festivosSet) && !vacacionesSet.has(toISO(d))) return d;
+    d.setDate(d.getDate() + 1);
+  }
+  return d;
+}
+
+function avanzarUnDiaLaborable(date, festivosSet, vacacionesSet) {
+  const d = new Date(date);
+  do { d.setDate(d.getDate() + 1); }
+  while (!esLaborable(d, festivosSet) || vacacionesSet.has(toISO(d)));
+  return d;
+}
+
+/**
+ * Reparte fechas estimadas respetando: solo días laborables (sin sábados,
+ * domingos ni festivos), máximo MAX_HORAS_PROYECTO_DIA horas de proyecto por
+ * día, y partiendo en varios días las tareas que superen ese tope.
+ * El parámetro `meses` ya no fuerza el escalonado: la duración real depende
+ * de la carga de horas; se conserva la firma por compatibilidad.
+ * @param tareas array con {horas, bloque, ...} ya ordenadas
+ * @param fechaInicioISO inicio del proyecto
+ * @param _meses (no se usa para el límite; se mantiene por compatibilidad)
+ * @param opts {festivos:[], vacaciones:Set}
+ */
+export function repartirFechas(tareas, fechaInicioISO, _meses = 3, opts = {}) {
+  if (!tareas.length) return tareas;
+  const festivosSet = new Set((opts.festivos && opts.festivos.length ? opts.festivos : FESTIVOS_2026).map(f => f.fecha || f));
+  const vacacionesSet = opts.vacaciones instanceof Set ? opts.vacaciones : new Set(opts.vacaciones || []);
+
+  let dia = primerLaborable(fechaInicioISO ? new Date(fechaInicioISO) : new Date(), festivosSet, vacacionesSet);
+  let usadasHoy = 0;
+
+  return tareas.map((t, i) => {
+    let horas = Number(t.horas) || 0;
+    // Si el día ya está lleno, saltar al siguiente laborable.
+    if (usadasHoy >= MAX_HORAS_PROYECTO_DIA) {
+      dia = avanzarUnDiaLaborable(dia, festivosSet, vacacionesSet);
+      usadasHoy = 0;
+    }
+    const fechaInicioTarea = toISO(dia);
+    // Consumir capacidad; si la tarea es más larga que lo que queda + días enteros,
+    // avanzar tantos días laborables como haga falta (parte la tarea en varios días).
+    let restante = horas;
+    let libreHoy = MAX_HORAS_PROYECTO_DIA - usadasHoy;
+    while (restante > libreHoy && libreHoy >= 0) {
+      restante -= libreHoy;
+      dia = avanzarUnDiaLaborable(dia, festivosSet, vacacionesSet);
+      libreHoy = MAX_HORAS_PROYECTO_DIA;
+    }
+    usadasHoy = (libreHoy === MAX_HORAS_PROYECTO_DIA ? 0 : MAX_HORAS_PROYECTO_DIA - libreHoy) + restante;
+    return { ...t, fecha_estimada: fechaInicioTarea, orden: i };
+  });
+}
+
+function repartirFechas_legacy(tareas, fechaInicioISO, meses = 3) {
   if (!tareas.length) return tareas;
   const bloques = [...new Set(tareas.map(t => t.bloque))];
   const inicio = fechaInicioISO ? new Date(fechaInicioISO) : new Date();
