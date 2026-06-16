@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
 import { tareasDeCliente, repartirFechas, horasCoordinacion } from '../../lib/planCliente.js';
+import { sincronizarTareaAgenda, sincronizarVariasAgenda, borrarReflejoAgenda } from '../../lib/sincroAgenda.js';
 import { descargarAgendaICS } from '../../lib/ics.js';
 
 const MODELOS = ['Apoyo', 'Relación', 'Implicación', 'Compromiso', 'Implantación'];
@@ -74,6 +75,7 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
       const actual = tareas.find(x => x.id === t._id);
       if (actual && actual.fecha_estimada !== t.fecha_estimada) {
         await updateRow('cliente_tareas', t._id, { fecha_estimada: t.fecha_estimada });
+        try { await sincronizarTareaAgenda({ ...actual, fecha_estimada: t.fecha_estimada }, c1 || null, equipo); } catch { /* noop */ }
         n++;
       }
     }
@@ -88,47 +90,61 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
       const existentes = new Set(tareas.map(t => `${t.norma_id}|${t.subproceso}`));
       const nuevas = propuesta.filter(p => !existentes.has(`${p.norma_id}|${p.subproceso}`));
       if (!nuevas.length) { setMsg('No hay tareas nuevas que añadir.'); return; }
+      const creadas = [];
       for (const p of nuevas) {
-        await insertRow('cliente_tareas', {
+        const fila = await insertRow('cliente_tareas', {
           cliente_id: cliente.id, norma_id: p.norma_id, modelo: p.modelo,
           proceso: p.proceso, subproceso: p.subproceso, titulo: p.titulo,
           horas: p.horas, bloque: p.bloque,
           consultor_id: c1 || null, fecha_estimada: p.fecha_estimada,
           fecha_real: null, hecha: false, orden: p.orden,
         });
+        if (fila?.id) creadas.push(fila);
       }
+      await sincronizarVariasAgenda(creadas, c1 || null, equipo);
       cargar();
-      setMsg(`${nuevas.length} tarea(s) añadidas.`);
+      setMsg(`${nuevas.length} tarea(s) añadidas y volcadas a la agenda.`);
     } catch (e) { setMsg(e.message); }
   }
 
   async function addTarea(p) {
-    await insertRow('cliente_tareas', {
+    const fila = await insertRow('cliente_tareas', {
       cliente_id: cliente.id, norma_id: p.norma_id, modelo: p.modelo,
       proceso: p.proceso, subproceso: p.subproceso, titulo: p.titulo,
       horas: p.horas, bloque: p.bloque, consultor_id: c1 || null,
       fecha_estimada: p.fecha_estimada, fecha_real: null, hecha: false, orden: p.orden,
     });
+    if (fila?.id) await sincronizarTareaAgenda(fila, c1 || null, equipo);
     cargar();
   }
 
   async function addVarias(lista) {
+    const creadas = [];
     for (const p of lista) {
-      await insertRow('cliente_tareas', {
+      const fila = await insertRow('cliente_tareas', {
         cliente_id: cliente.id, norma_id: p.norma_id, modelo: p.modelo,
         proceso: p.proceso, subproceso: p.subproceso, titulo: p.titulo,
         horas: p.horas, bloque: p.bloque, consultor_id: c1 || null,
         fecha_estimada: p.fecha_estimada, fecha_real: null, hecha: false, orden: p.orden,
       });
+      if (fila?.id) creadas.push(fila);
     }
+    await sincronizarVariasAgenda(creadas, c1 || null, equipo);
     cargar();
   }
 
   async function patch(id, campos) {
     await updateRow('cliente_tareas', id, campos);
-    setTareas(ts => ts.map(t => t.id === id ? { ...t, ...campos } : t));
+    const actualizada = { ...(tareas.find(t => t.id === id) || {}), ...campos, id };
+    setTareas(ts => ts.map(t => t.id === id ? actualizada : t));
+    // Reflejar el cambio (fecha, consultor, horas, hecha…) en la agenda.
+    try { await sincronizarTareaAgenda(actualizada, c1 || null, equipo); } catch { /* noop */ }
   }
-  async function quitar(id) { await deleteRow('cliente_tareas', id); cargar(); }
+  async function quitar(id) {
+    await deleteRow('cliente_tareas', id);
+    await borrarReflejoAgenda(id);
+    cargar();
+  }
 
   // Totales y coordinación
   const totalHoras = tareas.reduce((s, t) => s + (Number(t.horas) || 0), 0);

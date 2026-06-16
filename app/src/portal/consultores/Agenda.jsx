@@ -382,6 +382,7 @@ export default function Agenda() {
   const [modoVacaciones, setModoVacaciones] = useState(false);
   const [modal, setModal] = useState(null);
   const [err, setErr] = useState(null);
+  const [aviso, setAviso] = useState(null);
 
   useEffect(() => {
     listTable('consultores').then((c) => {
@@ -434,7 +435,53 @@ export default function Agenda() {
     try {
       const añadida = await toggleVacacion(consultorId, iso);
       setVacaciones((v) => añadida ? [...v, { id: `t-${iso}`, consultor_id: consultorId, fecha: iso }] : v.filter((x) => x.fecha !== iso));
+      if (añadida) {
+        // Reagendar las tareas previstas en ese día al siguiente día laborable libre.
+        const enEseDia = tareas.filter((t) => t.fecha_prevista === iso);
+        if (enEseDia.length) {
+          const ocupados = new Set([...vacacionesSet, iso, ...festivosSet]);
+          const siguienteHabil = (desdeISO) => {
+            const d = new Date(desdeISO);
+            for (let i = 0; i < 366; i++) {
+              d.setDate(d.getDate() + 1);
+              const di = toISO(d);
+              if (esLaborable(d, festivosSet) && !ocupados.has(di)) return di;
+            }
+            return desdeISO;
+          };
+          const destino = siguienteHabil(iso);
+          const movidas = [];
+          for (const t of enEseDia) {
+            const upd = await actualizarTareaAgenda(t.id, { fecha_prevista: destino });
+            movidas.push(upd);
+          }
+          setTareas((ts) => ts.map((x) => movidas.find((m) => m.id === x.id) || x));
+          setAviso(`Vacaciones el ${iso}: ${enEseDia.length} tarea(s) reagendada(s) al ${destino}.`);
+        }
+      }
     } catch { setErr('No se pudo guardar el día de vacaciones.'); }
+  }
+
+  // ── Acciones masivas sobre las tareas del consultor visible ──
+  async function reasignarTodas(nuevoConsultorId) {
+    if (!nuevoConsultorId || !tareas.length) return;
+    if (!confirm(`¿Reasignar las ${tareas.length} tareas visibles a otro consultor?`)) return;
+    try {
+      for (const t of tareas) await actualizarTareaAgenda(t.id, { consultor_id: nuevoConsultorId });
+      setTareas([]); // ya no son del consultor visible
+      setAviso(`${tareas.length} tarea(s) reasignada(s).`);
+    } catch { setErr('No se pudieron reasignar las tareas.'); }
+  }
+
+  async function cambiarTipoTodas(tipo) {
+    if (!tipo || !tareas.length) return;
+    if (!confirm(`¿Cambiar el tipo de las ${tareas.length} tareas visibles a "${TIPO_BY_ID[tipo]?.nombre || tipo}"?`)) return;
+    try {
+      const upd = [];
+      for (const t of tareas) upd.push(await actualizarTareaAgenda(t.id, { tipo }));
+      setTareas(upd);
+      setAviso(`Tipo cambiado en ${upd.length} tarea(s).`);
+    } catch { setErr('No se pudo cambiar el tipo.'); }
   }
 
   async function guardarTarea(datos, id) {
@@ -491,6 +538,33 @@ export default function Agenda() {
       </div>
 
       {err && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{err}</div>}
+      {aviso && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-brand-orange/10 px-4 py-3 text-sm font-bold text-brand-orangeDark">
+          <span>⤴ {aviso}</span>
+          <button onClick={() => setAviso(null)} className="text-brand-orangeDark/60 hover:text-brand-orangeDark">✕</button>
+        </div>
+      )}
+
+      {/* Acciones masivas sobre las tareas del consultor visible */}
+      {tareas.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-navy-100 bg-white px-4 py-3">
+          <span className="text-xs font-bold uppercase tracking-[0.16em] text-navy-300">{tareas.length} tareas de {consultor?.nombre}</span>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-bold text-navy-400">Reasignar todas a</label>
+            <select className="input !w-auto !py-1.5 !text-sm" defaultValue="" onChange={(e) => { reasignarTodas(e.target.value); e.target.value = ''; }}>
+              <option value="">— consultor —</option>
+              {consultores.filter((c) => String(c.id) !== String(consultorId)).map((c) => <option key={c.id} value={c.id}>{c.nombre} · {c.nivel}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-bold text-navy-400">Cambiar tipo de todas</label>
+            <select className="input !w-auto !py-1.5 !text-sm" defaultValue="" onChange={(e) => { cambiarTipoTodas(e.target.value); e.target.value = ''; }}>
+              <option value="">— tipo —</option>
+              {TIPOS_TAREA.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
 
       {/* KPIs del mes */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
