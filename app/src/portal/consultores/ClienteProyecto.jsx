@@ -56,9 +56,29 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
         consultor_1_id: c1 || null, consultor_2_id: c2 || null,
         meses_estimados: Number(meses) || 3, fecha_inicio: fechaIni || null,
       });
+      // Si hay tareas guardadas, reescala su calendario a la nueva duración/inicio.
+      const n = await reescalarFechas();
       onCambio?.();
-      setMsg('Guardado.');
+      setMsg(n > 0 ? `Guardado. Calendario reescalado (${n} tareas).` : 'Guardado.');
     } catch (e) { setMsg(e.message); }
+  }
+
+  // Reescala la fecha_estimada de las tareas YA guardadas según meses + fecha inicio,
+  // manteniendo el reparto por bloques de proceso. Devuelve nº de tareas actualizadas.
+  async function reescalarFechas() {
+    if (!tareas.length) return 0;
+    const base = tareas.map(t => ({ bloque: t.bloque, _id: t.id }));
+    const conFecha = repartirFechas(base, fechaIni, meses);
+    let n = 0;
+    for (const t of conFecha) {
+      const actual = tareas.find(x => x.id === t._id);
+      if (actual && actual.fecha_estimada !== t.fecha_estimada) {
+        await updateRow('cliente_tareas', t._id, { fecha_estimada: t.fecha_estimada });
+        n++;
+      }
+    }
+    if (n) cargar();
+    return n;
   }
 
   // Añade a demanda las tareas de la propuesta que aún no existan (por norma+subproceso).
@@ -181,6 +201,7 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
         <div>
           <label className="label">Meses estimados</label>
           <input type="number" min="1" className="input" value={meses} onChange={e => setMeses(e.target.value)} />
+          <p className="mt-1 text-xs font-medium text-navy-400">Al guardar, el calendario de las tareas se reescala a esta duración.</p>
         </div>
         <div>
           <label className="label">Fecha inicio</label>
