@@ -597,7 +597,26 @@ export default function Agenda() {
         </div>
 
         <div className="card">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy-300">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy-300">
+              Reloj mensual · {MESES[mes]}
+            </p>
+            <select className="input !w-auto !py-1 !text-xs" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
+              {MESES.map((m, i) => <option key={m} value={i}>{m}</option>)}
+            </select>
+          </div>
+          <div className="mt-2">
+            <RelojAnual previstas={rMes.previstas} reales={rMes.reales}
+              proyeccion={rMes.previstas} ritmo={rMes.laborables > 0 ? rMes.reales / rMes.laborables : 0}
+              capacidad={rMes.productivas} />
+          </div>
+          <div className="mt-3 space-y-1 border-t border-navy-50 pt-3 text-xs font-medium text-navy-400">
+            <p>Jornada del mes: <strong className="text-navy-800">{Math.round(rMes.objetivo)} h</strong> · {rMes.laborables} laborables{mes === 7 ? ' · intensiva' : ''}</p>
+            <p>Capacidad productiva ({PCT_PRODUCTIVO * 100} %): <strong className="text-navy-800">{Math.round(rMes.productivas)} h</strong></p>
+            <p>Desviación del mes: <strong className={desvMes > 0 ? 'text-red-600' : 'text-navy-800'}>{desvMes > 0 ? '+' : ''}{desvMes} h</strong> vs plan</p>
+          </div>
+
+          <p className="mt-5 border-t border-navy-100 pt-4 text-xs font-bold uppercase tracking-[0.16em] text-navy-300">
             Reloj anual · {consultor?.nombre ?? ''} {YEAR}
           </p>
           <div className="mt-2">

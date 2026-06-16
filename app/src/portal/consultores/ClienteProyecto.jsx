@@ -21,6 +21,24 @@ const aEventoICS = (t) => ({
   hora_inicio: '09:00',
 });
 
+// Tipo de tarea para etiqueta: coordinación (bloque PM) o producción (tareas de norma).
+const tipoTarea = (t) => {
+  if (t.tipo) return t.tipo;
+  const b = (t.bloque || '').toUpperCase();
+  if (b.startsWith('PM') || /COORDINAC/i.test(t.proceso || '')) return 'coordinacion';
+  return 'produccion';
+};
+const TIPO_LABEL = { produccion: 'Producción', gestion: 'Gestión', coordinacion: 'Coordinación' };
+const TIPO_CLASE = {
+  produccion: 'bg-brand-orange/15 text-brand-orangeDark',
+  gestion: 'bg-navy-100 text-navy-600',
+  coordinacion: 'bg-navy-800 text-white',
+};
+
+// Título con prefijo de cliente: "CLIENTE - norma - proceso - subproceso".
+const tituloConCliente = (nombreCliente, p) =>
+  [nombreCliente, p.norma_id, p.proceso, p.subproceso].filter(Boolean).join(' - ');
+
 export default function ClienteProyecto({ cliente, normasCliente, equipo, onCambio }) {
   const [modelo, setModelo] = useState('Implicación');
   const [meses, setMeses] = useState(cliente.meses_estimados || 3);
@@ -83,6 +101,16 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
     return n;
   }
 
+  // Construye el payload de una cliente_tarea con título prefijado por cliente y tipo.
+  const payloadTarea = (p) => ({
+    cliente_id: cliente.id, norma_id: p.norma_id, modelo: p.modelo,
+    proceso: p.proceso, subproceso: p.subproceso,
+    titulo: tituloConCliente(cliente.empresa, p),
+    horas: p.horas, bloque: p.bloque, tipo: tipoTarea(p),
+    consultor_id: c1 || null, fecha_estimada: p.fecha_estimada,
+    fecha_real: null, hecha: false, orden: p.orden,
+  });
+
   // Añade a demanda las tareas de la propuesta que aún no existan (por norma+subproceso).
   async function generarTareas() {
     setMsg(null);
@@ -92,13 +120,7 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
       if (!nuevas.length) { setMsg('No hay tareas nuevas que añadir.'); return; }
       const creadas = [];
       for (const p of nuevas) {
-        const fila = await insertRow('cliente_tareas', {
-          cliente_id: cliente.id, norma_id: p.norma_id, modelo: p.modelo,
-          proceso: p.proceso, subproceso: p.subproceso, titulo: p.titulo,
-          horas: p.horas, bloque: p.bloque,
-          consultor_id: c1 || null, fecha_estimada: p.fecha_estimada,
-          fecha_real: null, hecha: false, orden: p.orden,
-        });
+        const fila = await insertRow('cliente_tareas', payloadTarea(p));
         if (fila?.id) creadas.push(fila);
       }
       await sincronizarVariasAgenda(creadas, c1 || null, equipo);
@@ -108,12 +130,7 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
   }
 
   async function addTarea(p) {
-    const fila = await insertRow('cliente_tareas', {
-      cliente_id: cliente.id, norma_id: p.norma_id, modelo: p.modelo,
-      proceso: p.proceso, subproceso: p.subproceso, titulo: p.titulo,
-      horas: p.horas, bloque: p.bloque, consultor_id: c1 || null,
-      fecha_estimada: p.fecha_estimada, fecha_real: null, hecha: false, orden: p.orden,
-    });
+    const fila = await insertRow('cliente_tareas', payloadTarea(p));
     if (fila?.id) await sincronizarTareaAgenda(fila, c1 || null, equipo);
     cargar();
   }
@@ -121,12 +138,7 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
   async function addVarias(lista) {
     const creadas = [];
     for (const p of lista) {
-      const fila = await insertRow('cliente_tareas', {
-        cliente_id: cliente.id, norma_id: p.norma_id, modelo: p.modelo,
-        proceso: p.proceso, subproceso: p.subproceso, titulo: p.titulo,
-        horas: p.horas, bloque: p.bloque, consultor_id: c1 || null,
-        fecha_estimada: p.fecha_estimada, fecha_real: null, hecha: false, orden: p.orden,
-      });
+      const fila = await insertRow('cliente_tareas', payloadTarea(p));
       if (fila?.id) creadas.push(fila);
     }
     await sincronizarVariasAgenda(creadas, c1 || null, equipo);
@@ -145,6 +157,40 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
     await borrarReflejoAgenda(id);
     cargar();
   }
+
+  // Asigna TODAS las tareas del cliente a un consultor de una vez (y sincroniza agenda).
+  async function asignarTodas(consultorId) {
+    if (!tareas.length) return;
+    if (!confirm(`¿Asignar las ${tareas.length} tareas a un único consultor?`)) return;
+    try {
+      for (const t of tareas) {
+        await updateRow('cliente_tareas', t.id, { consultor_id: consultorId || null });
+        await sincronizarTareaAgenda({ ...t, consultor_id: consultorId || null }, c1 || null, equipo);
+      }
+      cargar();
+      setMsg(`${tareas.length} tarea(s) reasignadas.`);
+    } catch (e) { setMsg(e.message); }
+  }
+
+  // Resincroniza el prefijo del título de todas las tareas si cambia el nombre del cliente.
+  // Se dispara automáticamente cuando cambia cliente.empresa.
+  useEffect(() => {
+    if (!cliente?.empresa || !tareas.length) return;
+    const desfasadas = tareas.filter(t => {
+      const esperado = [cliente.empresa, t.norma_id, t.proceso, t.subproceso].filter(Boolean).join(' - ');
+      return t.titulo !== esperado;
+    });
+    if (!desfasadas.length) return;
+    (async () => {
+      for (const t of desfasadas) {
+        const nuevo = [cliente.empresa, t.norma_id, t.proceso, t.subproceso].filter(Boolean).join(' - ');
+        await updateRow('cliente_tareas', t.id, { titulo: nuevo });
+        try { await sincronizarTareaAgenda({ ...t, titulo: nuevo }, c1 || null, equipo); } catch { /* noop */ }
+      }
+      cargar();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cliente?.empresa]);
 
   // Totales y coordinación
   const totalHoras = tareas.reduce((s, t) => s + (Number(t.horas) || 0), 0);
@@ -305,12 +351,21 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
 
       {/* Tareas guardadas */}
       {tareas.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-navy-100 bg-navy-50/40 px-3 py-2">
+            <span className="text-xs font-bold text-navy-400">Asignar las {tareas.length} tareas a:</span>
+            <select className="input !w-auto !py-1.5 !text-sm" defaultValue="" onChange={e => { asignarTodas(e.target.value); e.target.value = ''; }}>
+              <option value="" disabled>— elegir consultor —</option>
+              {consultores.map(c => <option key={c.id} value={c.id}>{c.nombre} {c.apellidos || ''}</option>)}
+            </select>
+          </div>
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] text-sm">
             <thead>
               <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
                 <th className="py-2">✓</th>
                 <th className="py-2">Tarea</th>
+                <th className="py-2">Tipo</th>
                 <th className="py-2 text-right">Horas</th>
                 <th className="py-2">Consultor</th>
                 <th className="py-2">Estimada</th>
@@ -319,12 +374,15 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
               </tr>
             </thead>
             <tbody className="divide-y divide-navy-50">
-              {tareas.map(t => (
+              {tareas.map(t => {
+                const tipo = tipoTarea(t);
+                return (
                 <tr key={t.id} className={t.hecha ? 'opacity-60' : ''}>
                   <td className="py-1.5">
                     <input type="checkbox" checked={!!t.hecha} onChange={e => patch(t.id, { hecha: e.target.checked })} />
                   </td>
                   <td className="py-1.5 font-medium">{t.titulo}</td>
+                  <td className="py-1.5"><span className={`chip text-[11px] font-bold ${TIPO_CLASE[tipo]}`}>{TIPO_LABEL[tipo]}</span></td>
                   <td className="py-1.5 text-right">{fmtH(t.horas)}</td>
                   <td className="py-1.5">
                     <select className="input !py-1 !text-xs" value={t.consultor_id || ''} onChange={e => patch(t.id, { consultor_id: e.target.value || null })}>
@@ -342,9 +400,11 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
                     <button onClick={() => quitar(t.id)} className="text-xs font-bold text-red-500 hover:underline">×</button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
