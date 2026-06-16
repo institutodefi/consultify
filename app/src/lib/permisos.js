@@ -19,7 +19,6 @@ export const TABS_PORTAL = [
   { to: '',              label: 'Dashboard',          roles: ['superadmin', 'admin', 'consultor', 'gestion'] },
   { to: 'proyectos',     label: 'Proyectos',          roles: ['superadmin', 'admin', 'consultor', 'gestion'] },
   { to: 'agenda',        label: 'Agenda',             roles: ['superadmin', 'admin', 'consultor'] },
-  { to: 'sistemas',      label: 'Tareas por Norma',    roles: ['superadmin', 'admin', 'consultor'] },
   { to: 'planificador',  label: 'Planificador',        roles: ['superadmin', 'admin', 'consultor'] },
   { to: 'equipo',        label: 'Equipo',             roles: ['superadmin', 'admin'] },
   { to: 'clientes',      label: 'Clientes',           roles: ['superadmin', 'admin', 'gestion'] },

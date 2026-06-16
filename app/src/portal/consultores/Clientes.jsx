@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
+import ClienteProyecto from './ClienteProyecto.jsx';
 
 const VACIO = { codigo: '', empresa: '', contacto: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
 
@@ -195,6 +196,18 @@ export default function Clientes() {
                     </div>
                   );
                 })}
+
+                {/* Proyecto: consultores, tareas, Gantt, ICS */}
+                <ClienteProyecto
+                  cliente={c}
+                  normasCliente={[...new Set(
+                    emps.flatMap(e => normasEmp
+                      .filter(n => String(n.empresa_id) === String(e.id))
+                      .map(n => n.norma_id))
+                  )]}
+                  equipo={equipo}
+                  onCambio={cargar}
+                />
               </div>
             )}
           </div>
