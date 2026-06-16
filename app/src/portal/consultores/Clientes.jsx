@@ -62,6 +62,11 @@ export default function Clientes() {
     setNormasEmp(ns => ns.map(n => n.id === reg.id ? { ...n, alcance: texto } : n));
   }
 
+  async function editarNorma(reg, campos) {
+    await updateRow('empresa_normas', reg.id, campos);
+    setNormasEmp(ns => ns.map(n => n.id === reg.id ? { ...n, ...campos } : n));
+  }
+
   async function copiarAlcance(reg) {
     // Copia el alcance de esta norma al resto de normas de la MISMA empresa que estén vacías,
     // y ofrece extenderlo a las demás empresas del cliente.
@@ -188,6 +193,21 @@ export default function Clientes() {
                                 <button onClick={() => copiarAlcance(reg)} disabled={!reg.alcance}
                                   title="Copiar este alcance a las demás normas (y empresas) con alcance vacío"
                                   className="btn-ghost !px-3 !py-1.5 text-xs disabled:opacity-40">⧉ Copiar alcance</button>
+                                <div className="flex w-full flex-wrap items-center gap-2 pl-24">
+                                  <label className="text-xs font-bold text-navy-300">Responsable</label>
+                                  <select className="input !w-auto !py-1 !text-xs" value={reg.responsable_id || ''}
+                                    onChange={e => editarNorma(reg, { responsable_id: e.target.value || null })}>
+                                    <option value="">—</option>
+                                    {equipo.filter(x => (x.tipo_equipo || 'consultor') === 'consultor').map(x =>
+                                      <option key={x.id} value={x.id}>{x.nombre} {x.apellidos || ''}</option>)}
+                                  </select>
+                                  <label className="text-xs font-bold text-navy-300">Auditoría ext.</label>
+                                  <input type="date" className="input !w-auto !py-1 !text-xs" value={reg.fecha_auditoria || ''}
+                                    onChange={e => editarNorma(reg, { fecha_auditoria: e.target.value || null })} />
+                                  <label className="text-xs font-bold text-navy-300">Caduca</label>
+                                  <input type="date" className="input !w-auto !py-1 !text-xs" value={reg.fecha_caducidad || ''}
+                                    onChange={e => editarNorma(reg, { fecha_caducidad: e.target.value || null })} />
+                                </div>
                               </div>
                             ))}
                           </div>

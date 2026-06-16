@@ -92,6 +92,18 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
     cargar();
   }
 
+  async function addVarias(lista) {
+    for (const p of lista) {
+      await insertRow('cliente_tareas', {
+        cliente_id: cliente.id, norma_id: p.norma_id, modelo: p.modelo,
+        proceso: p.proceso, subproceso: p.subproceso, titulo: p.titulo,
+        horas: p.horas, bloque: p.bloque, consultor_id: c1 || null,
+        fecha_estimada: p.fecha_estimada, fecha_real: null, hecha: false, orden: p.orden,
+      });
+    }
+    cargar();
+  }
+
   async function patch(id, campos) {
     await updateRow('cliente_tareas', id, campos);
     setTareas(ts => ts.map(t => t.id === id ? { ...t, ...campos } : t));
@@ -139,6 +151,14 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
     if (!lista.length) { setMsg('Ese consultor no tiene tareas con fecha.'); return; }
     descargarAgendaICS(lista.map(aEventoICS), nombreCons(consultorId), `${cliente.empresa}-${nombreCons(consultorId)}`.toLowerCase().replace(/\s+/g, '-'));
   }
+
+  function descargarICSNorma(normaId) {
+    const lista = tareas.filter(t => t.norma_id === normaId && t.fecha_estimada);
+    if (!lista.length) { setMsg('Esa norma no tiene tareas con fecha.'); return; }
+    descargarAgendaICS(lista.map(aEventoICS), `${cliente.empresa} · ${normaId}`, `${cliente.empresa}-${normaId}`.toLowerCase().replace(/\s+/g, '-'));
+  }
+
+  const normasConTareas = useMemo(() => [...new Set(tareas.map(t => t.norma_id))], [tareas]);
 
   return (
     <div className="mt-5 space-y-5 border-t border-navy-100 pt-5">
@@ -231,6 +251,21 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
         </div>
       )}
 
+      {/* Descargas de calendario por norma */}
+      {normasConTareas.length > 0 && (
+        <div>
+          <p className="label">Calendario por norma (.ics)</p>
+          <div className="flex flex-wrap gap-2">
+            {normasConTareas.map(n => (
+              <button key={n} onClick={() => descargarICSNorma(n)}
+                className="chip border border-navy-200 bg-white font-bold text-navy-700 hover:border-brand-orange">
+                ⬇ {n} ({tareas.filter(t => t.norma_id === n && t.fecha_estimada).length})
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Tareas guardadas */}
       {tareas.length > 0 && (
         <div className="overflow-x-auto">
@@ -276,20 +311,39 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
         </div>
       )}
 
-      {/* Propuesta a demanda (tareas detectadas aún no añadidas) */}
-      {propuesta.length > 0 && (
-        <details className="rounded-xl border border-navy-100 p-4">
-          <summary className="cursor-pointer text-sm font-bold text-navy-700">Tareas detectadas a demanda ({propuesta.filter(p => !tareas.some(t => t.norma_id === p.norma_id && t.subproceso === p.subproceso)).length} sin añadir)</summary>
-          <div className="mt-3 space-y-1">
-            {propuesta.filter(p => !tareas.some(t => t.norma_id === p.norma_id && t.subproceso === p.subproceso)).map((p, i) => (
-              <div key={i} className="flex items-center justify-between gap-3 text-sm">
-                <span className="font-medium">{p.titulo} <span className="text-navy-300">· {fmtH(p.horas)} · {p.fecha_estimada}</span></span>
-                <button onClick={() => addTarea(p)} className="chip border border-brand-orange bg-brand-orange/10 font-bold text-brand-orangeDark">+ añadir</button>
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
+      {/* Propuesta a demanda agrupada por norma (añadir tarea a tarea) */}
+      {propuesta.length > 0 && (() => {
+        const pend = propuesta.filter(p => !tareas.some(t => t.norma_id === p.norma_id && t.subproceso === p.subproceso));
+        const porNorma = [...new Set(pend.map(p => p.norma_id))];
+        return (
+          <details className="rounded-xl border border-navy-100 p-4" open>
+            <summary className="cursor-pointer text-sm font-bold text-navy-700">
+              Tareas detectadas a demanda · {pend.length} sin añadir
+            </summary>
+            <div className="mt-3 space-y-4">
+              {porNorma.map(norma => {
+                const lista = pend.filter(p => p.norma_id === norma);
+                return (
+                  <div key={norma}>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-navy-500">{norma} · {lista.length} tareas</span>
+                      <button onClick={() => addVarias(lista)} className="chip border border-brand-orange bg-brand-orange/10 text-xs font-bold text-brand-orangeDark">+ añadir toda la norma</button>
+                    </div>
+                    <div className="space-y-1">
+                      {lista.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="font-medium">{p.proceso} - {p.subproceso} <span className="text-navy-300">· {fmtH(p.horas)} · {p.fecha_estimada}</span></span>
+                          <button onClick={() => addTarea(p)} className="chip border border-navy-200 bg-white text-xs font-bold text-navy-600 hover:border-brand-orange">+ añadir</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        );
+      })()}
     </div>
   );
 }

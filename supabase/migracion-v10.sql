@@ -42,6 +42,15 @@ create index if not exists idx_cliente_tareas_consultor on public.cliente_tareas
 
 comment on table public.cliente_tareas is 'Tareas del proyecto de un cliente, instanciadas desde el catálogo según sus normas. Fechas estimada (Gantt) y real.';
 
+-- 3) Por cada norma de cada empresa (CIF×norma): responsable + auditoría + caducidad
+alter table public.empresa_normas add column if not exists responsable_id    uuid references public.consultores(id);
+alter table public.empresa_normas add column if not exists fecha_auditoria    date;
+alter table public.empresa_normas add column if not exists fecha_caducidad    date;
+
+comment on column public.empresa_normas.responsable_id is 'Consultor responsable de esta norma (cualquiera del equipo).';
+comment on column public.empresa_normas.fecha_auditoria is 'Fecha de la auditoría externa de certificación/seguimiento.';
+comment on column public.empresa_normas.fecha_caducidad is 'Fecha de caducidad del certificado de esta norma.';
+
 commit;
 
 -- VERIFICACIÓN (aparte):
