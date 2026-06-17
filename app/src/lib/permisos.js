@@ -20,7 +20,8 @@ export const TABS_PORTAL = [
   { to: 'agenda',        label: 'Agenda',             roles: ['superadmin', 'admin', 'consultor'] },
   { to: 'planificador',  label: 'Planificador',        roles: ['superadmin', 'admin', 'consultor'] },
   { to: 'equipo',        label: 'Equipo',             roles: ['superadmin', 'admin'] },
-  { to: 'clientes',      label: 'Clientes y proyectos', roles: ['superadmin', 'admin', 'gestion'] },
+  { to: 'clientes',      label: 'Clientes',           roles: ['superadmin', 'admin', 'gestion'] },
+  { to: 'proyectos',     label: 'Proyectos',          roles: ['superadmin', 'admin', 'gestion', 'consultor'] },
 ];
 
 // Capacidades puntuales

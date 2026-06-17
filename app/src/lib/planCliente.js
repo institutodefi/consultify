@@ -186,3 +186,46 @@ function repartirFechas_legacy(tareas, fechaInicioISO, meses = 3) {
 export function horasCoordinacion(nSistemas, meses) {
   return Math.round(0.5 * nSistemas * Math.max(Number(meses) || 1, 1) * 100) / 100;
 }
+
+// Código de tarea integrada: "Cliente - Modelo - Proceso - Subproceso - Integrada n1 n2…"
+export function codigoTareaIntegrada(cliente, modelo, proceso, subproceso, normas) {
+  const base = [cliente, modelo, proceso, subproceso].filter(Boolean).join(' - ');
+  if (normas && normas.length > 1) return `${base} - Integrada ${normas.join(' ')}`;
+  return base;
+}
+
+/**
+ * Anida tareas comunes por (proceso+subproceso) entre las normas del proyecto.
+ * Las que comparten proceso+subproceso en ≥2 normas se funden en una tarea
+ * integrada (norma base = la primera del array `normas`), con horas = suma.
+ * Las que solo existen en una norma quedan individuales.
+ * @param tareas array de tareasDeCliente (una por norma+subproceso)
+ * @param normasOrden orden de prioridad de normas (la 1ª es la base)
+ * @param anidar Set de claves "proceso|subproceso" que el usuario decidió anidar
+ */
+export function anidarTareas(tareas, normasOrden = [], anidar = null) {
+  const rank = (n) => { const i = normasOrden.indexOf(n); return i < 0 ? 999 : i; };
+  const grupos = new Map();
+  for (const t of tareas) {
+    const k = `${t.proceso}|${t.subproceso}`;
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(t);
+  }
+  const out = [];
+  for (const [k, items] of grupos) {
+    const seAnida = items.length > 1 && (!anidar || anidar.has(k));
+    if (seAnida) {
+      const ordenadas = [...items].sort((a, b) => rank(a.norma_id) - rank(b.norma_id));
+      const normas = ordenadas.map(x => x.norma_id);
+      const horas = Math.round(ordenadas.reduce((s, x) => s + (Number(x.horas) || 0), 0) * 100) / 100;
+      const base = ordenadas[0];
+      out.push({
+        ...base, horas, integrada: true, normas_integradas: normas,
+        norma_id: base.norma_id, _clave: k,
+      });
+    } else {
+      for (const t of items) out.push({ ...t, integrada: false, normas_integradas: [t.norma_id], _clave: k });
+    }
+  }
+  return out;
+}

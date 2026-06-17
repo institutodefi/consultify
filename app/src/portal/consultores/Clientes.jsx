@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
-import ClienteProyecto from './ClienteProyecto.jsx';
 
 const VACIO = { codigo: '', empresa: '', contacto: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
 
@@ -11,6 +10,7 @@ export default function Clientes() {
   const [centros, setCentros] = useState([]);
   const [normasEmp, setNormasEmp] = useState([]);
   const [equipo, setEquipo] = useState([]);
+  const [proyectos, setProyectos] = useState([]);
   const [sel, setSel] = useState('');
   const [form, setForm] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -21,14 +21,24 @@ export default function Clientes() {
     listTable('empresa_centros').then(setCentros);
     listTable('empresa_normas').then(setNormasEmp);
     listTable('consultores').then(setEquipo).catch(() => {});
+    listTable('proyectos_cliente').then(setProyectos).catch(() => setProyectos([]));
   };
   useEffect(cargar, []);
 
   const cliente = useMemo(() => clientes.find(c => String(c.id) === String(sel)) || null, [clientes, sel]);
   const emps = useMemo(() => empresas.filter(e => String(e.cliente_id) === String(sel)), [empresas, sel]);
+  const proyectosCliente = useMemo(() => proyectos.filter(p => String(p.cliente_id) === String(sel)), [proyectos, sel]);
   const normasCliente = useMemo(() => [...new Set(
     emps.flatMap(e => normasEmp.filter(n => String(n.empresa_id) === String(e.id)).map(n => n.norma_id))
   )], [emps, normasEmp]);
+
+  async function crearProyecto() {
+    if (!cliente?.id) return;
+    const nombre = prompt('Nombre del proyecto:', `Proyecto ${proyectosCliente.length + 1}`);
+    if (!nombre) return;
+    await insertRow('proyectos_cliente', { cliente_id: cliente.id, nombre, normas: [], modelo: 'Implicación', estado: 'activo', meses_estimados: 3 });
+    cargar();
+  }
 
   async function guardarCliente(e) {
     e.preventDefault(); setMsg(null);
@@ -259,7 +269,28 @@ export default function Clientes() {
           </div>
 
           <div className="card">
-            <ClienteProyecto cliente={cliente} normasCliente={normasCliente} equipo={equipo} onCambio={cargar} />
+            <div className="flex items-center justify-between">
+              <h4 className="font-extrabold">Proyectos de este cliente</h4>
+              <button onClick={crearProyecto} className="btn-orange !px-4 !py-2">+ Nuevo proyecto</button>
+            </div>
+            <p className="mt-1 text-sm font-medium text-navy-400">El cliente es la matriz de facturación. Cada proyecto tiene sus normas, modelo y tareas.</p>
+            {proyectosCliente.length === 0 ? (
+              <p className="mt-4 text-sm font-medium text-navy-300">Aún no hay proyectos. Crea el primero.</p>
+            ) : (
+              <div className="mt-4 space-y-2">
+                {proyectosCliente.map(p => (
+                  <div key={p.id} className="flex items-center justify-between rounded-xl border border-navy-100 bg-white px-4 py-3">
+                    <div>
+                      <p className="font-bold text-navy-800">{p.nombre}</p>
+                      <p className="text-xs font-medium text-navy-400">
+                        {(p.normas || []).join(', ') || 'sin normas'} · {p.modelo || 'sin modelo'} · <span className={p.estado === 'activo' ? 'text-green-600' : 'text-navy-400'}>{p.estado}</span>
+                      </p>
+                    </div>
+                    <a href={`../proyectos?proyecto=${p.id}`} className="btn-ghost !px-3 !py-1.5 text-xs">Abrir →</a>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
