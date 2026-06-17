@@ -458,13 +458,13 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
             <button onClick={selTodas} className="text-xs font-bold text-navy-500 hover:underline">Sel. todas</button>
             <button onClick={selNinguna} className="text-xs font-bold text-navy-500 hover:underline">Ninguna</button>
             <span className="mx-1 h-4 w-px bg-navy-200" />
-            <select className="input !w-auto !py-1.5 !text-sm" defaultValue="" onChange={e => { asignarMasivo(e.target.value); e.target.value = ''; }}>
-              <option value="" disabled>Asignar a…</option>
-              <option value="">Sin asignar</option>
+            <select className="input !w-auto !py-1.5 !text-sm" value="__" onChange={e => { if (e.target.value !== '__') { asignarMasivo(e.target.value === '__none' ? '' : e.target.value); e.target.value = '__'; } }}>
+              <option value="__" disabled>Asignar a…</option>
+              <option value="__none">Sin asignar</option>
               {consultores.map(c => <option key={c.id} value={c.id}>{c.nombre} {c.apellidos || ''}</option>)}
             </select>
-            <select className="input !w-auto !py-1.5 !text-sm" defaultValue="" onChange={e => { tipoMasivo(e.target.value); e.target.value = ''; }}>
-              <option value="" disabled>Tipo…</option>
+            <select className="input !w-auto !py-1.5 !text-sm" value="__" onChange={e => { if (e.target.value !== '__') { tipoMasivo(e.target.value); e.target.value = '__'; } }}>
+              <option value="__" disabled>Tipo…</option>
               <option value="produccion">Producción</option>
               <option value="gestion">Gestión</option>
               <option value="coordinacion">Coordinación</option>
