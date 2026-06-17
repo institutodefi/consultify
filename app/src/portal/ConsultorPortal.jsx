@@ -4,6 +4,7 @@ import Equipo from './consultores/Equipo.jsx';
 import Clientes from './consultores/Clientes.jsx';
 import ProyectosConfig from './consultores/ProyectosConfig.jsx';
 import Agenda from './consultores/Agenda.jsx';
+import MiAgenda from './consultores/MiAgenda.jsx';
 import PlanificadorTareas from '../pages/PlanificadorTareas.jsx';
 import BarraVerComo from '../components/BarraVerComo.jsx';
 import { useAuth } from '../lib/auth.jsx';
@@ -24,19 +25,20 @@ export default function ConsultorPortal() {
   return (
     <>
       <BarraVerComo />
-      <div className="mx-auto max-w-7xl px-4 py-10">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:py-10">
         <p className="eyebrow">Operaciones Consultify</p>
-        <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Zona interna</h1>
-        <nav className="mt-6 flex flex-wrap gap-6 border-b border-navy-100 text-sm">
+        <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight">Zona interna</h1>
+        <nav className="mt-5 sm:mt-6 flex gap-4 sm:gap-6 border-b border-navy-100 text-sm overflow-x-auto -mx-4 px-4 scrollbar-none">
           {tabs.map(t => (
-            <NavLink key={t.to} to={t.to} end={t.to === ''} className={({ isActive }) => `pb-3 ${isActive ? 'tab-active' : 'tab-idle'}`}>{t.label}</NavLink>
+            <NavLink key={t.to} to={t.to} end={t.to === ''} className={({ isActive }) => `pb-3 whitespace-nowrap shrink-0 ${isActive ? 'tab-active' : 'tab-idle'}`}>{t.label}</NavLink>
           ))}
         </nav>
-        <div className="mt-8">
+        <div className="mt-6 sm:mt-8">
           <Routes>
             <Route index element={<Dashboard />} />
             <Route path="proyectos" element={<Guard ok={verClientes}><ProyectosConfig /></Guard>} />
             <Route path="agenda" element={<Guard ok={verPlanAgendaSist}><Agenda /></Guard>} />
+            <Route path="mi-agenda" element={<Guard ok={verPlanAgendaSist}><MiAgenda /></Guard>} />
             <Route path="planificador" element={<Guard ok={verPlanAgendaSist}><PlanificadorTareas /></Guard>} />
             <Route path="equipo" element={<Guard ok={verEquipo}><Equipo /></Guard>} />
             <Route path="clientes" element={<Guard ok={verClientes}><Clientes /></Guard>} />

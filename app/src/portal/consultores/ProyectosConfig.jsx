@@ -78,6 +78,19 @@ export default function Proyectos() {
   function anidarTodas() { setAnidar(new Set(clavesComunes)); }
   function anidarNinguna() { setAnidar(new Set()); }
 
+  async function nuevoProyecto() {
+    if (!clientes.length) { setMsg('Crea primero un cliente.'); return; }
+    const lista = clientes.map((c, i) => `${i + 1}. ${c.empresa}`).join('\n');
+    const idx = Number(prompt(`¿Para qué cliente?\n${lista}\n\nEscribe el número:`, '1'));
+    const cli = clientes[idx - 1];
+    if (!cli) return;
+    const nombre = prompt('Nombre del proyecto:', 'Proyecto 1');
+    if (!nombre) return;
+    const nuevo = await insertRow('proyectos_cliente', { cliente_id: cli.id, nombre, normas: [], modelo: 'Implicación', estado: 'activo', meses_estimados: 3 });
+    cargar();
+    if (nuevo?.id) setSel(nuevo.id);
+  }
+
   async function guardarConfig() {
     if (!proyecto) return;
     await updateRow('proyectos_cliente', proyecto.id, { normas: normasSel, modelo });
@@ -132,11 +145,16 @@ export default function Proyectos() {
 
       {/* Selector de proyecto activo */}
       <div className="card">
-        <label className="label" htmlFor="sel-proy">Proyecto (vinculado a su cliente matriz)</label>
-        <select id="sel-proy" className="input max-w-xl" value={sel} onChange={e => setSel(e.target.value)}>
-          <option value="">— Selecciona un proyecto activo —</option>
-          {activos.map(p => <option key={p.id} value={p.id}>{nombreCli(p.cliente_id)} · {p.nombre}</option>)}
-        </select>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex-1 min-w-[240px]">
+            <label className="label" htmlFor="sel-proy">Proyecto (vinculado a su cliente matriz)</label>
+            <select id="sel-proy" className="input w-full max-w-xl" value={sel} onChange={e => setSel(e.target.value)}>
+              <option value="">— Selecciona un proyecto activo —</option>
+              {activos.map(p => <option key={p.id} value={p.id}>{nombreCli(p.cliente_id)} · {p.nombre}</option>)}
+            </select>
+          </div>
+          <button onClick={nuevoProyecto} className="btn-orange !px-4 !py-2">+ Nuevo proyecto</button>
+        </div>
       </div>
 
       {!proyecto ? (

@@ -42,12 +42,14 @@ body {
   .eyebrow::before { content: ''; @apply h-2 w-2 rounded-full bg-brand-orange; }
 
   /* Tarjetas con el radio de la landing (22px) y su línea */
-  .card  { @apply rounded-[22px] border bg-white p-6 shadow-sm; border-color: rgba(10,21,48,0.10); }
+  .card  { @apply rounded-2xl sm:rounded-[22px] border bg-white p-4 sm:p-6 shadow-sm; border-color: rgba(10,21,48,0.10); }
   .input { @apply w-full rounded-xl border border-navy-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/30; }
   .label { @apply mb-1.5 block text-xs font-bold uppercase tracking-[0.16em] text-navy-400; }
   .chip  { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold; }
   .tab-active { @apply border-b-2 border-brand-orange font-bold text-navy-900; }
   .tab-idle   { @apply border-b-2 border-transparent font-semibold text-navy-400 hover:text-navy-700; }
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
 }
 
 ::selection { background: #F5A62355; }

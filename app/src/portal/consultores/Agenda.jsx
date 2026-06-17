@@ -380,6 +380,7 @@ export default function Agenda() {
   const [vacaciones, setVacaciones] = useState([]);
   const [tareas, setTareas] = useState([]);
   const [modoVacaciones, setModoVacaciones] = useState(false);
+  const [vista, setVista] = useState('calendario');
   const [modal, setModal] = useState(null);
   const [err, setErr] = useState(null);
   const [aviso, setAviso] = useState(null);
@@ -419,6 +420,9 @@ export default function Agenda() {
   const pctJornada = consultorSel?.pct_jornada ?? 100;
   const anual = useMemo(() => resumenAnual(YEAR, festivosSet, vacacionesSet, tareas, pctJornada), [festivosSet, vacacionesSet, tareas, pctJornada]);
   const rMes = anual.meses[mes];
+  const tareasMes = useMemo(() => tareas
+    .filter(t => t.fecha_prevista && new Date(t.fecha_prevista).getMonth() === mes && new Date(t.fecha_prevista).getFullYear() === YEAR)
+    .sort((a, b) => (a.fecha_prevista || '').localeCompare(b.fecha_prevista || '')), [tareas, mes]);
   const vacRestantes = DIAS_VACACIONES - anual.total.diasVacaciones;
   const desvMes = r1(rMes.reales - rMes.previstas);
 
@@ -586,14 +590,48 @@ export default function Agenda() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="card lg:col-span-2">
-          <Calendario
-            year={YEAR} mes={mes} onCambiarMes={(d) => setMes((m) => Math.min(11, Math.max(0, m + d)))}
-            festivosMap={festivosMap} vacacionesSet={vacacionesSet} tareas={tareas}
-            modoVacaciones={modoVacaciones}
-            onToggleVacacion={onToggleVacacion}
-            onNuevaTarea={(fecha) => setModal({ fecha })}
-            onEditarTarea={(tarea) => setModal({ tarea })}
-          />
+          <div className="mb-3 flex gap-2">
+            <button onClick={() => setVista('calendario')} className={`chip text-xs font-bold ${vista === 'calendario' ? 'bg-navy-800 text-white' : 'border border-navy-200 text-navy-500'}`}>📅 Calendario</button>
+            <button onClick={() => setVista('lista')} className={`chip text-xs font-bold ${vista === 'lista' ? 'bg-navy-800 text-white' : 'border border-navy-200 text-navy-500'}`}>☰ Lista</button>
+          </div>
+          {vista === 'calendario' ? (
+            <Calendario
+              year={YEAR} mes={mes} onCambiarMes={(d) => setMes((m) => Math.min(11, Math.max(0, m + d)))}
+              festivosMap={festivosMap} vacacionesSet={vacacionesSet} tareas={tareas}
+              modoVacaciones={modoVacaciones}
+              onToggleVacacion={onToggleVacacion}
+              onNuevaTarea={(fecha) => setModal({ fecha })}
+              onEditarTarea={(tarea) => setModal({ tarea })}
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-navy-300">Tareas de {MESES[mes]} ({tareasMes.length})</p>
+              {tareasMes.length === 0 ? (
+                <p className="text-sm font-medium text-navy-300">Sin tareas este mes.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
+                      <th className="py-2">Fecha</th><th className="py-2">Tarea</th><th className="py-2">Tipo</th>
+                      <th className="py-2 text-right">Prev.</th><th className="py-2 text-right">Real</th><th className="py-2">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-navy-50">
+                    {tareasMes.map(t => (
+                      <tr key={t.id} className="cursor-pointer hover:bg-navy-50/50" onClick={() => setModal({ tarea: t })}>
+                        <td className="py-1.5 font-medium">{t.fecha_prevista}</td>
+                        <td className="py-1.5">{t.titulo}</td>
+                        <td className="py-1.5">{TIPO_BY_ID[t.tipo]?.nombre || t.tipo}</td>
+                        <td className="py-1.5 text-right">{Number(t.horas_previstas) || 0}h</td>
+                        <td className="py-1.5 text-right">{t.horas_reales != null ? `${t.horas_reales}h` : '—'}</td>
+                        <td className="py-1.5">{t.estado || 'pendiente'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="card">

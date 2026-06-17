@@ -11,6 +11,7 @@ export default function Clientes() {
   const [normasEmp, setNormasEmp] = useState([]);
   const [equipo, setEquipo] = useState([]);
   const [proyectos, setProyectos] = useState([]);
+  const [contactos, setContactos] = useState([]);
   const [sel, setSel] = useState('');
   const [form, setForm] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -22,23 +23,36 @@ export default function Clientes() {
     listTable('empresa_normas').then(setNormasEmp);
     listTable('consultores').then(setEquipo).catch(() => {});
     listTable('proyectos_cliente').then(setProyectos).catch(() => setProyectos([]));
+    listTable('cliente_contactos').then(setContactos).catch(() => setContactos([]));
   };
   useEffect(cargar, []);
 
   const cliente = useMemo(() => clientes.find(c => String(c.id) === String(sel)) || null, [clientes, sel]);
   const emps = useMemo(() => empresas.filter(e => String(e.cliente_id) === String(sel)), [empresas, sel]);
   const proyectosCliente = useMemo(() => proyectos.filter(p => String(p.cliente_id) === String(sel)), [proyectos, sel]);
+  const contactosCliente = useMemo(() => contactos.filter(c => String(c.cliente_id) === String(sel)), [contactos, sel]);
+
+  async function addContacto() {
+    if (!cliente?.id) return;
+    await insertRow('cliente_contactos', { cliente_id: cliente.id, nombre: '', cargo: '', email: '', telefono: '', principal: contactosCliente.length === 0 });
+    cargar();
+  }
+  async function editarContacto(ct, campos) {
+    await updateRow('cliente_contactos', ct.id, campos);
+    setContactos(cs => cs.map(c => c.id === ct.id ? { ...c, ...campos } : c));
+  }
+  async function marcarPrincipal(ct) {
+    // Solo uno principal por cliente.
+    for (const c of contactosCliente) {
+      if (c.id === ct.id && !c.principal) await updateRow('cliente_contactos', c.id, { principal: true });
+      else if (c.id !== ct.id && c.principal) await updateRow('cliente_contactos', c.id, { principal: false });
+    }
+    cargar();
+  }
+  async function quitarContacto(id) { await deleteRow('cliente_contactos', id); cargar(); }
   const normasCliente = useMemo(() => [...new Set(
     emps.flatMap(e => normasEmp.filter(n => String(n.empresa_id) === String(e.id)).map(n => n.norma_id))
   )], [emps, normasEmp]);
-
-  async function crearProyecto() {
-    if (!cliente?.id) return;
-    const nombre = prompt('Nombre del proyecto:', `Proyecto ${proyectosCliente.length + 1}`);
-    if (!nombre) return;
-    await insertRow('proyectos_cliente', { cliente_id: cliente.id, nombre, normas: [], modelo: 'Implicación', estado: 'activo', meses_estimados: 3 });
-    cargar();
-  }
 
   async function guardarCliente(e) {
     e.preventDefault(); setMsg(null);
@@ -270,10 +284,40 @@ export default function Clientes() {
 
           <div className="card">
             <div className="flex items-center justify-between">
-              <h4 className="font-extrabold">Proyectos de este cliente</h4>
-              <button onClick={crearProyecto} className="btn-orange !px-4 !py-2">+ Nuevo proyecto</button>
+              <h4 className="font-extrabold">Contactos</h4>
+              <button onClick={addContacto} className="btn-orange !px-4 !py-2">+ Añadir contacto</button>
             </div>
-            <p className="mt-1 text-sm font-medium text-navy-400">El cliente es la matriz de facturación. Cada proyecto tiene sus normas, modelo y tareas.</p>
+            {contactosCliente.length === 0 ? (
+              <p className="mt-4 text-sm font-medium text-navy-300">Sin contactos. Añade el primero y márcalo como principal.</p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {contactosCliente.map(ct => (
+                  <div key={ct.id} className={`rounded-xl border p-3 ${ct.principal ? 'border-brand-orange bg-brand-orange/5' : 'border-navy-100 bg-white'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <button onClick={() => marcarPrincipal(ct)}
+                        className={`chip text-[11px] font-bold ${ct.principal ? 'bg-brand-orange text-navy-900' : 'border border-navy-200 bg-white text-navy-400'}`}>
+                        {ct.principal ? '★ Principal' : '☆ Marcar principal'}
+                      </button>
+                      <button onClick={() => quitarContacto(ct.id)} className="text-xs font-bold text-red-500 hover:underline">Eliminar</button>
+                    </div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <div><label className="label">Nombre</label><input className="input !py-1.5" value={ct.nombre || ''} onChange={e => editarContacto(ct, { nombre: e.target.value })} /></div>
+                      <div><label className="label">Cargo</label><input className="input !py-1.5" value={ct.cargo || ''} onChange={e => editarContacto(ct, { cargo: e.target.value })} /></div>
+                      <div><label className="label">Email</label><input type="email" className="input !py-1.5" value={ct.email || ''} onChange={e => editarContacto(ct, { email: e.target.value })} /></div>
+                      <div><label className="label">Teléfono</label><input className="input !py-1.5" value={ct.telefono || ''} onChange={e => editarContacto(ct, { telefono: e.target.value })} /></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <h4 className="font-extrabold">Proyectos de este cliente</h4>
+              <a href="../proyectos" className="btn-ghost !px-4 !py-2 text-sm">Ir a Proyectos →</a>
+            </div>
+            <p className="mt-1 text-sm font-medium text-navy-400">Los proyectos se crean y configuran en la pestaña Proyectos. Aquí solo se consultan.</p>
             {proyectosCliente.length === 0 ? (
               <p className="mt-4 text-sm font-medium text-navy-300">Aún no hay proyectos. Crea el primero.</p>
             ) : (

@@ -18,6 +18,7 @@ export const ROL_LABEL = {
 export const TABS_PORTAL = [
   { to: '',              label: 'Dashboard',          roles: ['superadmin', 'admin', 'consultor', 'gestion'] },
   { to: 'agenda',        label: 'Agenda',             roles: ['superadmin', 'admin', 'consultor'] },
+  { to: 'mi-agenda',     label: 'Mi agenda',          roles: ['superadmin', 'admin', 'consultor'] },
   { to: 'planificador',  label: 'Planificador',        roles: ['superadmin', 'admin', 'consultor'] },
   { to: 'equipo',        label: 'Equipo',             roles: ['superadmin', 'admin'] },
   { to: 'clientes',      label: 'Clientes',           roles: ['superadmin', 'admin', 'gestion'] },
