@@ -1,10 +1,8 @@
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import Dashboard from './consultores/Dashboard.jsx';
 import Equipo from './consultores/Equipo.jsx';
-import Proyectos from './consultores/Proyectos.jsx';
 import Clientes from './consultores/Clientes.jsx';
 import Agenda from './consultores/Agenda.jsx';
-import ControlSistema from './consultores/ControlSistema.jsx';
 import PlanificadorTareas from '../pages/PlanificadorTareas.jsx';
 import BarraVerComo from '../components/BarraVerComo.jsx';
 import { useAuth } from '../lib/auth.jsx';
@@ -36,9 +34,8 @@ export default function ConsultorPortal() {
         <div className="mt-8">
           <Routes>
             <Route index element={<Dashboard />} />
-            <Route path="proyectos" element={<Proyectos />} />
+            <Route path="proyectos" element={<Navigate to="../clientes" replace />} />
             <Route path="agenda" element={<Guard ok={verPlanAgendaSist}><Agenda /></Guard>} />
-            <Route path="sistemas" element={<Guard ok={verPlanAgendaSist}><ControlSistema /></Guard>} />
             <Route path="planificador" element={<Guard ok={verPlanAgendaSist}><PlanificadorTareas /></Guard>} />
             <Route path="equipo" element={<Guard ok={verEquipo}><Equipo /></Guard>} />
             <Route path="clientes" element={<Guard ok={verClientes}><Clientes /></Guard>} />

@@ -7,7 +7,7 @@ function demo() {
   if (!demoState) demoState = {
     consultores: demoClone('consultores'), clientes: demoClone('clientes'),
     proyectos: demoClone('proyectos'), presupuestos: demoClone('presupuestos'),
-    tareas_catalogo: catalogoFilas(), agenda_tareas: [], vacaciones: [], festivos: [],
+    tareas_catalogo: catalogoFilas(), agenda_tareas: [], cliente_tareas: [], vacaciones: [], festivos: [],
   };
   return demoState;
 }
