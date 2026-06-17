@@ -123,9 +123,10 @@ export default function Proyectos() {
 
       const creadas = [];
       for (const f of conFechas) {
+        const { tramos, _clave, _id, ...campos } = f;
         const fila = await insertRow('cliente_tareas', {
-          ...f, fecha_estimada: f.fecha_estimada,
-          seguimientos: (f.tramos && f.tramos.length > 1) ? f.tramos.map(tr => ({ ...tr, hecho: false })) : [],
+          ...campos,
+          seguimientos: (tramos && tramos.length > 1) ? tramos.map(tr => ({ ...tr, hecho: false })) : [],
           fecha_real: null, hecha: false,
         });
         if (fila?.id) creadas.push(fila);
