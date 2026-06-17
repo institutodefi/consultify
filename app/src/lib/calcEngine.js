@@ -75,6 +75,15 @@ export const MODELOS = {
 
 export const MODELO_IDS = Object.keys(MODELOS);
 
+// Duración por defecto (meses) de cada modelo de relación ("acuerdo").
+export const MESES_MODELO = {
+  Apoyo: 3,
+  Implantación: 12,
+  Relación: 12,
+  Implicación: 12,
+  Compromiso: 12,
+};
+
 /**
  * Calcula horas y precio para una combinación de normas y un modelo.
  * Reglas:

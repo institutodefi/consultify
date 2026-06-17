@@ -3,7 +3,7 @@ import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
 import { tareasDeCliente, repartirFechas, anidarTareas, codigoTareaIntegrada, horasCoordinacion } from '../../lib/planCliente.js';
 import { esLaborable, toISO, FESTIVOS_2026 } from '../../lib/agenda.js';
 import { sincronizarTareaAgenda, sincronizarVariasAgenda, borrarReflejoAgenda } from '../../lib/sincroAgenda.js';
-import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
+import { NORMAS, NORMA_BY_ID, MESES_MODELO } from '../../lib/calcEngine.js';
 
 const MODELOS = ['Apoyo', 'Relación', 'Implicación', 'Compromiso', 'Implantación'];
 const fmtH = (h) => `${(Math.round((h || 0) * 100) / 100).toLocaleString('es-ES')} h`;
@@ -51,7 +51,19 @@ export default function Proyectos() {
 
   const [normasSel, setNormasSel] = useState([]);
   const [modelo, setModelo] = useState('Implicación');
-  useEffect(() => { if (proyecto) { const ns = proyecto.normas || []; setNormasSel(ns.includes('9001') ? ns : ['9001', ...ns]); setModelo(proyecto.modelo || 'Implicación'); } }, [proyecto]);
+  const [meses, setMeses] = useState(MESES_MODELO['Implicación']);
+  useEffect(() => {
+    if (proyecto) {
+      const ns = proyecto.normas || [];
+      setNormasSel(ns.includes('9001') ? ns : ['9001', ...ns]);
+      const m = proyecto.modelo || 'Implicación';
+      setModelo(m);
+      setMeses(proyecto.meses_estimados || MESES_MODELO[m] || 3);
+    }
+  }, [proyecto]);
+
+  // Al cambiar el modelo (acuerdo), proponer su duración por defecto.
+  function cambiarModelo(m) { setModelo(m); setMeses(MESES_MODELO[m] || 3); }
 
   const consultores = equipo.filter(c => (c.tipo_equipo || 'consultor') === 'consultor' && c.activo !== false);
 
@@ -105,7 +117,7 @@ export default function Proyectos() {
 
   async function guardarConfig() {
     if (!proyecto) return;
-    await updateRow('proyectos_cliente', proyecto.id, { normas: normasSel, modelo });
+    await updateRow('proyectos_cliente', proyecto.id, { normas: normasSel, modelo, meses_estimados: meses });
     cargar(); setMsg('Configuración guardada.');
   }
 
@@ -129,7 +141,7 @@ export default function Proyectos() {
       }));
 
       // Distribuir fechas (mínimo 3 meses, 6h/día, festivos)
-      const conFechas = repartirFechas(filas, proyecto.fecha_inicio, proyecto.meses_estimados || 3, { festivos, meses: proyecto.meses_estimados || 3 });
+      const conFechas = repartirFechas(filas, proyecto.fecha_inicio, meses, { festivos, meses });
 
       const creadas = [];
       for (const f of conFechas) {
@@ -156,8 +168,8 @@ export default function Proyectos() {
       const nSis = normasSel.length;
       const horasCoord = Math.round(0.5 * nSis * 100) / 100; // 30 min por sistema
       const inicio = proyecto.fecha_inicio ? new Date(proyecto.fecha_inicio) : new Date();
-      const meses = Math.max(3, proyecto.meses_estimados || 3);
-      for (let k = 0; k < meses; k++) {
+      const mesesProy = Math.max(3, meses);
+      for (let k = 0; k < mesesProy; k++) {
         const ref = new Date(inicio.getFullYear(), inicio.getMonth() + k, 1);
         const fecha = segundoLunesLaborable(ref.getFullYear(), ref.getMonth());
         if (!fecha) continue;
@@ -232,10 +244,15 @@ export default function Proyectos() {
             </div>
             <div className="mt-4 flex flex-wrap items-end gap-3">
               <div>
-                <label className="label">Modelo de relación</label>
-                <select className="input !w-auto" value={modelo} onChange={e => setModelo(e.target.value)}>
+                <label className="label">Modelo de relación (acuerdo)</label>
+                <select className="input !w-auto" value={modelo} onChange={e => cambiarModelo(e.target.value)}>
                   {MODELOS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="label">Duración (meses)</label>
+                <input type="number" min="1" className="input !w-28" value={meses} onChange={e => setMeses(Number(e.target.value) || 1)} />
+                <p className="mt-1 text-xs font-medium text-navy-400">Por defecto {MESES_MODELO[modelo] || 3} meses para {modelo}.</p>
               </div>
               <button onClick={guardarConfig} className="btn-ghost !px-4 !py-2">Guardar configuración</button>
             </div>

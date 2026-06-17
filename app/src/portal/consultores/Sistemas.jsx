@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
+import { sincronizarTareaAgenda } from '../../lib/sincroAgenda.js';
 import { NORMAS } from '../../lib/calcEngine.js';
 
 const MODELOS = ['Apoyo', 'Implantación', 'Relación', 'Implicación', 'Compromiso'];
@@ -11,6 +12,8 @@ export default function Sistemas() {
   const [normaSel, setNormaSel] = useState('9001');
   const [modelo, setModelo] = useState('Implicación');
   const [msg, setMsg] = useState(null);
+  const [pendiente, setPendiente] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
 
   const cargar = () => listTable('tareas_catalogo').then(setCatalogo).catch(() => setCatalogo([]));
   useEffect(cargar, []);
@@ -23,12 +26,12 @@ export default function Sistemas() {
   async function editarHoras(t, horas) {
     await updateRow('tareas_catalogo', t.id, { horas_base: Number(horas) || 0 });
     setCatalogo(cs => cs.map(x => x.id === t.id ? { ...x, horas_base: Number(horas) || 0 } : x));
-    // Sincronizar SOLO tareas de proyecto no editadas a mano de este (norma+subproceso+modelo).
-    sincronizarProyectos(t, { horas: Number(horas) || 0 });
+    setPendiente(true); // hay cambios sin sincronizar
   }
   async function editarTexto(t, campos) {
     await updateRow('tareas_catalogo', t.id, campos);
     setCatalogo(cs => cs.map(x => x.id === t.id ? { ...x, ...campos } : x));
+    setPendiente(true);
   }
   async function addTarea() {
     const proceso = prompt('Proceso (p. ej. PE1 PLANIFICACIÓN ESTRATÉGICA):', '');
@@ -49,18 +52,33 @@ export default function Sistemas() {
     cargar(); setMsg('Tarea eliminada del catálogo.');
   }
 
-  // Propaga un cambio del catálogo a las tareas de proyecto NO editadas a mano.
-  async function sincronizarProyectos(catTarea, campos) {
+  // Sincroniza TODO el catálogo de la norma+modelo visible con los proyectos.
+  // Solo toca tareas NO terminadas, NO editadas a mano y NO integradas.
+  async function sincronizarAgendas() {
+    setSincronizando(true); setMsg(null);
     try {
       const todas = await listTable('cliente_tareas');
-      const afectadas = todas.filter(ct =>
-        ct.norma_id === catTarea.norma_id &&
-        ct.modelo === catTarea.modelo &&
-        (ct.subproceso || '') === (catTarea.subproceso || '') &&
-        !ct.editada_manual && !ct.integrada);
-      for (const ct of afectadas) await updateRow('cliente_tareas', ct.id, campos);
-      if (afectadas.length) setMsg(`Cambio sincronizado en ${afectadas.length} tarea(s) de proyectos.`);
-    } catch { /* noop */ }
+      const consultores = await listTable('consultores').catch(() => []);
+      let n = 0;
+      for (const cat of filas) {
+        const afectadas = todas.filter(ct =>
+          ct.norma_id === cat.norma_id &&
+          ct.modelo === cat.modelo &&
+          (ct.subproceso || '') === (cat.subproceso || '') &&
+          !ct.hecha &&            // ← solo tareas NO terminadas
+          !ct.editada_manual &&
+          !ct.integrada);
+        for (const ct of afectadas) {
+          const horas = Number(cat.horas_base) || 0;
+          await updateRow('cliente_tareas', ct.id, { horas });
+          try { await sincronizarTareaAgenda({ ...ct, horas }, ct.consultor_id, consultores); } catch { /* noop */ }
+          n++;
+        }
+      }
+      setPendiente(false);
+      setMsg(n ? `${n} tarea(s) no terminadas sincronizadas en proyectos y agendas.` : 'No había tareas pendientes que sincronizar.');
+    } catch (e) { setMsg(e.message); }
+    finally { setSincronizando(false); }
   }
 
   const total = filas.reduce((s, t) => s + (Number(t.horas_base) || 0), 0);
