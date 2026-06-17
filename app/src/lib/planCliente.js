@@ -108,45 +108,62 @@ export function repartirFechas(tareas, fechaInicioISO, mesesArg = 3, opts = {}) 
   const festivosSet = new Set((opts.festivos && opts.festivos.length ? opts.festivos : FESTIVOS_2026).map(f => f.fecha || f));
   const vacacionesSet = opts.vacaciones instanceof Set ? opts.vacaciones : new Set(opts.vacaciones || []);
   const meses = Math.max(MIN_MESES_PROYECTO, Number(opts.meses ?? mesesArg) || MIN_MESES_PROYECTO);
+  // Carga previa por día (fecha ISO -> horas ya ocupadas por el consultor en otros clientes).
+  const cargaPrevia = opts.cargaPrevia instanceof Map ? opts.cargaPrevia : new Map(Object.entries(opts.cargaPrevia || {}));
 
-  const inicio = primerLaborable(fechaInicioISO ? new Date(fechaInicioISO) : new Date(), festivosSet, vacacionesSet);
+  const ocupadasEn = (iso) => Number(cargaPrevia.get(iso) || 0);
+  const libreEn = (iso) => Math.max(0, MAX_HORAS_PROYECTO_DIA - ocupadasEn(iso));
 
-  // Días laborables disponibles en la ventana mínima (meses × ~30 días naturales).
+  // Primer día laborable con AL MENOS algo de hueco libre.
+  const primerConHueco = (date) => {
+    let d = primerLaborable(date, festivosSet, vacacionesSet);
+    for (let i = 0; i < 800; i++) {
+      if (libreEn(toISO(d)) > 1e-6) return d;
+      d = avanzarUnDiaLaborable(d, festivosSet, vacacionesSet);
+    }
+    return d;
+  };
+
+  const inicio = primerConHueco(fechaInicioISO ? new Date(fechaInicioISO) : new Date());
   const finVentana = new Date(inicio); finVentana.setDate(finVentana.getDate() + Math.round(meses * 30));
   const labVentana = Math.max(1, laborablesEntre(inicio, finVentana, festivosSet, vacacionesSet));
-
-  // Días que exige la carga a 6h/día.
   const totalHoras = tareas.reduce((s, t) => s + (Number(t.horas) || 0), 0);
   const labCarga = Math.max(1, Math.ceil(totalHoras / MAX_HORAS_PROYECTO_DIA));
-
-  // Repartimos sobre el mayor de ambos: nunca menos de la ventana mínima.
   const diasObjetivo = Math.max(labVentana, labCarga);
-
-  // Carga baja → espaciar las tareas para distribuirlas a lo largo de los 3 meses.
   const espaciar = diasObjetivo > labCarga;
   const saltoDias = espaciar ? Math.max(1, Math.floor(diasObjetivo / tareas.length)) : 0;
 
   let dia = new Date(inicio);
-  let usadasHoy = 0;
+  // horas ya colocadas hoy por ESTE reparto (se suman a la carga previa).
+  let puestasHoy = 0;
 
-  const avanzar = () => { dia = avanzarUnDiaLaborable(dia, festivosSet, vacacionesSet); usadasHoy = 0; };
-  const avanzarN = (n) => { for (let k = 0; k < n; k++) avanzar(); };
+  const avanzarHueco = () => {
+    do { dia = avanzarUnDiaLaborable(dia, festivosSet, vacacionesSet); puestasHoy = 0; }
+    while (libreEn(toISO(dia)) <= 1e-6);
+  };
 
   return tareas.map((t, i) => {
     const horas = Number(t.horas) || 0;
-    if (espaciar && i > 0) avanzarN(saltoDias);
-    else if (!espaciar && usadasHoy >= MAX_HORAS_PROYECTO_DIA - 1e-6 && usadasHoy > 0) avanzar();
+    const isoHoy = toISO(dia);
+    let libreHoy = libreEn(isoHoy) - puestasHoy;
+
+    if (espaciar && i > 0) { for (let k = 0; k < saltoDias; k++) avanzarHueco(); libreHoy = libreEn(toISO(dia)) - puestasHoy; }
+    else if (libreHoy <= 1e-6) { avanzarHueco(); libreHoy = libreEn(toISO(dia)) - puestasHoy; }
+
     const fechaInicioTarea = toISO(dia);
-    // Tope duro de 6h: parte tareas largas en varios días.
+    // Tramos: si la tarea no cabe en el hueco del día (6h − carga previa − puestas),
+    // se reparte en varios días → seguimientos.
+    const tramos = [];
     let restante = horas;
-    let libreHoy = MAX_HORAS_PROYECTO_DIA - usadasHoy;
-    while (restante > libreHoy && libreHoy >= 0) {
-      restante -= libreHoy;
-      avanzar();
-      libreHoy = MAX_HORAS_PROYECTO_DIA;
+    while (restante > libreHoy + 1e-6) {
+      if (libreHoy > 1e-6) { tramos.push({ fecha: toISO(dia), horas: Math.round(libreHoy * 100) / 100 }); restante -= libreHoy; }
+      avanzarHueco();
+      libreHoy = libreEn(toISO(dia)) - puestasHoy;
     }
-    usadasHoy = (MAX_HORAS_PROYECTO_DIA - libreHoy) + restante;
-    return { ...t, fecha_estimada: fechaInicioTarea, orden: i };
+    tramos.push({ fecha: toISO(dia), horas: Math.round(restante * 100) / 100 });
+    puestasHoy += restante;
+
+    return { ...t, fecha_estimada: fechaInicioTarea, tramos, orden: i };
   });
 }
 

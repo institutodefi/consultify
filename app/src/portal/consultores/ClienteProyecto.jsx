@@ -65,13 +65,32 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
     listTable('tareas_catalogo').then(setCatalogo).catch(() => setCatalogo([]));
     listTable('festivos').then(setFestivos).catch(() => setFestivos([]));
     listTable('cliente_tareas')
-      .then(all => setTareas(all.filter(t => String(t.cliente_id) === String(cliente.id))
-        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))))
-      .catch(() => setTareas([]));
+      .then(all => {
+        setTodasTareas(all);
+        setTareas(all.filter(t => String(t.cliente_id) === String(cliente.id))
+          .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)));
+      })
+      .catch(() => { setTareas([]); setTodasTareas([]); });
   };
   useEffect(cargar, [cliente.id]);
 
-  const opcionesReparto = useMemo(() => ({ festivos }), [festivos]);
+  const [todasTareas, setTodasTareas] = useState([]); // todas las cliente_tareas (todos los clientes)
+
+  // Carga previa por día del consultor 1: horas ya asignadas en OTROS clientes.
+  const cargaPrevia = useMemo(() => {
+    const m = {};
+    if (!c1) return m;
+    for (const t of todasTareas) {
+      if (String(t.consultor_id) !== String(c1)) continue;
+      if (String(t.cliente_id) === String(cliente.id)) continue; // excluir este proyecto
+      // sumar tramos si existen; si no, las horas en su fecha estimada
+      const tramos = Array.isArray(t.seguimientos) && t.seguimientos.length ? t.seguimientos : (t.fecha_estimada ? [{ fecha: t.fecha_estimada, horas: t.horas }] : []);
+      for (const tr of tramos) { if (tr.fecha) m[tr.fecha] = (m[tr.fecha] || 0) + (Number(tr.horas) || 0); }
+    }
+    return m;
+  }, [todasTareas, c1, cliente.id]);
+
+  const opcionesReparto = useMemo(() => ({ festivos, meses, cargaPrevia }), [festivos, meses, cargaPrevia]);
 
   // Propuesta de tareas según las normas del cliente (no se guarda hasta confirmar).
   const propuesta = useMemo(() => {
@@ -120,6 +139,7 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
     titulo: tituloConCliente(cliente.empresa, p),
     horas: p.horas, bloque: p.bloque, tipo: tipoTarea(p),
     consultor_id: c1 || null, fecha_estimada: p.fecha_estimada,
+    seguimientos: (p.tramos && p.tramos.length > 1) ? p.tramos.map(tr => ({ ...tr, hecho: false })) : [],
     fecha_real: null, hecha: false, orden: p.orden,
   });
 
@@ -168,6 +188,19 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
     await deleteRow('cliente_tareas', id);
     await borrarReflejoAgenda(id);
     cargar();
+  }
+
+  // Añade un seguimiento (tramo) manual a una tarea.
+  async function addSeguimiento(t) {
+    const fecha = prompt('Fecha del seguimiento (YYYY-MM-DD):', t.fecha_estimada || '');
+    if (!fecha) return;
+    const horas = Number(prompt('Horas de este seguimiento:', '2')) || 0;
+    const segs = [...(Array.isArray(t.seguimientos) ? t.seguimientos : []), { fecha, horas, hecho: false }];
+    await patch(t.id, { seguimientos: segs });
+  }
+  async function quitarSeguimiento(t, idx) {
+    const segs = (Array.isArray(t.seguimientos) ? t.seguimientos : []).filter((_, i) => i !== idx);
+    await patch(t.id, { seguimientos: segs });
   }
 
   // ── Filtro de tareas ──
@@ -540,8 +573,8 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
               <table className="w-full min-w-[900px] text-sm">
                 <thead>
                   <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
-                    <th className="py-2"><input type="checkbox" checked={sel.size === tareasFiltradas.length && tareasFiltradas.length > 0} onChange={e => e.target.checked ? selTodas() : selNinguna()} /></th>
-                    <th className="py-2">✓</th>
+                    <th className="py-2" title="Seleccionar para acciones en masa"><input type="checkbox" checked={sel.size === tareasFiltradas.length && tareasFiltradas.length > 0} onChange={e => e.target.checked ? selTodas() : selNinguna()} /> sel</th>
+                    <th className="py-2" title="Marcar tarea como hecha">hecha</th>
                     <th className="py-2">Sistema</th>
                     <th className="py-2">Bloque</th>
                     <th className="py-2">Tarea</th>
@@ -550,6 +583,7 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
                     <th className="py-2">Consultor</th>
                     <th className="py-2">Estimada</th>
                     <th className="py-2">Real</th>
+                    <th className="py-2">Seg.</th>
                     <th className="py-2"></th>
                   </tr>
                 </thead>
@@ -573,6 +607,11 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
                         </td>
                         <td className="py-1.5"><input type="date" className="input !py-1 !text-xs" value={t.fecha_estimada || ''} onChange={e => patch(t.id, { fecha_estimada: e.target.value || null })} /></td>
                         <td className="py-1.5"><input type="date" className="input !py-1 !text-xs" value={t.fecha_real || ''} onChange={e => patch(t.id, { fecha_real: e.target.value || null })} /></td>
+                        <td className="py-1.5 text-center">
+                          <button onClick={() => addSeguimiento(t)} title="Añadir seguimiento" className="text-xs font-bold text-navy-500 hover:text-brand-orange">
+                            +seg{Array.isArray(t.seguimientos) && t.seguimientos.length ? ` (${t.seguimientos.length})` : ''}
+                          </button>
+                        </td>
                         <td className="py-1.5 text-right"><button onClick={() => quitar(t.id)} className="text-xs font-bold text-red-500 hover:underline">×</button></td>
                       </tr>
                     );
