@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
 import { tareasDeCliente, repartirFechas, anidarTareas, codigoTareaIntegrada, horasCoordinacion } from '../../lib/planCliente.js';
-import { sincronizarVariasAgenda, borrarReflejoAgenda } from '../../lib/sincroAgenda.js';
+import { esLaborable, toISO, FESTIVOS_2026 } from '../../lib/agenda.js';
+import { sincronizarTareaAgenda, sincronizarVariasAgenda, borrarReflejoAgenda } from '../../lib/sincroAgenda.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
 
 const MODELOS = ['Apoyo', 'Relación', 'Implicación', 'Compromiso', 'Implantación'];
@@ -80,6 +81,15 @@ export default function Proyectos() {
   function anidarTodas() { setAnidar(new Set(clavesComunes)); }
   function anidarNinguna() { setAnidar(new Set()); }
 
+  // Edita una tarea ya distribuida: marca editada_manual para que la sincronización
+  // del catálogo no la pise, y refleja el cambio en la agenda.
+  async function patchTarea(t, campos) {
+    const conFlag = { ...campos, editada_manual: true };
+    await updateRow('cliente_tareas', t.id, conFlag);
+    setTareas(ts => ts.map(x => x.id === t.id ? { ...x, ...conFlag } : x));
+    try { await sincronizarTareaAgenda({ ...t, ...conFlag }, proyecto?.consultor_1_id || null, equipo); } catch { /* noop */ }
+  }
+
   async function nuevoProyecto() {
     if (!clientes.length) { setMsg('Crea primero un cliente.'); return; }
     const lista = clientes.map((c, i) => `${i + 1}. ${c.empresa}`).join('\n');
@@ -131,9 +141,43 @@ export default function Proyectos() {
         });
         if (fila?.id) creadas.push(fila);
       }
+
+      // ── Tarea de coordinación del proyecto: 30 min × nº de sistemas, el 2º lunes
+      //    laborable de CADA mes que abarque el proyecto. ──
+      const fSet = new Set((festivos.length ? festivos : FESTIVOS_2026).map(x => x.fecha || x));
+      const segundoLunesLaborable = (anio, mes) => {
+        let lunes = 0; const d = new Date(anio, mes, 1);
+        for (let i = 0; i < 31 && d.getMonth() === mes; i++) {
+          if (d.getDay() === 1 && esLaborable(d, fSet)) { lunes++; if (lunes === 2) return new Date(d); }
+          d.setDate(d.getDate() + 1);
+        }
+        return null;
+      };
+      const nSis = normasSel.length;
+      const horasCoord = Math.round(0.5 * nSis * 100) / 100; // 30 min por sistema
+      const inicio = proyecto.fecha_inicio ? new Date(proyecto.fecha_inicio) : new Date();
+      const meses = Math.max(3, proyecto.meses_estimados || 3);
+      for (let k = 0; k < meses; k++) {
+        const ref = new Date(inicio.getFullYear(), inicio.getMonth() + k, 1);
+        const fecha = segundoLunesLaborable(ref.getFullYear(), ref.getMonth());
+        if (!fecha) continue;
+        const fila = await insertRow('cliente_tareas', {
+          cliente_id: cliente.id, proyecto_id: proyecto.id,
+          norma_id: '9001', modelo,
+          proceso: 'PM COORDINACIÓN', subproceso: 'Reunión de coordinación del proyecto',
+          titulo: `${cliente.empresa} - ${modelo} - Coordinación del proyecto`,
+          horas: horasCoord, bloque: 'PM', tipo: 'coordinacion',
+          integrada: false, normas_integradas: normasSel,
+          consultor_id: proyecto.consultor_1_id || null,
+          fecha_estimada: toISO(fecha), fecha_real: null, hecha: false,
+          seguimientos: [], orden: 9000 + k,
+        });
+        if (fila?.id) creadas.push(fila);
+      }
+
       await sincronizarVariasAgenda(creadas, proyecto.consultor_1_id || null, equipo);
       cargar();
-      setMsg(`${creadas.length} tareas generadas y distribuidas por los meses del proyecto.`);
+      setMsg(`${creadas.length} tareas generadas (incluida coordinación mensual de ${horasCoord} h).`);
     } catch (e) { setMsg(e.message); }
   }
 
@@ -268,18 +312,33 @@ export default function Proyectos() {
           {tareasProyecto.length > 0 && (
             <div className="card">
               <h4 className="font-extrabold">Tareas distribuidas ({tareasProyecto.length})</h4>
-              <div className="mt-3 max-h-96 overflow-y-auto">
-                <table className="w-full text-sm">
+              <p className="mt-1 text-xs font-medium text-navy-400">Asigna consultor responsable y registra las horas reales conforme avanza el proyecto.</p>
+              <div className="mt-3 max-h-96 overflow-y-auto overflow-x-auto">
+                <table className="w-full min-w-[760px] text-sm">
                   <thead className="sticky top-0 bg-white">
                     <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
-                      <th className="py-2">Tarea</th><th className="py-2 text-right">Horas</th><th className="py-2">Estimada</th><th className="py-2">Seg.</th>
+                      <th className="py-2">✓</th><th className="py-2">Tarea</th><th className="py-2">Consultor</th>
+                      <th className="py-2 text-right">Horas</th><th className="py-2 text-right">Reales</th>
+                      <th className="py-2">Estimada</th><th className="py-2">Seg.</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-navy-50">
                     {tareasProyecto.map(t => (
-                      <tr key={t.id}>
+                      <tr key={t.id} className={t.hecha ? 'opacity-60' : ''}>
+                        <td className="py-1.5"><input type="checkbox" checked={!!t.hecha} onChange={e => patchTarea(t, { hecha: e.target.checked })} /></td>
                         <td className="py-1.5 font-medium">{t.titulo}</td>
+                        <td className="py-1.5">
+                          <select className="input !py-1 !text-xs" value={t.consultor_id || ''} onChange={e => patchTarea(t, { consultor_id: e.target.value || null })}>
+                            <option value="">—</option>
+                            {consultores.map(c => <option key={c.id} value={c.id}>{c.nombre} {c.apellidos || ''}</option>)}
+                          </select>
+                        </td>
                         <td className="py-1.5 text-right">{fmtH(t.horas)}</td>
+                        <td className="py-1.5 text-right">
+                          <input type="number" min="0" step="0.25" className="input !py-1 !text-xs !w-20 text-right"
+                            value={t.horas_reales ?? ''} placeholder="—"
+                            onChange={e => patchTarea(t, { horas_reales: e.target.value === '' ? null : Number(e.target.value) })} />
+                        </td>
                         <td className="py-1.5">{t.fecha_estimada || '—'}</td>
                         <td className="py-1.5">{Array.isArray(t.seguimientos) && t.seguimientos.length ? t.seguimientos.length : '—'}</td>
                       </tr>
