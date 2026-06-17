@@ -82,43 +82,70 @@ function avanzarUnDiaLaborable(date, festivosSet, vacacionesSet) {
   return d;
 }
 
+// Mínimo de duración de un proyecto, en meses.
+export const MIN_MESES_PROYECTO = 3;
+
+// Cuenta días laborables entre dos fechas (incl. inicio, excl. fin).
+function laborablesEntre(desde, hasta, festivosSet, vacacionesSet) {
+  const d = new Date(desde); let n = 0;
+  while (d < hasta) {
+    if (esLaborable(d, festivosSet) && !vacacionesSet.has(toISO(d))) n++;
+    d.setDate(d.getDate() + 1);
+  }
+  return n;
+}
+
 /**
  * Reparte fechas estimadas respetando: solo días laborables (sin sábados,
- * domingos ni festivos), máximo MAX_HORAS_PROYECTO_DIA horas de proyecto por
- * día, y partiendo en varios días las tareas que superen ese tope.
- * El parámetro `meses` ya no fuerza el escalonado: la duración real depende
- * de la carga de horas; se conserva la firma por compatibilidad.
- * @param tareas array con {horas, bloque, ...} ya ordenadas
- * @param fechaInicioISO inicio del proyecto
- * @param _meses (no se usa para el límite; se mantiene por compatibilidad)
- * @param opts {festivos:[], vacaciones:Set}
+ * domingos ni festivos), máximo MAX_HORAS_PROYECTO_DIA horas de proyecto por día,
+ * partiendo tareas largas, y un MÍNIMO de 3 meses de duración: si la carga
+ * cabe en menos, las tareas se espacian para distribuirse a lo largo de los
+ * 3 meses en vez de amontonarse al principio.
+ * @param opts {festivos:[], vacaciones:Set, meses:number}
  */
-export function repartirFechas(tareas, fechaInicioISO, _meses = 3, opts = {}) {
+export function repartirFechas(tareas, fechaInicioISO, mesesArg = 3, opts = {}) {
   if (!tareas.length) return tareas;
   const festivosSet = new Set((opts.festivos && opts.festivos.length ? opts.festivos : FESTIVOS_2026).map(f => f.fecha || f));
   const vacacionesSet = opts.vacaciones instanceof Set ? opts.vacaciones : new Set(opts.vacaciones || []);
+  const meses = Math.max(MIN_MESES_PROYECTO, Number(opts.meses ?? mesesArg) || MIN_MESES_PROYECTO);
 
-  let dia = primerLaborable(fechaInicioISO ? new Date(fechaInicioISO) : new Date(), festivosSet, vacacionesSet);
+  const inicio = primerLaborable(fechaInicioISO ? new Date(fechaInicioISO) : new Date(), festivosSet, vacacionesSet);
+
+  // Días laborables disponibles en la ventana mínima (meses × ~30 días naturales).
+  const finVentana = new Date(inicio); finVentana.setDate(finVentana.getDate() + Math.round(meses * 30));
+  const labVentana = Math.max(1, laborablesEntre(inicio, finVentana, festivosSet, vacacionesSet));
+
+  // Días que exige la carga a 6h/día.
+  const totalHoras = tareas.reduce((s, t) => s + (Number(t.horas) || 0), 0);
+  const labCarga = Math.max(1, Math.ceil(totalHoras / MAX_HORAS_PROYECTO_DIA));
+
+  // Repartimos sobre el mayor de ambos: nunca menos de la ventana mínima.
+  const diasObjetivo = Math.max(labVentana, labCarga);
+
+  // Carga baja → espaciar las tareas para distribuirlas a lo largo de los 3 meses.
+  const espaciar = diasObjetivo > labCarga;
+  const saltoDias = espaciar ? Math.max(1, Math.floor(diasObjetivo / tareas.length)) : 0;
+
+  let dia = new Date(inicio);
   let usadasHoy = 0;
 
+  const avanzar = () => { dia = avanzarUnDiaLaborable(dia, festivosSet, vacacionesSet); usadasHoy = 0; };
+  const avanzarN = (n) => { for (let k = 0; k < n; k++) avanzar(); };
+
   return tareas.map((t, i) => {
-    let horas = Number(t.horas) || 0;
-    // Si el día ya está lleno, saltar al siguiente laborable.
-    if (usadasHoy >= MAX_HORAS_PROYECTO_DIA) {
-      dia = avanzarUnDiaLaborable(dia, festivosSet, vacacionesSet);
-      usadasHoy = 0;
-    }
+    const horas = Number(t.horas) || 0;
+    if (espaciar && i > 0) avanzarN(saltoDias);
+    else if (!espaciar && usadasHoy >= MAX_HORAS_PROYECTO_DIA - 1e-6 && usadasHoy > 0) avanzar();
     const fechaInicioTarea = toISO(dia);
-    // Consumir capacidad; si la tarea es más larga que lo que queda + días enteros,
-    // avanzar tantos días laborables como haga falta (parte la tarea en varios días).
+    // Tope duro de 6h: parte tareas largas en varios días.
     let restante = horas;
     let libreHoy = MAX_HORAS_PROYECTO_DIA - usadasHoy;
     while (restante > libreHoy && libreHoy >= 0) {
       restante -= libreHoy;
-      dia = avanzarUnDiaLaborable(dia, festivosSet, vacacionesSet);
+      avanzar();
       libreHoy = MAX_HORAS_PROYECTO_DIA;
     }
-    usadasHoy = (libreHoy === MAX_HORAS_PROYECTO_DIA ? 0 : MAX_HORAS_PROYECTO_DIA - libreHoy) + restante;
+    usadasHoy = (MAX_HORAS_PROYECTO_DIA - libreHoy) + restante;
     return { ...t, fecha_estimada: fechaInicioTarea, orden: i };
   });
 }

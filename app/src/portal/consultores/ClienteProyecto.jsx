@@ -242,17 +242,21 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
     } catch (e) { setMsg(e.message); }
   }
 
-  // Agrupación por bloque común con suma de horas.
+  // Agrupación configurable: 'bloque' o 'subproceso' (proceso+subproceso comunes
+  // entre sistemas → permite sumar y compensar horas de sistemas integrados).
+  const [modoGrupo, setModoGrupo] = useState('bloque');
   const grupos = useMemo(() => {
     const m = new Map();
     for (const t of tareasFiltradas) {
-      const k = t.bloque || '—';
-      if (!m.has(k)) m.set(k, { bloque: k, items: [], horas: 0, sistemas: new Set() });
+      const k = modoGrupo === 'subproceso'
+        ? `${t.proceso || '—'} · ${t.subproceso || '—'}`
+        : (t.bloque || '—');
+      if (!m.has(k)) m.set(k, { clave: k, items: [], horas: 0, sistemas: new Set() });
       const g = m.get(k);
       g.items.push(t); g.horas += Number(t.horas) || 0; g.sistemas.add(t.norma_id);
     }
-    return [...m.values()].sort((a, b) => a.bloque.localeCompare(b.bloque));
-  }, [tareasFiltradas]);
+    return [...m.values()].sort((a, b) => a.clave.localeCompare(b.clave));
+  }, [tareasFiltradas, modoGrupo]);
 
   // Totales y coordinación
   const totalHoras = tareas.reduce((s, t) => s + (Number(t.horas) || 0), 0);
@@ -303,6 +307,18 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
   }
 
   const normasConTareas = useMemo(() => [...new Set(tareas.map(t => t.norma_id))], [tareas]);
+
+  // La planificación solo se permite sobre un cliente realmente dado de alta.
+  if (!cliente?.id) {
+    return (
+      <div className="mt-5 border-t border-navy-100 pt-5">
+        <h4 className="font-extrabold">Proyecto y tareas</h4>
+        <p className="mt-3 rounded-xl bg-navy-50 p-4 text-sm font-medium text-navy-500">
+          Guarda primero el cliente (alta) para poder planificar sus tareas.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-5 space-y-5 border-t border-navy-100 pt-5">
@@ -445,8 +461,14 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
             </div>
             <button onClick={() => { setFTexto(''); setFSistema(''); setFBloque(''); setFTipo(''); }} className="btn-ghost !px-3 !py-1.5 text-xs">Limpiar</button>
             <button onClick={() => setAgrupar(a => !a)} className={`chip border text-xs font-bold ${agrupar ? 'border-brand-orange bg-brand-orange/10 text-brand-orangeDark' : 'border-navy-200 text-navy-500'}`}>
-              {agrupar ? '▣ Agrupado por bloque' : '☰ Vista lista'}
+              {agrupar ? '▣ Agrupado' : '☰ Vista lista'}
             </button>
+            {agrupar && (
+              <select className="input !w-auto !py-1.5 !text-xs" value={modoGrupo} onChange={e => setModoGrupo(e.target.value)}>
+                <option value="bloque">por bloque</option>
+                <option value="subproceso">por proceso+subproceso (sistemas comunes)</option>
+              </select>
+            )}
             <span className="ml-auto text-xs font-medium text-navy-400">{tareasFiltradas.length} de {tareas.length} · {fmtH(tareasFiltradas.reduce((s, t) => s + (Number(t.horas) || 0), 0))}</span>
           </div>
 
@@ -481,10 +503,19 @@ export default function ClienteProyecto({ cliente, normasCliente, equipo, onCamb
           {agrupar ? (
             <div className="space-y-2">
               {grupos.map(g => (
-                <details key={g.bloque} className="rounded-xl border border-navy-100 bg-white p-3" open>
-                  <summary className="flex cursor-pointer items-center justify-between">
-                    <span className="font-extrabold text-navy-700">{g.bloque} <span className="text-xs font-medium text-navy-400">· {g.items.length} tareas · {[...g.sistemas].join(', ')}</span></span>
-                    <span className="text-sm font-bold text-navy-800">{fmtH(g.horas)}</span>
+                <details key={g.clave} className="rounded-xl border border-navy-100 bg-white p-3" open>
+                  <summary className="flex cursor-pointer items-center justify-between gap-2">
+                    <span className="font-extrabold text-navy-700">{g.clave} <span className="text-xs font-medium text-navy-400">· {g.items.length} tareas · {[...g.sistemas].join(', ')}</span></span>
+                    <span className="flex items-center gap-2">
+                      {g.sistemas.size > 1 && (
+                        <button onClick={(e) => { e.preventDefault(); setSel(new Set(g.items.map(t => t.id))); }}
+                          className="chip border border-brand-orange bg-brand-orange/10 text-[11px] font-bold text-brand-orangeDark"
+                          title="Seleccionar este grupo para sumar/compensar sus horas con el % de reducción de arriba">
+                          ⚖ seleccionar para compensar
+                        </button>
+                      )}
+                      <span className="text-sm font-bold text-navy-800">{fmtH(g.horas)}</span>
+                    </span>
                   </summary>
                   <div className="mt-2 space-y-1">
                     {g.items.map(t => {
