@@ -22,6 +22,8 @@ export default function Proyectos() {
   const [tareas, setTareas] = useState([]);
   const [sel, setSel] = useState('');         // proyecto seleccionado
   const [anidar, setAnidar] = useState(new Set()); // claves proceso|subproceso a anidar
+  const [arrastra, setArrastra] = useState(null);
+  const puedeFusionar = (claveA, claveB) => claveA === claveB; // misma clave = mismo proceso+subproceso
   const [msg, setMsg] = useState(null);
 
   const cargar = () => {
@@ -48,7 +50,7 @@ export default function Proyectos() {
 
   const [normasSel, setNormasSel] = useState([]);
   const [modelo, setModelo] = useState('Implicación');
-  useEffect(() => { if (proyecto) { setNormasSel(proyecto.normas || []); setModelo(proyecto.modelo || 'Implicación'); } }, [proyecto]);
+  useEffect(() => { if (proyecto) { const ns = proyecto.normas || []; setNormasSel(ns.includes('9001') ? ns : ['9001', ...ns]); setModelo(proyecto.modelo || 'Implicación'); } }, [proyecto]);
 
   const consultores = equipo.filter(c => (c.tipo_equipo || 'consultor') === 'consultor' && c.activo !== false);
 
@@ -225,16 +227,23 @@ export default function Proyectos() {
               <h4 className="font-extrabold">Tareas resultantes ({candidatas.length})</h4>
               <span className="text-sm font-bold text-navy-800">{fmtH(totalHoras)}</span>
             </div>
+            <p className="mt-1 text-xs font-medium text-navy-400">Arrastra una tarea sobre otra del mismo proceso y subproceso para anidarlas (fusionar e integrar sus horas).</p>
             <div className="mt-3 max-h-80 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white">
                   <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
-                    <th className="py-2">Código</th><th className="py-2">Tipo</th><th className="py-2 text-right">Horas</th>
+                    <th className="py-2"></th><th className="py-2">Código</th><th className="py-2">Tipo</th><th className="py-2 text-right">Horas</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-navy-50">
                   {candidatas.map((c, i) => (
-                    <tr key={i}>
+                    <tr key={c._clave + i}
+                      draggable
+                      onDragStart={() => setArrastra(c._clave)}
+                      onDragOver={(e) => { if (arrastra && puedeFusionar(arrastra, c._clave)) e.preventDefault(); }}
+                      onDrop={() => { if (arrastra && puedeFusionar(arrastra, c._clave)) { setAnidar(s => new Set([...s, c._clave])); } setArrastra(null); }}
+                      className={`${arrastra && puedeFusionar(arrastra, c._clave) ? 'bg-brand-orange/5' : ''} cursor-grab`}>
+                      <td className="py-1.5 text-navy-300">⠿</td>
                       <td className="py-1.5 font-medium">
                         {codigoTareaIntegrada(cliente?.empresa, modelo, c.proceso, c.subproceso, c.normas_integradas)}
                         {c.integrada && <span className="ml-2 chip bg-brand-orange/15 text-[10px] font-bold text-brand-orangeDark">integrada</span>}

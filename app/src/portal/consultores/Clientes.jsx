@@ -15,6 +15,21 @@ export default function Clientes() {
   const [sel, setSel] = useState('');
   const [form, setForm] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [busca, setBusca] = useState('');
+  const [porPagina, setPorPagina] = useState('25');
+  const [pag, setPag] = useState(0);
+
+  const clientesFiltrados = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    if (!q) return clientes;
+    return clientes.filter(c => `${c.empresa} ${c.codigo || ''} ${c.contacto || ''} ${c.email || ''}`.toLowerCase().includes(q));
+  }, [clientes, busca]);
+  const totalPags = porPagina === 'todos' ? 1 : Math.max(1, Math.ceil(clientesFiltrados.length / Number(porPagina)));
+  const clientesPagina = useMemo(() => {
+    if (porPagina === 'todos') return clientesFiltrados;
+    const n = Number(porPagina);
+    return clientesFiltrados.slice(pag * n, pag * n + n);
+  }, [clientesFiltrados, porPagina, pag]);
 
   const cargar = () => {
     listTable('clientes').then(setClientes);
@@ -113,10 +128,10 @@ export default function Clientes() {
 
   return (
     <div className="space-y-6">
-      {/* Selector de cliente */}
+      {/* Selector + acciones */}
       <div className="card">
         <div className="flex flex-wrap items-end gap-4">
-          <div className="min-w-[260px] flex-1">
+          <div className="min-w-[220px] flex-1">
             <label className="label" htmlFor="sel-cliente">Cliente</label>
             <select id="sel-cliente" className="input" value={sel} onChange={e => { setSel(e.target.value); setForm(null); }}>
               <option value="">— Selecciona un cliente —</option>
@@ -128,6 +143,49 @@ export default function Clientes() {
             {cliente && <button onClick={() => setForm({ ...VACIO, ...cliente })} className="btn-ghost !px-4 !py-2">Editar datos</button>}
           </div>
         </div>
+      </div>
+
+      {/* Lista de clientes en bloques */}
+      <div className="card">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <input className="input !w-auto !py-1.5 !text-sm" placeholder="Buscar cliente…" value={busca} onChange={e => { setBusca(e.target.value); setPag(0); }} />
+            <span className="text-xs font-medium text-navy-400">{clientesFiltrados.length} clientes</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-bold text-navy-400">Mostrar</label>
+            <select className="input !w-auto !py-1.5 !text-sm" value={porPagina} onChange={e => { setPorPagina(e.target.value); setPag(0); }}>
+              {['10', '25', '50', '100', 'todos'].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
+                <th className="py-2">ID</th><th className="py-2">Cliente</th><th className="py-2">Contacto</th><th className="py-2">Email</th><th className="py-2"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-navy-50">
+              {clientesPagina.map(c => (
+                <tr key={c.id} className={`cursor-pointer hover:bg-navy-50/50 ${String(c.id) === String(sel) ? 'bg-brand-orange/5' : ''}`} onClick={() => { setSel(String(c.id)); setForm(null); }}>
+                  <td className="py-2 font-bold text-navy-400">{c.codigo || '—'}</td>
+                  <td className="py-2 font-medium">{c.empresa}</td>
+                  <td className="py-2 text-navy-500">{c.contacto || '—'}</td>
+                  <td className="py-2 text-navy-500">{c.email || '—'}</td>
+                  <td className="py-2 text-right"><span className="text-xs font-bold text-brand-orangeDark">Abrir →</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {porPagina !== 'todos' && totalPags > 1 && (
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <button onClick={() => setPag(p => Math.max(0, p - 1))} disabled={pag === 0} className="btn-ghost !px-3 !py-1.5 text-xs disabled:opacity-30">‹ Anterior</button>
+            <span className="text-xs font-medium text-navy-400">Página {pag + 1} de {totalPags}</span>
+            <button onClick={() => setPag(p => Math.min(totalPags - 1, p + 1))} disabled={pag >= totalPags - 1} className="btn-ghost !px-3 !py-1.5 text-xs disabled:opacity-30">Siguiente ›</button>
+          </div>
+        )}
       </div>
 
       {/* Alta / edición */}

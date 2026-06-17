@@ -5,6 +5,7 @@ import Clientes from './consultores/Clientes.jsx';
 import ProyectosConfig from './consultores/ProyectosConfig.jsx';
 import Agenda from './consultores/Agenda.jsx';
 import MiAgenda from './consultores/MiAgenda.jsx';
+import Sistemas from './consultores/Sistemas.jsx';
 import PlanificadorTareas from '../pages/PlanificadorTareas.jsx';
 import BarraVerComo from '../components/BarraVerComo.jsx';
 import { useAuth } from '../lib/auth.jsx';
@@ -41,6 +42,7 @@ export default function ConsultorPortal() {
             <Route path="mi-agenda" element={<Guard ok={verPlanAgendaSist}><MiAgenda /></Guard>} />
             <Route path="planificador" element={<Guard ok={verPlanAgendaSist}><PlanificadorTareas /></Guard>} />
             <Route path="equipo" element={<Guard ok={verEquipo}><Equipo /></Guard>} />
+            <Route path="sistemas" element={<Guard ok={verEquipo}><Sistemas /></Guard>} />
             <Route path="clientes" element={<Guard ok={verClientes}><Clientes /></Guard>} />
             <Route path="*" element={<Navigate to="." replace />} />
           </Routes>

@@ -21,6 +21,7 @@ export const TABS_PORTAL = [
   { to: 'mi-agenda',     label: 'Mi agenda',          roles: ['superadmin', 'admin', 'consultor'] },
   { to: 'planificador',  label: 'Planificador',        roles: ['superadmin', 'admin', 'consultor'] },
   { to: 'equipo',        label: 'Equipo',             roles: ['superadmin', 'admin'] },
+  { to: 'sistemas',      label: 'Sistemas',           roles: ['superadmin', 'admin'] },
   { to: 'clientes',      label: 'Clientes',           roles: ['superadmin', 'admin', 'gestion'] },
   { to: 'proyectos',     label: 'Proyectos',          roles: ['superadmin', 'admin', 'gestion', 'consultor'] },
 ];
