@@ -3,7 +3,7 @@ import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
 import { tareasDeCliente, repartirFechas, anidarTareas, codigoTareaIntegrada, horasCoordinacion } from '../../lib/planCliente.js';
 import { esLaborable, toISO, FESTIVOS_2026 } from '../../lib/agenda.js';
 import { sincronizarTareaAgenda, sincronizarVariasAgenda, borrarReflejoAgenda } from '../../lib/sincroAgenda.js';
-import { NORMAS, NORMA_BY_ID, MESES_MODELO } from '../../lib/calcEngine.js';
+import { NORMAS, NORMA_BY_ID, MESES_MODELO, mesesPorModelo } from '../../lib/calcEngine.js';
 
 const MODELOS = ['Apoyo', 'Relación', 'Implicación', 'Compromiso', 'Implantación'];
 const fmtH = (h) => `${(Math.round((h || 0) * 100) / 100).toLocaleString('es-ES')} h`;
@@ -63,7 +63,7 @@ export default function Proyectos() {
   }, [proyecto]);
 
   // Al cambiar el modelo (acuerdo), proponer su duración por defecto.
-  function cambiarModelo(m) { setModelo(m); setMeses(MESES_MODELO[m] || 3); }
+  function cambiarModelo(m) { setModelo(m); setMeses(mesesPorModelo(m, normasSel.length)); }
 
   const consultores = equipo.filter(c => (c.tipo_equipo || 'consultor') === 'consultor' && c.activo !== false);
 
@@ -85,7 +85,12 @@ export default function Proyectos() {
 
   function toggleNorma(id) {
     if (id === '9001') return; // base obligatoria
-    setNormasSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
+    setNormasSel(s => {
+      const next = s.includes(id) ? s.filter(x => x !== id) : [...s, id];
+      // Apoyo: la duración mínima depende del nº de sistemas.
+      if (modelo === 'Apoyo') setMeses(mesesPorModelo('Apoyo', next.length));
+      return next;
+    });
   }
   function toggleAnidar(k) {
     setAnidar(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
@@ -252,7 +257,9 @@ export default function Proyectos() {
               <div>
                 <label className="label">Duración (meses)</label>
                 <input type="number" min="1" className="input !w-28" value={meses} onChange={e => setMeses(Number(e.target.value) || 1)} />
-                <p className="mt-1 text-xs font-medium text-navy-400">Por defecto {MESES_MODELO[modelo] || 3} meses para {modelo}.</p>
+                <p className="mt-1 text-xs font-medium text-navy-400">
+                  Mínimo {mesesPorModelo(modelo, normasSel.length)} meses para {modelo}{modelo === 'Apoyo' ? ` con ${normasSel.length} sistema(s)` : ''}.
+                </p>
               </div>
               <button onClick={guardarConfig} className="btn-ghost !px-4 !py-2">Guardar configuración</button>
             </div>

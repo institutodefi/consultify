@@ -84,6 +84,13 @@ export const MESES_MODELO = {
   Compromiso: 12,
 };
 
+// Duración mínima según modelo y nº de sistemas.
+// Apoyo: 2 sistemas → 3 meses; más de 2 → mínimo 4 meses.
+export function mesesPorModelo(modelo, nSistemas = 1) {
+  if (modelo === 'Apoyo') return nSistemas > 2 ? 4 : 3;
+  return MESES_MODELO[modelo] || 3;
+}
+
 /**
  * Calcula horas y precio para una combinación de normas y un modelo.
  * Reglas:
