@@ -24,6 +24,8 @@ export default function Proyectos() {
   const [sel, setSel] = useState('');         // proyecto seleccionado
   const [anidar, setAnidar] = useState(new Set()); // claves proceso|subproceso a anidar
   const [arrastra, setArrastra] = useState(null);
+  const [selT, setSelT] = useState(new Set());
+  const [distribuyendo, setDistribuyendo] = useState(false);
   const puedeFusionar = (claveA, claveB) => claveA === claveB; // misma clave = mismo proceso+subproceso
   const [msg, setMsg] = useState(null);
 
@@ -106,6 +108,42 @@ export default function Proyectos() {
     setTareas(ts => ts.map(x => x.id === t.id ? { ...x, ...conFlag } : x));
     try { await sincronizarTareaAgenda({ ...t, ...conFlag }, proyecto?.consultor_1_id || null, equipo); } catch { /* noop */ }
   }
+
+  // Horas reales = suma de los seguimientos marcados como hechos.
+  function horasRealesDe(t) {
+    const segs = Array.isArray(t.seguimientos) ? t.seguimientos : [];
+    return Math.round(segs.filter(s => s.hecho).reduce((a, s) => a + (Number(s.horas) || 0), 0) * 100) / 100;
+  }
+
+  const toggleSelT = (id) => setSelT(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  // Asigna consultor a las tareas seleccionadas (lote).
+  async function asignarLote(consultorId) {
+    const ids = [...selT];
+    if (!ids.length) { setMsg('Selecciona tareas con el aspa primero.'); return; }
+    if (!confirm(`¿Asignar ${ids.length} tarea(s) a ${consultorId ? nombreConsultor(consultorId) : 'sin asignar'}?`)) return;
+    try {
+      for (const id of ids) {
+        const t = tareas.find(x => x.id === id); if (!t) continue;
+        await updateRow('cliente_tareas', id, { consultor_id: consultorId, editada_manual: true });
+        try { await sincronizarTareaAgenda({ ...t, consultor_id: consultorId }, proyecto?.consultor_1_id || null, equipo); } catch { /* noop */ }
+      }
+      setSelT(new Set()); cargar();
+      setMsg(`${ids.length} tarea(s) reasignada(s).`);
+    } catch (e) { setMsg(e.message); }
+  }
+
+  // Vuelca a la agenda todas las tareas del proyecto (sin regenerar fechas).
+  async function distribuirAgenda() {
+    setDistribuyendo(true); setMsg(null);
+    try {
+      const n = await sincronizarVariasAgenda(tareasProyecto, proyecto?.consultor_1_id || null, equipo);
+      setMsg(`Agenda distribuida: ${n} tarea(s) volcadas a las agendas de los consultores.`);
+    } catch (e) { setMsg(e.message); }
+    finally { setDistribuyendo(false); }
+  }
+
+  const nombreConsultor = (id) => { const c = equipo.find(x => String(x.id) === String(id)); return c ? `${c.nombre} ${c.apellidos || ''}`.trim() : '—'; };
 
   async function nuevoProyecto() {
     if (!clientes.length) { setMsg('Crea primero un cliente.'); return; }
@@ -335,20 +373,44 @@ export default function Proyectos() {
           {/* Tareas ya distribuidas */}
           {tareasProyecto.length > 0 && (
             <div className="card">
-              <h4 className="font-extrabold">Tareas distribuidas ({tareasProyecto.length})</h4>
-              <p className="mt-1 text-xs font-medium text-navy-400">Asigna consultor responsable y registra las horas reales conforme avanza el proyecto.</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="font-extrabold">Tareas distribuidas ({tareasProyecto.length})</h4>
+                <button onClick={distribuirAgenda} disabled={distribuyendo} className="btn-orange !px-4 !py-2 disabled:opacity-40">
+                  {distribuyendo ? 'Distribuyendo…' : '↻ Distribuir agenda'}
+                </button>
+              </div>
+              <p className="mt-1 text-xs font-medium text-navy-400">Asigna consultor responsable. Las horas reales salen del seguimiento de la tarea. Pulsa «Distribuir agenda» tras aceptar las tareas.</p>
+
+              {/* Acciones masivas */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-navy-100 bg-navy-50/40 px-3 py-2">
+                <span className="text-xs font-bold text-navy-500">{selT.size ? `${selT.size} seleccionada(s)` : `${tareasProyecto.length} tareas`}</span>
+                <button onClick={() => setSelT(new Set(tareasProyecto.map(t => t.id)))} className="text-xs font-bold text-navy-500 hover:underline">Todas</button>
+                <button onClick={() => setSelT(new Set())} className="text-xs font-bold text-navy-500 hover:underline">Ninguna</button>
+                <span className="mx-1 h-4 w-px bg-navy-200" />
+                <label className="text-xs font-bold text-navy-500">Asignar consultor en lote</label>
+                <select className="input !w-auto !py-1.5 !text-sm" value="__" onChange={e => { if (e.target.value !== '__') { asignarLote(e.target.value === '__none' ? null : e.target.value); e.target.value = '__'; } }}>
+                  <option value="__" disabled>Elegir…</option>
+                  <option value="__none">Sin asignar</option>
+                  {consultores.map(c => <option key={c.id} value={c.id}>{c.nombre} {c.apellidos || ''}</option>)}
+                </select>
+              </div>
+
               <div className="mt-3 max-h-96 overflow-y-auto overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
+                <table className="w-full min-w-[820px] text-sm">
                   <thead className="sticky top-0 bg-white">
                     <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
-                      <th className="py-2">✓</th><th className="py-2">Tarea</th><th className="py-2">Consultor</th>
+                      <th className="py-2"><input type="checkbox" checked={selT.size === tareasProyecto.length && tareasProyecto.length > 0} onChange={e => e.target.checked ? setSelT(new Set(tareasProyecto.map(t => t.id))) : setSelT(new Set())} /> sel</th>
+                      <th className="py-2">hecha</th><th className="py-2">Tarea</th><th className="py-2">Consultor</th>
                       <th className="py-2 text-right">Horas</th><th className="py-2 text-right">Reales</th>
                       <th className="py-2">Estimada</th><th className="py-2">Seg.</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-navy-50">
-                    {tareasProyecto.map(t => (
-                      <tr key={t.id} className={t.hecha ? 'opacity-60' : ''}>
+                    {tareasProyecto.map(t => {
+                      const reales = horasRealesDe(t);
+                      return (
+                      <tr key={t.id} className={`${t.hecha ? 'opacity-60' : ''} ${selT.has(t.id) ? 'bg-brand-orange/5' : ''}`}>
+                        <td className="py-1.5"><input type="checkbox" checked={selT.has(t.id)} onChange={() => toggleSelT(t.id)} /></td>
                         <td className="py-1.5"><input type="checkbox" checked={!!t.hecha} onChange={e => patchTarea(t, { hecha: e.target.checked })} /></td>
                         <td className="py-1.5 font-medium">{t.titulo}</td>
                         <td className="py-1.5">
@@ -358,15 +420,12 @@ export default function Proyectos() {
                           </select>
                         </td>
                         <td className="py-1.5 text-right">{fmtH(t.horas)}</td>
-                        <td className="py-1.5 text-right">
-                          <input type="number" min="0" step="0.25" className="input !py-1 !text-xs !w-20 text-right"
-                            value={t.horas_reales ?? ''} placeholder="—"
-                            onChange={e => patchTarea(t, { horas_reales: e.target.value === '' ? null : Number(e.target.value) })} />
-                        </td>
+                        <td className="py-1.5 text-right" title="Suma de los seguimientos marcados como hechos">{reales > 0 ? fmtH(reales) : '—'}</td>
                         <td className="py-1.5">{t.fecha_estimada || '—'}</td>
-                        <td className="py-1.5">{Array.isArray(t.seguimientos) && t.seguimientos.length ? t.seguimientos.length : '—'}</td>
+                        <td className="py-1.5">{Array.isArray(t.seguimientos) && t.seguimientos.length ? `${t.seguimientos.filter(s => s.hecho).length}/${t.seguimientos.length}` : '—'}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
