@@ -71,6 +71,9 @@ export default function Proyectos() {
   const tareasProyecto = useMemo(() => tareas.filter(t => String(t.proyecto_id) === String(sel)), [tareas, sel]);
 
   const [normasSel, setNormasSel] = useState([]);
+  const [nombreProy, setNombreProy] = useState('');
+  const [estadoProy, setEstadoProy] = useState('activo');
+  const [msgCab, setMsgCab] = useState(null);
   const [modelo, setModelo] = useState('Implicación');
   const [meses, setMeses] = useState(MESES_MODELO['Implicación']);
   useEffect(() => {
@@ -80,8 +83,17 @@ export default function Proyectos() {
       const m = proyecto.modelo || 'Implicación';
       setModelo(m);
       setMeses(proyecto.meses_estimados || MESES_MODELO[m] || 3);
+      setNombreProy(proyecto.nombre || '');
+      setEstadoProy(proyecto.estado || 'activo');
+      setMsgCab(null);
     }
   }, [proyecto]);
+
+  async function guardarCabecera() {
+    if (!proyecto) return;
+    await updateRow('proyectos_cliente', proyecto.id, { nombre: nombreProy.trim() || proyecto.nombre, estado: estadoProy });
+    cargar(); setMsgCab('Guardado.');
+  }
 
   // Al cambiar el modelo (acuerdo), proponer su duración por defecto.
   function cambiarModelo(m) { setModelo(m); setMeses(mesesPorModelo(m, normasSel.length)); }
@@ -361,7 +373,22 @@ export default function Proyectos() {
           <div className="card">
             <p className="text-xs font-bold uppercase tracking-wider text-navy-300">Cliente matriz</p>
             <p className="text-lg font-extrabold">{cliente?.empresa || '—'}</p>
-            <p className="text-sm font-medium text-navy-400">{proyecto.nombre} · {proyecto.estado}</p>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[220px]">
+                <label className="label">Nombre del proyecto</label>
+                <input className="input" value={nombreProy} onChange={e => setNombreProy(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Estado</label>
+                <select className="input !w-auto" value={estadoProy} onChange={e => setEstadoProy(e.target.value)}>
+                  <option value="activo">Activo</option>
+                  <option value="pausado">Pausado</option>
+                  <option value="cerrado">Cerrado</option>
+                </select>
+              </div>
+              <button onClick={guardarCabecera} className="btn-ghost !px-4 !py-2">Guardar</button>
+              {msgCab && <span className="text-sm font-bold text-navy-600">{msgCab}</span>}
+            </div>
           </div>
 
           {/* Normas + modelo */}

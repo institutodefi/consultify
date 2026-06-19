@@ -17,21 +17,25 @@ export default function Dashboard() {
   const [ready, setReady] = useState(false);
 
   const cargar = () => {
-    Promise.all([listTable('consultores'), listTable('proyectos_cliente'), listTable('clientes'), listTable('cliente_tareas')])
-      .then(([c, p, cl, t]) => { setConsultores(c); setProyectos(p); setClientes(cl); setTareas(t); setReady(true); })
-      .catch(() => setReady(true));
+    listTable('consultores').then(setConsultores).catch(() => setConsultores([]));
+    listTable('proyectos_cliente').then(setProyectos).catch(() => setProyectos([]));
+    listTable('clientes').then(setClientes).catch(() => setClientes([]));
+    listTable('cliente_tareas').then(setTareas).catch(() => setTareas([]));
+    setReady(true);
   };
   useEffect(cargar, []);
 
-  // Realtime: refresca el dashboard cuando cambian los proyectos.
+  // Realtime: refresca el dashboard cuando cambian los proyectos (si está disponible).
   useEffect(() => {
     if (!supabase) return;
-    const canal = supabase
-      .channel('dash-proyectos')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'proyectos_cliente' }, cargar)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cliente_tareas' }, cargar)
-      .subscribe();
-    return () => { supabase.removeChannel(canal); };
+    try {
+      const canal = supabase
+        .channel('dash-proyectos')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'proyectos_cliente' }, cargar)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cliente_tareas' }, cargar)
+        .subscribe();
+      return () => { try { supabase.removeChannel(canal); } catch { /* noop */ } };
+    } catch { /* realtime no disponible */ }
   }, []);
 
   const activos = useMemo(() => proyectos.filter(p => p.estado !== 'cerrado'), [proyectos]);
