@@ -112,9 +112,17 @@ export default function Calculadora() {
                       {m.destacado && <span className="absolute -top-2 right-4 chip bg-navy-800 text-white">Recomendado</span>}
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="text-lg font-extrabold">{m.titulo}</span>
-                        <span className="font-extrabold text-navy-800">{fmtEUR(r.precioCatalogo)}{r.tipo === 'mes' ? '/mes' : ' único'}</span>
+                        <span className="font-extrabold text-navy-800">
+                          {r?.fraccionado
+                            ? <>{fmtEUR(r.fraccionado.totalConIva)} <span className="text-xs font-bold text-navy-400">total</span></>
+                            : <>{fmtEUR(r.precioCatalogo)}{r.tipo === 'mes' ? '/mes' : ' único'}</>}
+                        </span>
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-brand-orangeDark">{m.claim}</p>
+                      <p className="mt-1 text-sm font-semibold text-brand-orangeDark">
+                        {r?.fraccionado
+                          ? `50% al inicio (${fmtEUR(r.fraccionado.cuota1)}) · 50% antes de auditoría (${fmtEUR(r.fraccionado.cuota2)})`
+                          : m.claim}
+                      </p>
                       <p className="mt-2 text-xs font-medium leading-relaxed text-navy-400">{m.leyenda}</p>
                     </button>
                   );
