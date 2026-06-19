@@ -229,3 +229,31 @@ export function anidarTareas(tareas, normasOrden = [], anidar = null) {
   }
   return out;
 }
+
+// Tamaño de bloque de ejecución por defecto (horas).
+export const HORAS_BLOQUE = 4;
+
+// Trocea una cantidad de horas en bloques de 4h (el último con el resto).
+// 20→[4,4,4,4,4] · 3→[3] · 10→[4,4,2]
+export function trocearEnBloques(horas, tam = HORAS_BLOQUE) {
+  const h = Number(horas) || 0;
+  if (h <= 0) return [];
+  if (h <= tam) return [Math.round(h * 100) / 100];
+  const bloques = [];
+  let resto = h;
+  while (resto > tam + 1e-6) { bloques.push(tam); resto -= tam; }
+  bloques.push(Math.round(resto * 100) / 100);
+  return bloques;
+}
+
+// Genera los bloques de ejecución de una tarea con fechas autopropuestas.
+export function bloquesEjecucion(horas, fechaInicioISO, opts = {}) {
+  const tam = opts.tam || HORAS_BLOQUE;
+  const trozos = trocearEnBloques(horas, tam);
+  if (!trozos.length) return [];
+  const comoTareas = trozos.map((h, i) => ({ horas: h, bloque: 'BLK', orden: i }));
+  const colocadas = repartirFechas(comoTareas, fechaInicioISO, opts.meses || 3, {
+    festivos: opts.festivos, vacaciones: opts.vacaciones, cargaPrevia: opts.cargaPrevia, meses: opts.meses,
+  });
+  return colocadas.map(c => ({ horas: c.horas, fecha: c.fecha_estimada }));
+}

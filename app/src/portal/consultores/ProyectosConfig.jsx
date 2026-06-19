@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
-import { tareasDeCliente, repartirFechas, anidarTareas, codigoTareaIntegrada, horasCoordinacion } from '../../lib/planCliente.js';
+import { tareasDeCliente, repartirFechas, anidarTareas, codigoTareaIntegrada, horasCoordinacion, bloquesEjecucion, trocearEnBloques } from '../../lib/planCliente.js';
 import { esLaborable, toISO, FESTIVOS_2026 } from '../../lib/agenda.js';
 import { sincronizarTareaAgenda, sincronizarVariasAgenda, borrarReflejoAgenda } from '../../lib/sincroAgenda.js';
 import { NORMAS, NORMA_BY_ID, MESES_MODELO, mesesPorModelo } from '../../lib/calcEngine.js';
@@ -26,6 +26,22 @@ export default function Proyectos() {
   const [arrastra, setArrastra] = useState(null);
   const [selT, setSelT] = useState(new Set());
   const [distribuyendo, setDistribuyendo] = useState(false);
+  const [expandida, setExpandida] = useState(null);
+  const [buscaP, setBuscaP] = useState('');
+  const [porPagP, setPorPagP] = useState('25');
+  const [pagP, setPagP] = useState(0);
+
+  const proyectosFiltrados = useMemo(() => {
+    const q = buscaP.trim().toLowerCase();
+    if (!q) return proyectos;
+    return proyectos.filter(p => `${p.nombre} ${nombreCli(p.cliente_id)} ${(p.normas || []).join(' ')} ${p.modelo || ''}`.toLowerCase().includes(q));
+  }, [proyectos, buscaP, clientes]);
+  const totalPagsP = porPagP === 'todos' ? 1 : Math.max(1, Math.ceil(proyectosFiltrados.length / Number(porPagP)));
+  const proyectosPagina = useMemo(() => {
+    if (porPagP === 'todos') return proyectosFiltrados;
+    const n = Number(porPagP);
+    return proyectosFiltrados.slice(pagP * n, pagP * n + n);
+  }, [proyectosFiltrados, porPagP, pagP]);
   const puedeFusionar = (claveA, claveB) => claveA === claveB; // misma clave = mismo proceso+subproceso
   const [msg, setMsg] = useState(null);
 
@@ -38,6 +54,7 @@ export default function Proyectos() {
     listTable('cliente_tareas').then(all => setTareas(all)).catch(() => setTareas([]));
   };
   useEffect(cargar, []);
+  const nombreCli = (id) => clientes.find(c => String(c.id) === String(id))?.empresa || '—';
 
   // Permitir abrir un proyecto por querystring (?proyecto=ID) desde Clientes.
   useEffect(() => {
@@ -49,7 +66,6 @@ export default function Proyectos() {
   const cliente = useMemo(() => clientes.find(c => String(c.id) === String(proyecto?.cliente_id)) || null, [clientes, proyecto]);
   const activos = useMemo(() => proyectos.filter(p => p.estado === 'activo'), [proyectos]);
   const tareasProyecto = useMemo(() => tareas.filter(t => String(t.proyecto_id) === String(sel)), [tareas, sel]);
-  const nombreCli = (id) => clientes.find(c => String(c.id) === String(id))?.empresa || '—';
 
   const [normasSel, setNormasSel] = useState([]);
   const [modelo, setModelo] = useState('Implicación');
@@ -102,6 +118,30 @@ export default function Proyectos() {
 
   // Edita una tarea ya distribuida: marca editada_manual para que la sincronización
   // del catálogo no la pise, y refleja el cambio en la agenda.
+  // Edita un bloque de ejecución y resincroniza la agenda automáticamente.
+  async function editarBloque(t, idx, campos) {
+    const base = Array.isArray(t.bloques_ejecucion) && t.bloques_ejecucion.length
+      ? t.bloques_ejecucion
+      : trocearEnBloques(t.horas).map(h => ({ horas: h, fecha: t.fecha_estimada }));
+    const bloques = base.map((b, i) => i === idx ? { ...b, ...campos } : b);
+    await guardarBloques(t, bloques);
+  }
+  async function addBloque(t) {
+    const base = Array.isArray(t.bloques_ejecucion) ? [...t.bloques_ejecucion] : [];
+    base.push({ horas: 4, fecha: t.fecha_estimada });
+    await guardarBloques(t, base);
+  }
+  async function quitarBloque(t, idx) {
+    const base = (Array.isArray(t.bloques_ejecucion) ? t.bloques_ejecucion : []).filter((_, i) => i !== idx);
+    await guardarBloques(t, base);
+  }
+  async function guardarBloques(t, bloques) {
+    const upd = { bloques_ejecucion: bloques, editada_manual: true };
+    await updateRow('cliente_tareas', t.id, upd);
+    setTareas(ts => ts.map(x => x.id === t.id ? { ...x, ...upd } : x));
+    try { await sincronizarTareaAgenda({ ...t, ...upd }, proyecto?.consultor_1_id || null, equipo); } catch { /* noop */ }
+  }
+
   async function patchTarea(t, campos) {
     const conFlag = { ...campos, editada_manual: true };
     await updateRow('cliente_tareas', t.id, conFlag);
@@ -135,11 +175,15 @@ export default function Proyectos() {
 
   // Vuelca a la agenda todas las tareas del proyecto (sin regenerar fechas).
   async function distribuirAgenda() {
-    setDistribuyendo(true); setMsg(null);
+    if (!tareasProyecto.length) { setMsg('No hay tareas que distribuir.'); return; }
+    const conConsultor = tareasProyecto.filter(t => t.consultor_id || proyecto?.consultor_1_id);
+    if (!conConsultor.length) { setMsg('Asigna un consultor a las tareas (o un consultor 1 al proyecto) antes de distribuir.'); return; }
+    setDistribuyendo(true); setMsg('Distribuyendo…');
     try {
       const n = await sincronizarVariasAgenda(tareasProyecto, proyecto?.consultor_1_id || null, equipo);
-      setMsg(`Agenda distribuida: ${n} tarea(s) volcadas a las agendas de los consultores.`);
-    } catch (e) { setMsg(e.message); }
+      const sinFecha = tareasProyecto.filter(t => !t.fecha_estimada).length;
+      setMsg(`Agenda distribuida: ${n} tarea(s) volcadas${sinFecha ? ` · ${sinFecha} sin fecha no se volcaron` : ''}.`);
+    } catch (e) { setMsg('Error al distribuir: ' + e.message); }
     finally { setDistribuyendo(false); }
   }
 
@@ -189,9 +233,12 @@ export default function Proyectos() {
       const creadas = [];
       for (const f of conFechas) {
         const { tramos, _clave, _id, ...campos } = f;
+        // Bloques de ejecución de 4h con fechas autopropuestas desde la fecha estimada.
+        const bloques = bloquesEjecucion(campos.horas, campos.fecha_estimada, { festivos, meses });
         const fila = await insertRow('cliente_tareas', {
           ...campos,
-          seguimientos: (tramos && tramos.length > 1) ? tramos.map(tr => ({ ...tr, hecho: false })) : [],
+          bloques_ejecucion: bloques,
+          seguimientos: [],
           fecha_real: null, hecha: false,
         });
         if (fila?.id) creadas.push(fila);
@@ -257,6 +304,50 @@ export default function Proyectos() {
           </div>
           <button onClick={nuevoProyecto} className="btn-orange !px-4 !py-2">+ Nuevo proyecto</button>
         </div>
+      </div>
+
+      {/* Lista de proyectos */}
+      <div className="card">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <input className="input !w-auto !py-1.5 !text-sm" placeholder="Buscar proyecto…" value={buscaP} onChange={e => { setBuscaP(e.target.value); setPagP(0); }} />
+            <span className="text-xs font-medium text-navy-400">{proyectosFiltrados.length} proyectos</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-bold text-navy-400">Mostrar</label>
+            <select className="input !w-auto !py-1.5 !text-sm" value={porPagP} onChange={e => { setPorPagP(e.target.value); setPagP(0); }}>
+              {['10', '25', '50', '100', 'todos'].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
+                <th className="py-2">Cliente</th><th className="py-2">Proyecto</th><th className="py-2">Normas</th><th className="py-2">Modelo</th><th className="py-2">Estado</th><th className="py-2"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-navy-50">
+              {proyectosPagina.map(p => (
+                <tr key={p.id} className={`cursor-pointer hover:bg-navy-50/50 ${String(p.id) === String(sel) ? 'bg-brand-orange/5' : ''}`} onClick={() => setSel(String(p.id))}>
+                  <td className="py-2 font-medium">{nombreCli(p.cliente_id)}</td>
+                  <td className="py-2">{p.nombre}</td>
+                  <td className="py-2 text-xs text-navy-500">{(p.normas || []).join(', ') || '—'}</td>
+                  <td className="py-2 text-xs">{p.modelo || '—'}</td>
+                  <td className="py-2"><span className={`chip text-[11px] font-bold ${p.estado === 'activo' ? 'bg-green-100 text-green-700' : 'bg-navy-100 text-navy-500'}`}>{p.estado}</span></td>
+                  <td className="py-2 text-right"><span className="text-xs font-bold text-brand-orangeDark">Abrir →</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {porPagP !== 'todos' && totalPagsP > 1 && (
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <button onClick={() => setPagP(p => Math.max(0, p - 1))} disabled={pagP === 0} className="btn-ghost !px-3 !py-1.5 text-xs disabled:opacity-30">‹ Anterior</button>
+            <span className="text-xs font-medium text-navy-400">Página {pagP + 1} de {totalPagsP}</span>
+            <button onClick={() => setPagP(p => Math.min(totalPagsP - 1, p + 1))} disabled={pagP >= totalPagsP - 1} className="btn-ghost !px-3 !py-1.5 text-xs disabled:opacity-30">Siguiente ›</button>
+          </div>
+        )}
       </div>
 
       {!proyecto ? (
@@ -375,9 +466,12 @@ export default function Proyectos() {
             <div className="card">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h4 className="font-extrabold">Tareas distribuidas ({tareasProyecto.length})</h4>
-                <button onClick={distribuirAgenda} disabled={distribuyendo} className="btn-orange !px-4 !py-2 disabled:opacity-40">
-                  {distribuyendo ? 'Distribuyendo…' : '↻ Distribuir agenda'}
-                </button>
+                <div className="flex items-center gap-3">
+                  {msg && <span className="text-sm font-bold text-navy-600">{msg}</span>}
+                  <button onClick={distribuirAgenda} disabled={distribuyendo} className="btn-orange !px-4 !py-2 disabled:opacity-40">
+                    {distribuyendo ? 'Distribuyendo…' : '↻ Distribuir agenda'}
+                  </button>
+                </div>
               </div>
               <p className="mt-1 text-xs font-medium text-navy-400">Asigna consultor responsable. Las horas reales salen del seguimiento de la tarea. Pulsa «Distribuir agenda» tras aceptar las tareas.</p>
 
@@ -395,35 +489,69 @@ export default function Proyectos() {
                 </select>
               </div>
 
-              <div className="mt-3 max-h-96 overflow-y-auto overflow-x-auto">
-                <table className="w-full min-w-[820px] text-sm">
-                  <thead className="sticky top-0 bg-white">
+              <div className="mt-3 max-h-[32rem] overflow-y-auto overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead className="sticky top-0 bg-white z-10">
                     <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
-                      <th className="py-2"><input type="checkbox" checked={selT.size === tareasProyecto.length && tareasProyecto.length > 0} onChange={e => e.target.checked ? setSelT(new Set(tareasProyecto.map(t => t.id))) : setSelT(new Set())} /> sel</th>
-                      <th className="py-2">hecha</th><th className="py-2">Tarea</th><th className="py-2">Consultor</th>
-                      <th className="py-2 text-right">Horas</th><th className="py-2 text-right">Reales</th>
-                      <th className="py-2">Estimada</th><th className="py-2">Seg.</th>
+                      <th className="py-2 w-8"><input type="checkbox" checked={selT.size === tareasProyecto.length && tareasProyecto.length > 0} onChange={e => e.target.checked ? setSelT(new Set(tareasProyecto.map(t => t.id))) : setSelT(new Set())} /></th>
+                      <th className="py-2 w-16">Código</th>
+                      <th className="py-2">Tarea</th>
+                      <th className="py-2 w-40">Consultor</th>
+                      <th className="py-2 w-28">Fecha límite</th>
+                      <th className="py-2 text-right w-16">Horas</th>
+                      <th className="py-2 w-8"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-navy-50">
-                    {tareasProyecto.map(t => {
-                      const reales = horasRealesDe(t);
+                    {tareasProyecto.map((t, idx) => {
+                      const bloques = Array.isArray(t.bloques_ejecucion) ? t.bloques_ejecucion : [];
+                      const fechaLimite = bloques.length ? bloques.map(b => b.fecha).filter(Boolean).sort().slice(-1)[0] : t.fecha_estimada;
+                      const abierto = expandida === t.id;
+                      const codigo = `T${String(idx + 1).padStart(3, '0')}`;
                       return (
+                      <>
                       <tr key={t.id} className={`${t.hecha ? 'opacity-60' : ''} ${selT.has(t.id) ? 'bg-brand-orange/5' : ''}`}>
                         <td className="py-1.5"><input type="checkbox" checked={selT.has(t.id)} onChange={() => toggleSelT(t.id)} /></td>
-                        <td className="py-1.5"><input type="checkbox" checked={!!t.hecha} onChange={e => patchTarea(t, { hecha: e.target.checked })} /></td>
-                        <td className="py-1.5 font-medium">{t.titulo}</td>
+                        <td className="py-1.5 font-bold text-navy-400 text-xs">{codigo}</td>
+                        <td className="py-1.5">
+                          <div className="max-w-[260px] truncate font-medium" title={t.titulo}>{t.titulo}</div>
+                          {t.integrada && <span className="chip bg-brand-orange/15 text-[10px] font-bold text-brand-orangeDark">integrada</span>}
+                        </td>
                         <td className="py-1.5">
                           <select className="input !py-1 !text-xs" value={t.consultor_id || ''} onChange={e => patchTarea(t, { consultor_id: e.target.value || null })}>
                             <option value="">—</option>
                             {consultores.map(c => <option key={c.id} value={c.id}>{c.nombre} {c.apellidos || ''}</option>)}
                           </select>
                         </td>
+                        <td className="py-1.5 text-xs">{fechaLimite || '—'}</td>
                         <td className="py-1.5 text-right">{fmtH(t.horas)}</td>
-                        <td className="py-1.5 text-right" title="Suma de los seguimientos marcados como hechos">{reales > 0 ? fmtH(reales) : '—'}</td>
-                        <td className="py-1.5">{t.fecha_estimada || '—'}</td>
-                        <td className="py-1.5">{Array.isArray(t.seguimientos) && t.seguimientos.length ? `${t.seguimientos.filter(s => s.hecho).length}/${t.seguimientos.length}` : '—'}</td>
+                        <td className="py-1.5 text-right">
+                          <button onClick={() => setExpandida(abierto ? null : t.id)} className="text-xs font-bold text-navy-500 hover:text-brand-orange" title="Bloques de ejecución">
+                            {abierto ? '▾' : '▸'} {bloques.length || trocearEnBloques(t.horas).length}
+                          </button>
+                        </td>
                       </tr>
+                      {abierto && (
+                        <tr className="bg-navy-50/40">
+                          <td></td>
+                          <td colSpan={6} className="py-2 pr-3">
+                            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-navy-300">Bloques de ejecución (4h por defecto, editables)</p>
+                            <div className="space-y-1.5">
+                              {(bloques.length ? bloques : trocearEnBloques(t.horas).map(h => ({ horas: h, fecha: t.fecha_estimada }))).map((b, bi) => (
+                                <div key={bi} className="flex items-center gap-2">
+                                  <span className="w-14 text-xs font-bold text-navy-400">Bloque {bi + 1}</span>
+                                  <input type="date" className="input !py-1 !text-xs !w-auto" value={b.fecha || ''} onChange={e => editarBloque(t, bi, { fecha: e.target.value })} />
+                                  <input type="number" min="0.5" step="0.5" className="input !py-1 !text-xs !w-20 text-right" value={b.horas} onChange={e => editarBloque(t, bi, { horas: Number(e.target.value) || 0 })} />
+                                  <span className="text-xs text-navy-400">h</span>
+                                  <button onClick={() => quitarBloque(t, bi)} className="text-xs font-bold text-red-400 hover:underline">×</button>
+                                </div>
+                              ))}
+                              <button onClick={() => addBloque(t)} className="chip border border-brand-orange bg-brand-orange/10 text-[11px] font-bold text-brand-orangeDark">+ bloque</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </>
                       );
                     })}
                   </tbody>

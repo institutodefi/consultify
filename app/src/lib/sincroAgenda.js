@@ -1,83 +1,78 @@
 // ════════════════════════════════════════════════════════════════
 // PUENTE Planificador (cliente_tareas) → Agenda (agenda_tareas)
-// Sincroniza sin duplicar usando agenda_tareas.origen_cliente_tarea_id.
-// - Tarea del cliente con fecha_estimada y consultor → se refleja en agenda.
-// - Si ya existe el reflejo, se actualiza (fecha, horas, consultor, tipo).
-// - Si la tarea pierde fecha o consultor, se elimina su reflejo.
-// El consultor es el de la tarea; si no tiene, el consultor_1 del cliente.
+// Cada BLOQUE de ejecución de la tarea se vuelca como un evento de agenda.
+// Sin duplicar: se borran los reflejos previos de la tarea y se recrean.
+// Solo se envían columnas que existen en agenda_tareas.
 // ════════════════════════════════════════════════════════════════
-import { listTable, insertRow, updateRow, deleteRow } from './data.js';
-import { EFICIENCIA } from './calcEngine.js';
+import { listTable, insertRow, deleteRow } from './data.js';
+import { trocearEnBloques } from './planCliente.js';
 
-// Mapea el "tipo" de agenda a partir del bloque/proceso de la tarea del cliente.
 function tipoDeTarea(t) {
-  if (t.tipo) return t.tipo; // si ya viene marcado
+  if (t.tipo) return t.tipo;
   const b = (t.bloque || '').toUpperCase();
   if (b.startsWith('PM') || /COORDINAC/i.test(t.proceso || '')) return 'coordinacion';
-  return 'produccion'; // las tareas de norma son producción (facturables)
+  return 'produccion';
 }
 
-/**
- * Sincroniza UNA tarea de cliente con la agenda.
- * @param ct        fila de cliente_tareas (ya guardada, con id)
- * @param consultor1Id  consultor_1 del cliente (fallback)
- * @param consultores   lista de consultores (para nivel/eficiencia)
- */
+// Bloques de ejecución: usa los guardados (bloques_ejecucion) o trocea en 4h.
+function bloquesDe(ct) {
+  if (Array.isArray(ct.bloques_ejecucion) && ct.bloques_ejecucion.length) {
+    return ct.bloques_ejecucion.map(b => ({ horas: Number(b.horas) || 0, fecha: b.fecha || ct.fecha_estimada }));
+  }
+  const trozos = trocearEnBloques(ct.horas);
+  return trozos.map(h => ({ horas: h, fecha: ct.fecha_estimada }));
+}
+
 export async function sincronizarTareaAgenda(ct, consultor1Id, consultores = []) {
   const consultorId = ct.consultor_id || consultor1Id || null;
 
-  // Buscar reflejo existente
-  let reflejo = null;
+  // Borrar reflejos previos de esta tarea (se recrean por bloque).
+  let previos = [];
   try {
     const todas = await listTable('agenda_tareas');
-    reflejo = todas.find(a => String(a.origen_cliente_tarea_id) === String(ct.id)) || null;
-  } catch { /* tabla puede no existir en algún entorno */ }
+    previos = todas.filter(a => String(a.origen_cliente_tarea_id) === String(ct.id));
+  } catch { /* noop */ }
+  for (const p of previos) { try { await deleteRow('agenda_tareas', p.id); } catch { /* noop */ } }
 
-  // Sin fecha o sin consultor → no debe haber reflejo
-  if (!ct.fecha_estimada || !consultorId) {
-    if (reflejo) await deleteRow('agenda_tareas', reflejo.id);
-    return null;
+  if (!consultorId) return null;
+
+  const bloques = bloquesDe(ct).filter(b => b.horas > 0 && b.fecha);
+  if (!bloques.length) return null;
+
+  const tipo = tipoDeTarea(ct);
+  const creados = [];
+  for (let i = 0; i < bloques.length; i++) {
+    const b = bloques[i];
+    const sufijo = bloques.length > 1 ? ` (bloque ${i + 1}/${bloques.length})` : '';
+    const payload = {
+      consultor_id: consultorId,
+      fecha_prevista: b.fecha,
+      horas_previstas: Math.min(9, Math.max(0.5, Number(b.horas) || 0)),
+      titulo: `${ct.titulo}${sufijo}`,
+      descripcion: `${ct.norma_id || ''} · ${ct.proceso || ''}`.trim(),
+      tipo,
+      estado: ct.hecha ? 'completada' : 'pendiente',
+      origen_cliente_tarea_id: ct.id,
+    };
+    try { creados.push(await insertRow('agenda_tareas', payload)); }
+    catch (e) { console.error('insert agenda bloque', ct.id, e); throw e; }
   }
-
-  const nivel = consultores.find(c => String(c.id) === String(consultorId))?.nivel || 'J2';
-  const coef = EFICIENCIA[nivel] ?? 1;
-  const horas = Number(ct.horas) || 0;
-
-  const payload = {
-    consultor_id: consultorId,
-    titulo: ct.titulo,
-    descripcion: `${ct.norma_id} · ${ct.proceso || ''}`,
-    fecha_prevista: ct.fecha_estimada,
-    horas_base: horas,
-    horas_previstas: horas,
-    horas_consultor: Math.round(horas * coef * 100) / 100,
-    fecha_efectiva: ct.fecha_real || null,
-    horas_reales: ct.fecha_real ? horas : null,
-    tipo: tipoDeTarea(ct),
-    hora_inicio: '09:00',
-    estado: ct.hecha ? 'completada' : 'pendiente',
-    origen_cliente_tarea_id: ct.id,
-  };
-
-  if (reflejo) return updateRow('agenda_tareas', reflejo.id, payload);
-  return insertRow('agenda_tareas', payload);
+  return creados;
 }
 
-// Sincroniza varias (en serie para no saturar).
 export async function sincronizarVariasAgenda(lista, consultor1Id, consultores = []) {
   let n = 0;
   for (const ct of lista) {
-    try { await sincronizarTareaAgenda(ct, consultor1Id, consultores); n++; }
+    try { const r = await sincronizarTareaAgenda(ct, consultor1Id, consultores); if (r) n++; }
     catch (e) { console.error('sync agenda', ct.id, e); }
   }
   return n;
 }
 
-// Borra el reflejo en agenda de una tarea de cliente (al eliminarla).
 export async function borrarReflejoAgenda(clienteTareaId) {
   try {
     const todas = await listTable('agenda_tareas');
-    const reflejo = todas.find(a => String(a.origen_cliente_tarea_id) === String(clienteTareaId));
-    if (reflejo) await deleteRow('agenda_tareas', reflejo.id);
+    const reflejos = todas.filter(a => String(a.origen_cliente_tarea_id) === String(clienteTareaId));
+    for (const r of reflejos) await deleteRow('agenda_tareas', r.id);
   } catch { /* noop */ }
 }
