@@ -28,17 +28,20 @@ export default function Calculadora() {
     if (!lead.consent || !res) return;
     setLeadState('sending');
     try {
+      // Para Implantación el "precio" relevante es el total fraccionado (sin IVA).
+      const precioLead = res.fraccionado ? res.fraccionado.totalSinIva : res.precioCatalogo;
+      const tipoLead = res.fraccionado ? 'fraccionado' : res.tipo;
       // 1) Guardar presupuesto en Supabase (o demo)
       await insertRow('presupuestos', {
         email: lead.email, nombre: lead.nombre, empresa: lead.empresa, telefono: lead.telefono,
-        normas: sel, modelo, precio: res.precioCatalogo, tipo: res.tipo,
+        normas: sel, modelo, precio: precioLead, tipo: tipoLead,
         ...(user?.id && user.id !== 'demo' ? { user_id: user.id } : {}),
       });
       // 2) Enviar a Brevo vía Netlify Function (la API key vive en el servidor)
       const r = await fetch('/.netlify/functions/brevo-lead', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...lead, normas: sel, modelo, precio: res.precioCatalogo, tipo: res.tipo }),
+        body: JSON.stringify({ ...lead, normas: sel, modelo, precio: precioLead, tipo: tipoLead }),
       });
       if (!r.ok && r.status !== 404) throw new Error('brevo');
       setLeadState('ok');
@@ -135,9 +138,22 @@ export default function Calculadora() {
                     {modelo !== 'Implantación' && (
                       <tr><td className="py-2 font-semibold text-navy-400">Dedicación del equipo</td><td className="py-2 text-right font-bold">{res.hTotal} h{res.tipo === 'mes' ? '/mes' : ' totales'}</td></tr>
                     )}
-                    <tr><td className="py-2 font-semibold text-navy-400">Subtotal</td><td className="py-2 text-right font-bold">{fmtEUR(res.precioCatalogo)}</td></tr>
-                    <tr><td className="py-2 font-semibold text-navy-400">IVA 21 %</td><td className="py-2 text-right font-bold">{fmtEUR(res.iva)}</td></tr>
-                    <tr><td className="py-3 text-base font-extrabold">Total{res.tipo === 'mes' ? ' / mes' : ''}</td><td className="py-3 text-right text-base font-extrabold text-navy-800">{fmtEUR(res.totalConIva)}</td></tr>
+                    {res.fraccionado ? (
+                      <>
+                        <tr><td className="py-2 font-semibold text-navy-400">Duración implantación</td><td className="py-2 text-right font-bold">{res.fraccionado.meses} meses</td></tr>
+                        <tr><td className="py-2 font-semibold text-navy-400">Subtotal</td><td className="py-2 text-right font-bold">{fmtEUR(res.fraccionado.totalSinIva)}</td></tr>
+                        <tr><td className="py-2 font-semibold text-navy-400">IVA 21 %</td><td className="py-2 text-right font-bold">{fmtEUR(res.fraccionado.totalConIva - res.fraccionado.totalSinIva)}</td></tr>
+                        <tr><td className="py-3 text-base font-extrabold">Total</td><td className="py-3 text-right text-base font-extrabold text-navy-800">{fmtEUR(res.fraccionado.totalConIva)}</td></tr>
+                        <tr><td className="py-2 font-semibold text-navy-400">50% por adelantado</td><td className="py-2 text-right font-bold">{fmtEUR(res.fraccionado.cuota1)}</td></tr>
+                        <tr><td className="py-2 font-semibold text-navy-400">50% antes de auditoría externa</td><td className="py-2 text-right font-bold">{fmtEUR(res.fraccionado.cuota2)}</td></tr>
+                      </>
+                    ) : (
+                      <>
+                        <tr><td className="py-2 font-semibold text-navy-400">Subtotal</td><td className="py-2 text-right font-bold">{fmtEUR(res.precioCatalogo)}</td></tr>
+                        <tr><td className="py-2 font-semibold text-navy-400">IVA 21 %</td><td className="py-2 text-right font-bold">{fmtEUR(res.iva)}</td></tr>
+                        <tr><td className="py-3 text-base font-extrabold">Total{res.tipo === 'mes' ? ' / mes' : ''}</td><td className="py-3 text-right text-base font-extrabold text-navy-800">{fmtEUR(res.totalConIva)}</td></tr>
+                      </>
+                    )}
                   </tbody>
                 </table>
                 <p className="mt-3 rounded-xl bg-navy-50 p-3 text-xs font-medium leading-relaxed text-navy-700">{res.leyenda} Acompañamiento a auditoría: {fmtEUR(ACOMPANAMIENTO_AUDITORIA_DIA)}/jornada, siempre aparte.</p>
@@ -155,7 +171,7 @@ export default function Calculadora() {
                           <tr key={c.modelo} className={c.modelo === modelo ? 'bg-brand-orange/10' : ''}>
                             <td className="py-2 font-bold">{c.modelo}</td>
                             <td className="py-2 font-medium text-navy-400">{c.modelo === 'Implantación' ? '—' : <>{c.hTotal} h{c.tipo === 'mes' ? '/mes' : ''}</>}</td>
-                            <td className="py-2 text-right font-extrabold">{fmtEUR(c.precioCatalogo)}{c.tipo === 'mes' ? '/mes' : ''}</td>
+                            <td className="py-2 text-right font-extrabold">{c.fraccionado ? <>{fmtEUR(c.fraccionado.totalConIva)} <span className="text-[11px] font-medium text-navy-400">total</span></> : <>{fmtEUR(c.precioCatalogo)}{c.tipo === 'mes' ? '/mes' : ''}</>}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -205,8 +221,21 @@ export default function Calculadora() {
             <p className="eyebrow !text-brand-orange">Tu precio en vivo</p>
             {res ? (
               <>
-                <p className="mt-3 text-4xl font-extrabold tracking-tight">{fmtEUR(res.precioCatalogo)}<span className="text-base font-bold text-white/60">{res.tipo === 'mes' ? ' /mes' : ' pago único'}</span></p>
-                <p className="mt-1 text-sm font-semibold text-white/70">{fmtEUR(res.totalConIva)} con IVA</p>
+                {res.fraccionado ? (
+                  <>
+                    <p className="mt-3 text-4xl font-extrabold tracking-tight">{fmtEUR(res.fraccionado.totalConIva)}<span className="text-base font-bold text-white/60"> total</span></p>
+                    <p className="mt-1 text-sm font-semibold text-white/70">IVA incluido · {res.fraccionado.meses} meses de implantación</p>
+                    <div className="mt-3 space-y-1.5 rounded-2xl bg-white/10 p-3 text-sm font-semibold text-white/90">
+                      <p>50% ahora: <strong>{fmtEUR(res.fraccionado.cuota1)}</strong></p>
+                      <p>50% antes de auditoría: <strong>{fmtEUR(res.fraccionado.cuota2)}</strong></p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-3 text-4xl font-extrabold tracking-tight">{fmtEUR(res.precioCatalogo)}<span className="text-base font-bold text-white/60">{res.tipo === 'mes' ? ' /mes' : ' pago único'}</span></p>
+                    <p className="mt-1 text-sm font-semibold text-white/70">{fmtEUR(res.totalConIva)} con IVA</p>
+                  </>
+                )}
                 <div className="mt-4 space-y-1.5 text-sm font-medium text-white/80">
                   <p>{res.nSistemas} sistema{res.nSistemas > 1 ? 's' : ''} · modelo {modelo}</p>
                   {modelo !== 'Implantación' && <p>{res.hTotal} h de consultor{res.tipo === 'mes' ? ' cada mes' : ''}</p>}

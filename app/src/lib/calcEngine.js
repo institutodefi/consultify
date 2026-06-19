@@ -141,9 +141,28 @@ export function calcular(normaIds, modeloId) {
   const iva = Math.round(precioCatalogo * IVA * 100) / 100;
   const totalConIva = Math.round((precioCatalogo + iva) * 100) / 100;
 
+  // Implantación: el precio se cobra como pago único fraccionado 50%+50%
+  // (50% por adelantado, 50% antes de la auditoría externa). El importe total
+  // es la cuota mensual × meses de implantación.
+  let fraccionado = null;
+  if (modeloId === 'Implantación') {
+    const meses = MESES_MODELO.Implantación || 6;
+    const totalSinIva = precioCatalogo * meses;
+    const totalConIvaFrac = Math.round(totalSinIva * (1 + IVA) * 100) / 100;
+    const mitad = Math.round((totalConIvaFrac / 2) * 100) / 100;
+    fraccionado = {
+      meses,
+      totalSinIva,
+      totalConIva: totalConIvaFrac,
+      cuota1: mitad,                                   // 50% por adelantado
+      cuota2: Math.round((totalConIvaFrac - mitad) * 100) / 100, // 50% antes de auditoría
+    };
+  }
+
   return {
     modelo: modeloId,
     tipo: m.tipo,                 // 'bolsa' → pago único · 'mes' → cuota mensual
+    cobro: modeloId === 'Implantación' ? 'fraccionado' : m.tipo,
     normas: normas.map(n => n.id),
     nSistemas: normas.length,
     horas: h,
@@ -153,6 +172,7 @@ export function calcular(normaIds, modeloId) {
     precioCatalogo,
     iva,
     totalConIva,
+    fraccionado,
     leyenda: m.leyenda,
   };
 }
