@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, ReferenceLine, CartesianGrid } from 'recharts';
 import { listTable } from '../../lib/data.js';
 import { descargarTareaICS, descargarAgendaICS } from '../../lib/ics.js';
+import BoxEquipo from './BoxEquipo.jsx';
 import { EFICIENCIA } from '../../lib/calcEngine.js';
 import {
   YEAR_AGENDA, FESTIVOS_2026, MESES, TOPE_ANUAL, MAX_HORAS_DIA, DIAS_VACACIONES,
@@ -623,26 +624,9 @@ export default function Agenda() {
         </div>
       )}
 
-      {/* Acciones masivas sobre las tareas del consultor visible */}
-      {tareas.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-navy-100 bg-white px-4 py-3">
-          <span className="text-xs font-bold uppercase tracking-[0.16em] text-navy-300">{tareas.length} tareas de {consultor?.nombre}</span>
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-bold text-navy-400">Reasignar todas a</label>
-            <select className="input !w-auto !py-1.5 !text-sm" defaultValue="" onChange={(e) => { reasignarTodas(e.target.value); e.target.value = ''; }}>
-              <option value="">— consultor —</option>
-              {consultores.filter((c) => String(c.id) !== String(consultorId)).map((c) => <option key={c.id} value={c.id}>{c.nombre} · {c.nivel}</option>)}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-bold text-navy-400">Cambiar tipo de todas</label>
-            <select className="input !w-auto !py-1.5 !text-sm" defaultValue="" onChange={(e) => { cambiarTipoTodas(e.target.value); e.target.value = ''; }}>
-              <option value="">— tipo —</option>
-              {TIPOS_TAREA.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-            </select>
-          </div>
-        </div>
-      )}
+      {/* Equipo en los relojes (arriba) */}
+      <BoxEquipo consultores={consultores} sel={equipoSel} setSel={setEquipoSel}
+        activoId={consultorId} onActivo={setConsultorId} capacidad={pctJornadaEquipo} />
 
       {/* KPIs del mes */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
@@ -786,48 +770,6 @@ export default function Agenda() {
               );
             })}
           </div>
-        </div>
-
-        {/* Box de equipo: elige qué consultores suman en los relojes */}
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <h3 className="font-extrabold">Equipo en los relojes</h3>
-            <div className="flex gap-2">
-              <button onClick={() => setEquipoSel(new Set(consultores.map(c => String(c.id))))} className="chip border border-navy-200 text-[11px] font-bold text-navy-500">Todos</button>
-              <button onClick={() => setEquipoSel(new Set([String(consultorId)]))} className="chip border border-navy-200 text-[11px] font-bold text-navy-500">Solo activo</button>
-            </div>
-          </div>
-          <p className="mt-1 text-xs font-medium text-navy-400">Marca (✓) los consultores cuya carga se suma en los relojes. Haz clic en un nombre para marcarlo como activo (●) y editar sus tareas/vacaciones.</p>
-          <div className="mt-3 max-h-[28rem] overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
-                  <th className="py-2 w-8"></th><th className="py-2">Consultor</th><th className="py-2">Nivel</th><th className="py-2 text-right">Jornada</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-navy-50">
-                {consultores.map(c => {
-                  const on = equipoSel.has(String(c.id));
-                  const activo = String(c.id) === String(consultorId);
-                  return (
-                    <tr key={c.id} className={`${on ? 'bg-brand-orange/5' : ''} ${activo ? 'ring-1 ring-inset ring-navy-300' : ''}`}>
-                      <td className="py-1.5"><input type="checkbox" checked={on} onChange={() => setEquipoSel(s => { const n = new Set(s); n.has(String(c.id)) ? n.delete(String(c.id)) : n.add(String(c.id)); return n; })} /></td>
-                      <td className="py-1.5">
-                        <button onClick={() => setConsultorId(String(c.id))} className={`font-medium hover:text-brand-orange ${activo ? 'text-navy-900 font-bold' : ''}`} title="Marcar como consultor activo (editar tareas y vacaciones)">
-                          {c.nombre} {c.apellidos || ''}{activo ? ' ●' : ''}
-                        </button>
-                      </td>
-                      <td className="py-1.5 text-navy-400">{c.nivel || '—'}</td>
-                      <td className="py-1.5 text-right text-navy-400">{c.pct_jornada ?? 100}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-3 border-t border-navy-50 pt-3 text-xs font-medium text-navy-400">
-            {equipoSel.size} consultor(es) · capacidad sumada {Math.round(pctJornadaEquipo)}%
-          </p>
         </div>
       </div>
 

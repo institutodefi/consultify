@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listTable } from '../../lib/data.js';
 import { getTareasAgenda, TIPO_BY_ID } from '../../lib/agenda.js';
+import BoxEquipo from './BoxEquipo.jsx';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const YEAR = new Date().getFullYear();
@@ -8,12 +9,29 @@ const fmtH = (h) => `${(Math.round((h || 0) * 100) / 100).toLocaleString('es-ES'
 
 export default function MiAgenda() {
   const [equipo, setEquipo] = useState([]);
-  const [consultorId, setConsultorId] = useState('');
+  const [equipoSel, setEquipoSel] = useState(new Set());
   const [tareas, setTareas] = useState([]);
   const [mesesSel, setMesesSel] = useState(new Set([new Date().getMonth()]));
 
-  useEffect(() => { listTable('consultores').then(cs => { setEquipo(cs); if (cs[0]) setConsultorId(String(cs[0].id)); }).catch(() => {}); }, []);
-  useEffect(() => { if (consultorId) getTareasAgenda(consultorId, YEAR).then(setTareas).catch(() => setTareas([])); }, [consultorId]);
+  useEffect(() => {
+    listTable('consultores').then(cs => {
+      const act = cs.filter(c => c.activo !== false);
+      setEquipo(act);
+      if (act[0]) setEquipoSel(new Set([String(act[0].id)]));
+    }).catch(() => {});
+  }, []);
+
+  // Carga las tareas de todos los consultores seleccionados (suma).
+  useEffect(() => {
+    const ids = [...equipoSel];
+    if (!ids.length) { setTareas([]); return; }
+    Promise.all(ids.map(id => getTareasAgenda(id, YEAR).catch(() => [])))
+      .then(arrs => setTareas(arrs.flat())).catch(() => setTareas([]));
+  }, [equipoSel]);
+
+  const capacidad = useMemo(() =>
+    [...equipoSel].reduce((s, id) => s + (equipo.find(c => String(c.id) === String(id))?.pct_jornada ?? 100), 0),
+    [equipoSel, equipo]);
 
   const toggleMes = (m) => setMesesSel(s => { const n = new Set(s); n.has(m) ? n.delete(m) : n.add(m); return n; });
   const todos = () => setMesesSel(new Set(MESES.map((_, i) => i)));
@@ -46,13 +64,8 @@ export default function MiAgenda() {
         <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight">Previsto, efectivo y pendiente</h1>
       </div>
 
-      {/* Consultor */}
-      <div className="card">
-        <label className="label">Consultor</label>
-        <select className="input w-full max-w-md" value={consultorId} onChange={e => setConsultorId(e.target.value)}>
-          {equipo.map(c => <option key={c.id} value={c.id}>{c.nombre} {c.apellidos || ''}</option>)}
-        </select>
-      </div>
+      {/* Equipo (suma en los totales) */}
+      <BoxEquipo consultores={equipo} sel={equipoSel} setSel={setEquipoSel} capacidad={capacidad} titulo="Equipo" />
 
       {/* Selector de meses (aspas) */}
       <div className="card">
