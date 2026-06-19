@@ -17,6 +17,12 @@ body {
   line-height: 1.55;
 }
 
+/* Manrope en toda la interfaz, incluidos inputs y botones (que por defecto
+   heredan la fuente del sistema). */
+*, input, select, textarea, button {
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+}
+
 @layer components {
   /* Botones píldora idénticos a la landing (.btn) */
   .btn-primary {

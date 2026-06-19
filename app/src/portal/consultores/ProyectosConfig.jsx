@@ -517,7 +517,7 @@ export default function Proyectos() {
                         <td className="py-1.5"><input type="checkbox" checked={selT.has(t.id)} onChange={() => toggleSelT(t.id)} /></td>
                         <td className="py-1.5 font-bold text-navy-400 text-xs">{codigo}</td>
                         <td className="py-1.5">
-                          <div className="max-w-[260px] truncate font-medium" title={t.titulo}>{t.titulo}</div>
+                          <div className="font-medium leading-snug min-w-[220px] max-w-[420px] whitespace-normal break-words">{t.titulo}</div>
                           {t.integrada && <span className="chip bg-brand-orange/15 text-[10px] font-bold text-brand-orangeDark">integrada</span>}
                         </td>
                         <td className="py-1.5">

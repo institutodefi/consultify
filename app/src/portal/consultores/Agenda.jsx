@@ -67,9 +67,13 @@ function RelojAnual({ previstas, reales, proyeccion, ritmo, capacidad }) {
 function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, clientes, tareasDelDia, onGuardar, onBorrar, onCerrar }) {
   const fmtNum = (n) => (Math.round((n || 0) * 100) / 100).toLocaleString('es-ES');
   const editando = Boolean(tarea?.id);
+  // Una tarea que viene de un proyecto tiene origen_cliente_tarea_id: su título,
+  // proyecto y código son automáticos (no editables a mano).
+  const deProyecto = Boolean(tarea?.origen_cliente_tarea_id);
   const [f, setF] = useState({
     consultor_id: tarea?.consultor_id ?? consultorId,
     titulo: tarea?.titulo ?? '',
+    codigo: tarea?.codigo ?? '',
     descripcion: tarea?.descripcion ?? '',
     fecha_prevista: tarea?.fecha_prevista ?? fecha,
     horas_previstas: tarea?.horas_previstas ?? 2,
@@ -119,6 +123,7 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
         fecha_efectiva: f.ejecuciones[0]?.fecha || null,
         horas_reales: f.ejecuciones.length ? f.ejecuciones.reduce((s, e) => s + (Number(e.horas) || 0), 0) : null,
         proyecto_id: f.proyecto_id || null,
+        codigo: f.codigo || null,
         tipo: f.tipo,
         hora_inicio: f.hora_inicio || '09:00',
         hora_fin: f.hora_fin || null,
@@ -131,6 +136,9 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
     const cl = clientes.find((c) => String(c.id) === String(p.cliente_id));
     return `${cl?.empresa || 'Cliente'} · ${p.modelo}`;
   };
+  // Nombre del proyecto mostrado automáticamente (tareas que vienen de proyecto).
+  const proyAuto = proyectos.find((p) => String(p.id) === String(f.proyecto_id));
+  const proyectoAuto = proyAuto ? nombreProyecto(proyAuto) : (f.descripcion || '—');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/50 p-4" onClick={onCerrar}>
@@ -142,8 +150,13 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
 
         <div className="space-y-3">
           <div>
-            <label className="label">Título *</label>
-            <input className="input" value={f.titulo} onChange={set('titulo')} autoFocus placeholder="Ej.: Auditoría interna ISO 9001 — Cliente X" />
+            <label className="label">Título{deProyecto ? '' : ' *'}</label>
+            {deProyecto ? (
+              <div className="input bg-navy-50/60 text-navy-700 font-medium">{f.titulo || '—'}</div>
+            ) : (
+              <input className="input" value={f.titulo} onChange={set('titulo')} autoFocus placeholder="Ej.: Auditoría interna ISO 9001 — Cliente X" />
+            )}
+            {f.codigo && <p className="mt-1 text-[11px] font-bold text-brand-orangeDark">Código: {f.codigo}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -155,10 +168,14 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
             </div>
             <div>
               <label className="label">Proyecto</label>
-              <select className="input" value={f.proyecto_id} onChange={set('proyecto_id')}>
-                <option value="">— Sin proyecto —</option>
-                {proyectos.map((p) => <option key={p.id} value={p.id}>{nombreProyecto(p)}</option>)}
-              </select>
+              {deProyecto ? (
+                <div className="input bg-navy-50/60 text-navy-700 font-medium">{proyectoAuto}</div>
+              ) : (
+                <select className="input" value={f.proyecto_id} onChange={set('proyecto_id')}>
+                  <option value="">— Sin proyecto —</option>
+                  {proyectos.map((p) => <option key={p.id} value={p.id}>{nombreProyecto(p)}</option>)}
+                </select>
+              )}
             </div>
           </div>
 
@@ -557,6 +574,9 @@ export default function Agenda() {
         const t = await crearTareaAgenda(datos);
         if (String(t.consultor_id) === String(consultorId)) setTareas((ts) => [...ts, t]);
       }
+      // Resincronizar los relojes del equipo (por si cambió el consultor).
+      const ids = [...equipoSel];
+      if (ids.length) Promise.all(ids.map((cid) => getTareasAgenda(cid, YEAR).catch(() => []))).then((a) => setTareasEquipo(a.flat()));
       setModal(null);
     } catch { setErr('No se pudo guardar la tarea.'); }
   }
@@ -672,7 +692,7 @@ export default function Agenda() {
                     {tareasMes.map(t => (
                       <tr key={t.id} className="cursor-pointer hover:bg-navy-50/50" onClick={() => setModal({ tarea: t })}>
                         <td className="py-1.5 font-medium">{t.fecha_prevista}</td>
-                        <td className="py-1.5">{t.titulo}</td>
+                        <td className="py-1.5">{t.codigo && <span className="mr-1 font-bold text-brand-orangeDark text-xs">{t.codigo}</span>}{t.titulo}</td>
                         <td className="py-1.5">{TIPO_BY_ID[t.tipo]?.nombre || t.tipo}</td>
                         <td className="py-1.5 text-right">{Number(t.horas_previstas) || 0}h</td>
                         <td className="py-1.5 text-right">{t.horas_reales != null ? `${t.horas_reales}h` : '—'}</td>
