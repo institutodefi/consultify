@@ -456,6 +456,28 @@ export default function Agenda() {
   // Los relojes usan las tareas del equipo seleccionado y la capacidad sumada.
   const anual = useMemo(() => resumenAnual(YEAR, festivosSet, vacacionesSet, tareasEquipo, pctJornadaEquipo), [festivosSet, vacacionesSet, tareasEquipo, pctJornadaEquipo]);
   const rMes = anual.meses[mes];
+  // Meses elegidos para el reloj de arriba (multi-mes, suma).
+  const [mesesReloj, setMesesReloj] = useState(() => new Set([new Date().getFullYear() === YEAR ? new Date().getMonth() : 0]));
+  const rMesSel = useMemo(() => {
+    const ids = [...mesesReloj];
+    const acc = { previstas: 0, reales: 0, productivas: 0, objetivo: 0, laborables: 0 };
+    for (const i of ids) {
+      const m = anual.meses[i]; if (!m) continue;
+      acc.previstas += m.previstas; acc.reales += m.reales; acc.productivas += m.productivas;
+      acc.objetivo += m.objetivo; acc.laborables += m.laborables;
+    }
+    return acc;
+  }, [mesesReloj, anual]);
+  const etiquetaMeses = useMemo(() => {
+    const ids = [...mesesReloj].sort((a, b) => a - b);
+    if (!ids.length) return '—';
+    if (ids.length === 1) return MESES[ids[0]];
+    if (ids.length === 12) return 'Todo el año';
+    return ids.map(i => MESES[i].slice(0, 3)).join(' + ');
+  }, [mesesReloj]);
+  const nombresEquipoSel = useMemo(() =>
+    [...equipoSel].map(id => consultores.find(c => String(c.id) === String(id))?.nombre).filter(Boolean).join(' + ') || '—',
+    [equipoSel, consultores]);
   const tareasMes = useMemo(() => tareas
     .filter(t => t.fecha_prevista && new Date(t.fecha_prevista).getMonth() === mes && new Date(t.fecha_prevista).getFullYear() === YEAR)
     .sort((a, b) => (a.fecha_prevista || '').localeCompare(b.fecha_prevista || '')), [tareas, mes]);
@@ -556,14 +578,8 @@ export default function Agenda() {
 
   return (
     <div className="space-y-6">
-      {/* Selector + modo vacaciones */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <label className="label">Consultor</label>
-          <select className="input !w-auto min-w-[220px]" value={consultorId} onChange={(e) => setConsultorId(e.target.value)}>
-            {consultores.map((c) => <option key={c.id} value={c.id}>{c.nombre} · {c.nivel}</option>)}
-          </select>
-        </div>
+      {/* Acciones (el consultor se elige en el box de los relojes) */}
+      <div className="flex flex-wrap items-end justify-end gap-3">
         <div className="flex gap-2">
           <button onClick={() => descargarAgendaICS(tareas, consultor?.nombre ? `${consultor.nombre} ${consultor.apellidos || ''}`.trim() : '', `${consultor?.nombre || 'agenda'}-${YEAR}`)}
             disabled={!tareas.length} className="btn-ghost disabled:opacity-40"
@@ -673,25 +689,44 @@ export default function Agenda() {
         <div className="card">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy-300">
-              Reloj mensual · {MESES[mes]}
+              Reloj · {etiquetaMeses}
             </p>
-            <select className="input !w-auto !py-1 !text-xs" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
-              {MESES.map((m, i) => <option key={m} value={i}>{m}</option>)}
-            </select>
+            <details className="relative">
+              <summary className="chip cursor-pointer border border-navy-200 text-xs font-bold text-navy-500 list-none">Elegir meses ▾</summary>
+              <div className="absolute right-0 z-20 mt-1 w-56 rounded-xl border border-navy-100 bg-white p-2 shadow-lg">
+                <div className="mb-2 flex gap-2">
+                  <button onClick={() => setMesesReloj(new Set(MESES.map((_, i) => i)))} className="chip border border-navy-200 text-[11px] font-bold text-navy-500">Todos</button>
+                  <button onClick={() => setMesesReloj(new Set())} className="chip border border-navy-200 text-[11px] font-bold text-navy-500">Ninguno</button>
+                </div>
+                <div className="grid grid-cols-3 gap-1">
+                  {MESES.map((m, i) => {
+                    const on = mesesReloj.has(i);
+                    return (
+                      <button key={m} onClick={() => setMesesReloj(s => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; })}
+                        className={`chip justify-center border text-[11px] font-bold ${on ? 'border-brand-orange bg-brand-orange/15 text-navy-900' : 'border-navy-200 text-navy-400'}`}>
+                        {on ? '✓' : ''}{m.slice(0, 3)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </details>
           </div>
           <div className="mt-2">
-            <RelojAnual previstas={rMes.previstas} reales={rMes.reales}
-              proyeccion={rMes.previstas} ritmo={rMes.laborables > 0 ? rMes.reales / rMes.laborables : 0}
-              capacidad={rMes.productivas} />
+            <RelojAnual previstas={rMesSel.previstas} reales={rMesSel.reales}
+              proyeccion={rMesSel.previstas} ritmo={rMesSel.laborables > 0 ? rMesSel.reales / rMesSel.laborables : 0}
+              capacidad={rMesSel.productivas} />
           </div>
           <div className="mt-3 space-y-1 border-t border-navy-50 pt-3 text-xs font-medium text-navy-400">
-            <p>Jornada del mes: <strong className="text-navy-800">{Math.round(rMes.objetivo)} h</strong> · {rMes.laborables} laborables{mes === 7 ? ' · intensiva' : ''}</p>
-            <p>Capacidad productiva ({PCT_PRODUCTIVO * 100} %): <strong className="text-navy-800">{Math.round(rMes.productivas)} h</strong></p>
-            <p>Desviación del mes: <strong className={desvMes > 0 ? 'text-red-600' : 'text-navy-800'}>{desvMes > 0 ? '+' : ''}{desvMes} h</strong> vs plan</p>
+            <p className="font-bold text-navy-600">Sumatorio de: {nombresEquipoSel}</p>
+            <p>Meses: <strong className="text-navy-800">{etiquetaMeses}</strong> · {rMesSel.laborables} laborables</p>
+            <p>Jornada del periodo: <strong className="text-navy-800">{Math.round(rMesSel.objetivo)} h</strong></p>
+            <p>Capacidad productiva ({PCT_PRODUCTIVO * 100} %): <strong className="text-navy-800">{Math.round(rMesSel.productivas)} h</strong></p>
+            <p>Previstas: <strong className="text-navy-800">{Math.round(rMesSel.previstas)} h</strong> · Reales: <strong className="text-navy-800">{Math.round(rMesSel.reales)} h</strong></p>
           </div>
 
           <p className="mt-5 border-t border-navy-100 pt-4 text-xs font-bold uppercase tracking-[0.16em] text-navy-300">
-            Reloj anual · {consultor?.nombre ?? ''} {YEAR}
+            Reloj anual · {nombresEquipoSel} {YEAR}
           </p>
           <div className="mt-2">
             <RelojAnual previstas={anual.total.previstas} reales={anual.total.reales}
@@ -740,7 +775,7 @@ export default function Agenda() {
               <button onClick={() => setEquipoSel(new Set([String(consultorId)]))} className="chip border border-navy-200 text-[11px] font-bold text-navy-500">Solo activo</button>
             </div>
           </div>
-          <p className="mt-1 text-xs font-medium text-navy-400">Marca los consultores cuya carga se suma en los relojes de arriba.</p>
+          <p className="mt-1 text-xs font-medium text-navy-400">Marca (✓) los consultores cuya carga se suma en los relojes. Haz clic en un nombre para marcarlo como activo (●) y editar sus tareas/vacaciones.</p>
           <div className="mt-3 max-h-[28rem] overflow-y-auto">
             <table className="w-full text-sm">
               <thead>
@@ -751,10 +786,15 @@ export default function Agenda() {
               <tbody className="divide-y divide-navy-50">
                 {consultores.map(c => {
                   const on = equipoSel.has(String(c.id));
+                  const activo = String(c.id) === String(consultorId);
                   return (
-                    <tr key={c.id} className={on ? 'bg-brand-orange/5' : ''}>
+                    <tr key={c.id} className={`${on ? 'bg-brand-orange/5' : ''} ${activo ? 'ring-1 ring-inset ring-navy-300' : ''}`}>
                       <td className="py-1.5"><input type="checkbox" checked={on} onChange={() => setEquipoSel(s => { const n = new Set(s); n.has(String(c.id)) ? n.delete(String(c.id)) : n.add(String(c.id)); return n; })} /></td>
-                      <td className="py-1.5 font-medium">{c.nombre} {c.apellidos || ''}</td>
+                      <td className="py-1.5">
+                        <button onClick={() => setConsultorId(String(c.id))} className={`font-medium hover:text-brand-orange ${activo ? 'text-navy-900 font-bold' : ''}`} title="Marcar como consultor activo (editar tareas y vacaciones)">
+                          {c.nombre} {c.apellidos || ''}{activo ? ' ●' : ''}
+                        </button>
+                      </td>
                       <td className="py-1.5 text-navy-400">{c.nivel || '—'}</td>
                       <td className="py-1.5 text-right text-navy-400">{c.pct_jornada ?? 100}%</td>
                     </tr>

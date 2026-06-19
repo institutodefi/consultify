@@ -13,11 +13,12 @@ export default function Dashboard() {
   const [consultores, setConsultores] = useState([]);
   const [proyectos, setProyectos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [tareas, setTareas] = useState([]);
   const [ready, setReady] = useState(false);
 
   const cargar = () => {
-    Promise.all([listTable('consultores'), listTable('proyectos_cliente'), listTable('clientes')])
-      .then(([c, p, cl]) => { setConsultores(c); setProyectos(p); setClientes(cl); setReady(true); })
+    Promise.all([listTable('consultores'), listTable('proyectos_cliente'), listTable('clientes'), listTable('cliente_tareas')])
+      .then(([c, p, cl, t]) => { setConsultores(c); setProyectos(p); setClientes(cl); setTareas(t); setReady(true); })
       .catch(() => setReady(true));
   };
   useEffect(cargar, []);
@@ -66,15 +67,25 @@ export default function Dashboard() {
   const equipoGestion = useMemo(() => consultores.filter(c => c.activo && c.tipo_equipo === 'gestion'), [consultores]);
 
   const carga = useMemo(() => equipoConsultores.map(c => {
-    const asignados = activos.filter(p => String(p.consultor_1_id) === String(c.id));
-    const horas = asignados.reduce((s, p) => {
-      if (p.modelo === 'Apoyo') return s;
-      const r = calcular(p.normas || [], p.modelo);
-      return s + (r?.hTotal || 0);
-    }, 0);
+    // Carga real: horas de las tareas de proyecto asignadas a este consultor.
+    const suyas = tareas.filter(t => String(t.consultor_id) === String(c.id));
+    const horas = suyas.reduce((s, t) => s + (Number(t.horas) || 0), 0);
+    const proyectosIds = new Set(suyas.map(t => t.proyecto_id).filter(Boolean));
     const capProd = Math.round(150 * (c.pct_jornada ?? 100) / 100 * 0.7);
-    return { ...c, nProyectos: asignados.length, horas, capProd, pct: capProd ? Math.min(100, Math.round(horas / capProd * 100)) : 0 };
-  }), [equipoConsultores, activos]);
+    return { ...c, nProyectos: proyectosIds.size, horas, capProd, pct: capProd ? Math.min(100, Math.round(horas / capProd * 100)) : 0 };
+  }), [equipoConsultores, tareas]);
+
+  // Selección flexible de qué consultores se ven en la carga.
+  const [equipoCargaSel, setEquipoCargaSel] = useState(null);
+  useEffect(() => {
+    if (equipoCargaSel === null && equipoConsultores.length) {
+      setEquipoCargaSel(new Set(equipoConsultores.map(c => String(c.id))));
+    }
+  }, [equipoConsultores, equipoCargaSel]);
+  const cargaVisible = useMemo(() => {
+    if (!equipoCargaSel) return carga;
+    return carga.filter(c => equipoCargaSel.has(String(c.id)));
+  }, [carga, equipoCargaSel]);
 
   if (!ready) return <p className="font-semibold text-navy-400">Cargando…</p>;
 
@@ -156,9 +167,27 @@ export default function Dashboard() {
       </div>
 
       <div className="card">
-        <h3 className="font-extrabold">Carga del equipo de consultoría</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-extrabold">Carga del equipo de consultoría</h3>
+          <div className="flex gap-2">
+            <button onClick={() => setEquipoCargaSel(new Set(equipoConsultores.map(c => String(c.id))))} className="chip border border-navy-200 text-[11px] font-bold text-navy-500">Todos</button>
+            <button onClick={() => setEquipoCargaSel(new Set())} className="chip border border-navy-200 text-[11px] font-bold text-navy-500">Ninguno</button>
+          </div>
+        </div>
+        <p className="mt-1 text-xs font-medium text-navy-400">Marca los consultores que quieres incluir en la vista de carga.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {equipoConsultores.map(c => {
+            const on = equipoCargaSel.has(String(c.id));
+            return (
+              <button key={c.id} onClick={() => setEquipoCargaSel(s => { const n = new Set(s); n.has(String(c.id)) ? n.delete(String(c.id)) : n.add(String(c.id)); return n; })}
+                className={`chip border text-xs font-bold ${on ? 'border-brand-orange bg-brand-orange/15 text-navy-900' : 'border-navy-200 bg-white text-navy-400'}`}>
+                {on ? '✓ ' : ''}{c.nombre}
+              </button>
+            );
+          })}
+        </div>
         <div className="mt-4 space-y-4">
-          {carga.map(c => (
+          {cargaVisible.map(c => (
             <div key={c.id}>
               <div className="flex items-baseline justify-between text-sm">
                 <p className="font-bold">{c.nombre} <span className="chip ml-1 bg-navy-50 text-navy-500">{c.nivel}</span></p>
