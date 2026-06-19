@@ -65,7 +65,7 @@ function RelojAnual({ previstas, reales, proyeccion, ritmo, capacidad }) {
 }
 
 // ════════════════ MODAL DE TAREA ════════════════
-function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, clientes, tareasDelDia, onGuardar, onBorrar, onCerrar }) {
+function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, clientes, clienteTareas = [], tareasDelDia, onGuardar, onBorrar, onCerrar }) {
   const fmtNum = (n) => (Math.round((n || 0) * 100) / 100).toLocaleString('es-ES');
   const editando = Boolean(tarea?.id);
   // Una tarea que viene de un proyecto tiene origen_cliente_tarea_id: su título,
@@ -135,11 +135,17 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
 
   const nombreProyecto = (p) => {
     const cl = clientes.find((c) => String(c.id) === String(p.cliente_id));
-    return `${cl?.empresa || 'Cliente'} · ${p.modelo}`;
+    return `${cl?.empresa || 'Cliente'} · ${p.nombre || p.modelo}`;
   };
-  // Nombre del proyecto mostrado automáticamente (tareas que vienen de proyecto).
-  const proyAuto = proyectos.find((p) => String(p.id) === String(f.proyecto_id));
-  const proyectoAuto = proyAuto ? nombreProyecto(proyAuto) : (f.descripcion || '—');
+  // Proyecto de la tarea: se resuelve por la cadena origen_cliente_tarea_id →
+  // cliente_tarea → proyecto_id → proyectos_cliente → cliente.
+  const ctOrigen = tarea?.origen_cliente_tarea_id
+    ? clienteTareas.find((ct) => String(ct.id) === String(tarea.origen_cliente_tarea_id))
+    : null;
+  const proyDeOrigen = ctOrigen
+    ? proyectos.find((p) => String(p.id) === String(ctOrigen.proyecto_id))
+    : proyectos.find((p) => String(p.id) === String(f.proyecto_id));
+  const proyectoAuto = proyDeOrigen ? nombreProyecto(proyDeOrigen) : '—';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/50 p-4" onClick={onCerrar}>
@@ -798,7 +804,7 @@ export default function Agenda() {
         <ModalTarea
           tarea={modal.tarea} fecha={modal.fecha ?? modal.tarea?.fecha_prevista}
           consultorId={consultorId} consultores={consultores}
-          proyectos={proyectos} clientes={clientes} tareasDelDia={tareas}
+          proyectos={proyectos} clientes={clientes} clienteTareas={clienteTareas} tareasDelDia={tareas}
           onGuardar={guardarTarea} onBorrar={borrarTarea} onCerrar={() => setModal(null)}
         />
       )}

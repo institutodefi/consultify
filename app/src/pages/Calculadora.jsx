@@ -132,7 +132,9 @@ export default function Calculadora() {
                   <tbody className="divide-y divide-navy-50">
                     <tr><td className="py-2 font-semibold text-navy-400">Normas</td><td className="py-2 text-right font-bold">{sel.map(id => NORMAS.find(n => n.id === id)?.nombre).join(' + ')}</td></tr>
                     <tr><td className="py-2 font-semibold text-navy-400">Modelo</td><td className="py-2 text-right font-bold">{modelo}</td></tr>
-                    <tr><td className="py-2 font-semibold text-navy-400">Dedicación del equipo</td><td className="py-2 text-right font-bold">{res.hTotal} h{res.tipo === 'mes' ? '/mes' : ' totales'}</td></tr>
+                    {modelo !== 'Implantación' && (
+                      <tr><td className="py-2 font-semibold text-navy-400">Dedicación del equipo</td><td className="py-2 text-right font-bold">{res.hTotal} h{res.tipo === 'mes' ? '/mes' : ' totales'}</td></tr>
+                    )}
                     <tr><td className="py-2 font-semibold text-navy-400">Subtotal</td><td className="py-2 text-right font-bold">{fmtEUR(res.precioCatalogo)}</td></tr>
                     <tr><td className="py-2 font-semibold text-navy-400">IVA 21 %</td><td className="py-2 text-right font-bold">{fmtEUR(res.iva)}</td></tr>
                     <tr><td className="py-3 text-base font-extrabold">Total{res.tipo === 'mes' ? ' / mes' : ''}</td><td className="py-3 text-right text-base font-extrabold text-navy-800">{fmtEUR(res.totalConIva)}</td></tr>
@@ -152,7 +154,7 @@ export default function Calculadora() {
                         {comparativa.map(c => (
                           <tr key={c.modelo} className={c.modelo === modelo ? 'bg-brand-orange/10' : ''}>
                             <td className="py-2 font-bold">{c.modelo}</td>
-                            <td className="py-2 font-medium text-navy-400">{c.hTotal} h{c.tipo === 'mes' ? '/mes' : ''}</td>
+                            <td className="py-2 font-medium text-navy-400">{c.modelo === 'Implantación' ? '—' : <>{c.hTotal} h{c.tipo === 'mes' ? '/mes' : ''}</>}</td>
                             <td className="py-2 text-right font-extrabold">{fmtEUR(c.precioCatalogo)}{c.tipo === 'mes' ? '/mes' : ''}</td>
                           </tr>
                         ))}
@@ -207,7 +209,7 @@ export default function Calculadora() {
                 <p className="mt-1 text-sm font-semibold text-white/70">{fmtEUR(res.totalConIva)} con IVA</p>
                 <div className="mt-4 space-y-1.5 text-sm font-medium text-white/80">
                   <p>{res.nSistemas} sistema{res.nSistemas > 1 ? 's' : ''} · modelo {modelo}</p>
-                  <p>{res.hTotal} h de consultor{res.tipo === 'mes' ? ' cada mes' : ''}</p>
+                  {modelo !== 'Implantación' && <p>{res.hTotal} h de consultor{res.tipo === 'mes' ? ' cada mes' : ''}</p>}
                 </div>
               </>
             ) : (
