@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { listTable } from '../../lib/data.js';
+import { supabase } from '../../lib/supabase.js';
 import { NORMA_BY_ID, fmtEUR, calcular } from '../../lib/calcEngine.js';
 import { useAuth } from '../../lib/auth.jsx';
 
@@ -14,17 +15,36 @@ export default function Dashboard() {
   const [clientes, setClientes] = useState([]);
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    Promise.all([listTable('consultores'), listTable('proyectos'), listTable('clientes')])
+  const cargar = () => {
+    Promise.all([listTable('consultores'), listTable('proyectos_cliente'), listTable('clientes')])
       .then(([c, p, cl]) => { setConsultores(c); setProyectos(p); setClientes(cl); setReady(true); })
       .catch(() => setReady(true));
+  };
+  useEffect(cargar, []);
+
+  // Realtime: refresca el dashboard cuando cambian los proyectos.
+  useEffect(() => {
+    if (!supabase) return;
+    const canal = supabase
+      .channel('dash-proyectos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'proyectos_cliente' }, cargar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cliente_tareas' }, cargar)
+      .subscribe();
+    return () => { supabase.removeChannel(canal); };
   }, []);
 
   const activos = useMemo(() => proyectos.filter(p => p.estado !== 'cerrado'), [proyectos]);
 
+  // KPIs recalculados desde normas+modelo de cada proyecto (proyectos_cliente
+  // no guarda precio; lo derivamos del motor de cálculo).
   const kpis = useMemo(() => {
-    const mrr = activos.reduce((s, p) => s + (p.precio_mes || 0), 0);
-    const bolsas = activos.reduce((s, p) => s + (p.precio_total || 0), 0);
+    let mrr = 0, bolsas = 0;
+    for (const p of activos) {
+      const r = calcular(p.normas || [], p.modelo);
+      if (!r) continue;
+      if (r.tipo === 'mes') mrr += r.precioCatalogo || 0;
+      else bolsas += r.precioCatalogo || 0;
+    }
     return { mrr, arr: mrr * 12, bolsas, nProyectos: activos.length, nClientes: clientes.length };
   }, [activos, clientes]);
 
@@ -46,7 +66,7 @@ export default function Dashboard() {
   const equipoGestion = useMemo(() => consultores.filter(c => c.activo && c.tipo_equipo === 'gestion'), [consultores]);
 
   const carga = useMemo(() => equipoConsultores.map(c => {
-    const asignados = activos.filter(p => p.consultor_id === c.id);
+    const asignados = activos.filter(p => String(p.consultor_1_id) === String(c.id));
     const horas = asignados.reduce((s, p) => {
       if (p.modelo === 'Apoyo') return s;
       const r = calcular(p.normas || [], p.modelo);

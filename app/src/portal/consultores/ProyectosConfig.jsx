@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
-import { tareasDeCliente, repartirFechas, anidarTareas, codigoTareaIntegrada, horasCoordinacion, bloquesEjecucion, trocearEnBloques } from '../../lib/planCliente.js';
+import { tareasDeCliente, repartirFechas, anidarTareas, codigoTareaIntegrada, horasCoordinacion, bloquesEjecucion, trocearEnBloques, codigoTarea } from '../../lib/planCliente.js';
 import { esLaborable, toISO, FESTIVOS_2026 } from '../../lib/agenda.js';
 import { sincronizarTareaAgenda, sincronizarVariasAgenda, borrarReflejoAgenda } from '../../lib/sincroAgenda.js';
 import { NORMAS, NORMA_BY_ID, MESES_MODELO, mesesPorModelo } from '../../lib/calcEngine.js';
@@ -55,6 +55,9 @@ export default function Proyectos() {
   };
   useEffect(cargar, []);
   const nombreCli = (id) => clientes.find(c => String(c.id) === String(id))?.empresa || '—';
+  const codigoCli = (id) => clientes.find(c => String(c.id) === String(id))?.codigo || 'CLI';
+  // Enriquece una tarea con el código de su cliente (para el código CLI-Txxx-By).
+  const conCod = (t) => ({ ...t, codigo_cliente: codigoCli(t.cliente_id) });
 
   // Permitir abrir un proyecto por querystring (?proyecto=ID) desde Clientes.
   useEffect(() => {
@@ -139,14 +142,14 @@ export default function Proyectos() {
     const upd = { bloques_ejecucion: bloques, editada_manual: true };
     await updateRow('cliente_tareas', t.id, upd);
     setTareas(ts => ts.map(x => x.id === t.id ? { ...x, ...upd } : x));
-    try { await sincronizarTareaAgenda({ ...t, ...upd }, proyecto?.consultor_1_id || null, equipo); } catch { /* noop */ }
+    try { await sincronizarTareaAgenda(conCod({ ...t, ...upd }), proyecto?.consultor_1_id || null, equipo); } catch { /* noop */ }
   }
 
   async function patchTarea(t, campos) {
     const conFlag = { ...campos, editada_manual: true };
     await updateRow('cliente_tareas', t.id, conFlag);
     setTareas(ts => ts.map(x => x.id === t.id ? { ...x, ...conFlag } : x));
-    try { await sincronizarTareaAgenda({ ...t, ...conFlag }, proyecto?.consultor_1_id || null, equipo); } catch { /* noop */ }
+    try { await sincronizarTareaAgenda(conCod({ ...t, ...conFlag }), proyecto?.consultor_1_id || null, equipo); } catch { /* noop */ }
   }
 
   // Horas reales = suma de los seguimientos marcados como hechos.
@@ -166,7 +169,7 @@ export default function Proyectos() {
       for (const id of ids) {
         const t = tareas.find(x => x.id === id); if (!t) continue;
         await updateRow('cliente_tareas', id, { consultor_id: consultorId, editada_manual: true });
-        try { await sincronizarTareaAgenda({ ...t, consultor_id: consultorId }, proyecto?.consultor_1_id || null, equipo); } catch { /* noop */ }
+        try { await sincronizarTareaAgenda(conCod({ ...t, consultor_id: consultorId }), proyecto?.consultor_1_id || null, equipo); } catch { /* noop */ }
       }
       setSelT(new Set()); cargar();
       setMsg(`${ids.length} tarea(s) reasignada(s).`);
@@ -180,7 +183,7 @@ export default function Proyectos() {
     if (!conConsultor.length) { setMsg('Asigna un consultor a las tareas (o un consultor 1 al proyecto) antes de distribuir.'); return; }
     setDistribuyendo(true); setMsg('Distribuyendo…');
     try {
-      const n = await sincronizarVariasAgenda(tareasProyecto, proyecto?.consultor_1_id || null, equipo);
+      const n = await sincronizarVariasAgenda(tareasProyecto.map(conCod), proyecto?.consultor_1_id || null, equipo);
       const sinFecha = tareasProyecto.filter(t => !t.fecha_estimada).length;
       setMsg(`Agenda distribuida: ${n} tarea(s) volcadas${sinFecha ? ` · ${sinFecha} sin fecha no se volcaron` : ''}.`);
     } catch (e) { setMsg('Error al distribuir: ' + e.message); }
@@ -224,7 +227,7 @@ export default function Proyectos() {
         titulo: codigoTareaIntegrada(cliente.empresa, modelo, c.proceso, c.subproceso, c.normas_integradas),
         horas: c.horas, bloque: c.bloque, tipo: tipoTarea(c),
         integrada: !!c.integrada, normas_integradas: c.normas_integradas || [c.norma_id],
-        consultor_id: proyecto.consultor_1_id || null, orden: i,
+        consultor_id: proyecto.consultor_1_id || null, orden: i, num_tarea: i + 1,
       }));
 
       // Distribuir fechas (mínimo 3 meses, 6h/día, festivos)
@@ -277,7 +280,7 @@ export default function Proyectos() {
         if (fila?.id) creadas.push(fila);
       }
 
-      await sincronizarVariasAgenda(creadas, proyecto.consultor_1_id || null, equipo);
+      await sincronizarVariasAgenda(creadas.map(conCod), proyecto.consultor_1_id || null, equipo);
       cargar();
       setMsg(`${creadas.length} tareas generadas (incluida coordinación mensual de ${horasCoord} h).`);
     } catch (e) { setMsg(e.message); }
@@ -507,7 +510,7 @@ export default function Proyectos() {
                       const bloques = Array.isArray(t.bloques_ejecucion) ? t.bloques_ejecucion : [];
                       const fechaLimite = bloques.length ? bloques.map(b => b.fecha).filter(Boolean).sort().slice(-1)[0] : t.fecha_estimada;
                       const abierto = expandida === t.id;
-                      const codigo = `T${String(idx + 1).padStart(3, '0')}`;
+                      const codigo = codigoTarea(codigoCli(t.cliente_id), t.num_tarea || (idx + 1));
                       return (
                       <>
                       <tr key={t.id} className={`${t.hecha ? 'opacity-60' : ''} ${selT.has(t.id) ? 'bg-brand-orange/5' : ''}`}>

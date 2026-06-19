@@ -5,7 +5,7 @@
 // Solo se envían columnas que existen en agenda_tareas.
 // ════════════════════════════════════════════════════════════════
 import { listTable, insertRow, deleteRow } from './data.js';
-import { trocearEnBloques } from './planCliente.js';
+import { trocearEnBloques, codigoTarea } from './planCliente.js';
 
 function tipoDeTarea(t) {
   if (t.tipo) return t.tipo;
@@ -40,15 +40,18 @@ export async function sincronizarTareaAgenda(ct, consultor1Id, consultores = [])
   if (!bloques.length) return null;
 
   const tipo = tipoDeTarea(ct);
+  const codCli = ct.codigo_cliente || 'CLI';
+  const nT = ct.num_tarea || 1;
   const creados = [];
   for (let i = 0; i < bloques.length; i++) {
     const b = bloques[i];
-    const sufijo = bloques.length > 1 ? ` (bloque ${i + 1}/${bloques.length})` : '';
+    const cod = codigoTarea(codCli, nT, bloques.length > 1 ? i + 1 : null);
     const payload = {
       consultor_id: consultorId,
       fecha_prevista: b.fecha,
       horas_previstas: Math.min(9, Math.max(0.5, Number(b.horas) || 0)),
-      titulo: `${ct.titulo}${sufijo}`,
+      titulo: `${cod} · ${ct.titulo}`,
+      codigo: cod,
       descripcion: `${ct.norma_id || ''} · ${ct.proceso || ''}`.trim(),
       tipo,
       estado: ct.hecha ? 'completada' : 'pendiente',

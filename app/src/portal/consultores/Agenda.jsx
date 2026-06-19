@@ -65,6 +65,7 @@ function RelojAnual({ previstas, reales, proyeccion, ritmo, capacidad }) {
 
 // ════════════════ MODAL DE TAREA ════════════════
 function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, clientes, tareasDelDia, onGuardar, onBorrar, onCerrar }) {
+  const fmtNum = (n) => (Math.round((n || 0) * 100) / 100).toLocaleString('es-ES');
   const editando = Boolean(tarea?.id);
   const [f, setF] = useState({
     consultor_id: tarea?.consultor_id ?? consultorId,
@@ -72,11 +73,13 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
     descripcion: tarea?.descripcion ?? '',
     fecha_prevista: tarea?.fecha_prevista ?? fecha,
     horas_previstas: tarea?.horas_previstas ?? 2,
-    fecha_efectiva: tarea?.fecha_efectiva ?? '',
-    horas_reales: tarea?.horas_reales ?? '',
+    ejecuciones: Array.isArray(tarea?.ejecuciones) && tarea.ejecuciones.length
+      ? tarea.ejecuciones
+      : (tarea?.fecha_efectiva ? [{ fecha: tarea.fecha_efectiva, horas: Number(tarea.horas_reales) || 0 }] : []),
     proyecto_id: tarea?.proyecto_id ?? '',
     tipo: tarea?.tipo ?? 'produccion',
     hora_inicio: tarea?.hora_inicio ?? '09:00',
+    hora_fin: tarea?.hora_fin ?? '',
     horas_base: tarea?.horas_base ?? '',
     estado: tarea?.estado ?? 'pendiente',
   });
@@ -93,9 +96,12 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
     tareasDelDia.filter((t) => t.id !== tarea?.id && t[campoF] === fechaV)
       .reduce((s, t) => s + Number(t[campoH] || 0), 0) + Number(horasV || 0);
   const totalPrev = suma('fecha_prevista', 'horas_previstas', f.fecha_prevista, f.horas_previstas);
-  const totalReal = f.fecha_efectiva ? suma('fecha_efectiva', 'horas_reales', f.fecha_efectiva, f.horas_reales) : 0;
+  const totalReal = f.ejecuciones.reduce((s, e) => s + (Number(e.horas) || 0), 0);
 
-  const copiar = () => setF((x) => ({ ...x, fecha_efectiva: x.fecha_prevista, horas_reales: x.horas_previstas, estado: 'completada' }));
+  const addEjec = () => setF((x) => ({ ...x, ejecuciones: [...x.ejecuciones, { fecha: x.fecha_prevista, horas: x.horas_previstas }] }));
+  const editEjec = (i, campo, val) => setF((x) => ({ ...x, ejecuciones: x.ejecuciones.map((e, j) => j === i ? { ...e, [campo]: campo === 'horas' ? Number(val) || 0 : val } : e) }));
+  const quitEjec = (i) => setF((x) => ({ ...x, ejecuciones: x.ejecuciones.filter((_, j) => j !== i) }));
+  const copiar = () => setF((x) => ({ ...x, ejecuciones: [{ fecha: x.fecha_prevista, horas: x.horas_previstas }], estado: 'completada' }));
 
   async function guardar() {
     if (!f.titulo.trim() || !f.fecha_prevista || Number(f.horas_previstas) <= 0) return;
@@ -109,11 +115,13 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
         horas_base: f.horas_base ? Number(f.horas_base) : null,
         horas_previstas: horasTarea,
         horas_consultor: horasConsultor,
-        fecha_efectiva: f.fecha_efectiva || null,
-        horas_reales: f.horas_reales ? Number(f.horas_reales) : null,
+        ejecuciones: f.ejecuciones,
+        fecha_efectiva: f.ejecuciones[0]?.fecha || null,
+        horas_reales: f.ejecuciones.length ? f.ejecuciones.reduce((s, e) => s + (Number(e.horas) || 0), 0) : null,
         proyecto_id: f.proyecto_id || null,
         tipo: f.tipo,
         hora_inicio: f.hora_inicio || '09:00',
+        hora_fin: f.hora_fin || null,
         estado: f.estado,
       }, tarea?.id);
     } finally { setGuardando(false); }
@@ -190,11 +198,17 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
                 <p className="text-[11px] font-medium text-navy-300">Las horas de la tarea son su total; no varían por el nivel del consultor.</p>
               </div>
             </div>
-            <div className="mt-3 w-1/2 pr-1.5">
-              <label className="label">Hora de inicio</label>
-              <input type="time" className="input" value={f.hora_inicio} onChange={set('hora_inicio')} />
-              <p className="mt-1 text-[11px] font-medium text-navy-300">Se usa al descargar la tarea a tu calendario.</p>
+            <div className="mt-3 flex gap-3">
+              <div className="flex-1">
+                <label className="label">Hora inicio</label>
+                <input type="time" className="input" value={f.hora_inicio} onChange={set('hora_inicio')} />
+              </div>
+              <div className="flex-1">
+                <label className="label">Hora fin</label>
+                <input type="time" className="input" value={f.hora_fin} onChange={set('hora_fin')} />
+              </div>
             </div>
+            <p className="mt-1 text-[11px] font-medium text-navy-300">Horas planificadas (se usan al descargar al calendario).</p>
             {totalPrev > MAX_HORAS_DIA && (
               <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
                 El plan de ese día suma {totalPrev} h; el convenio limita a {MAX_HORAS_DIA} h ordinarias/día.
@@ -202,28 +216,29 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
             )}
           </div>
 
-          {/* Real */}
+          {/* Real: varias fechas efectivas que suman */}
           <div className="rounded-2xl border border-green-300 bg-green-50/40 p-4">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-green-700">Ejecución real</p>
-              <button type="button" onClick={copiar} className="chip border border-green-300 bg-white text-green-700 hover:bg-green-100">
-                ⤵ Copiar previsto → real
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">Fecha efectiva</label>
-                <input type="date" className="input" value={f.fecha_efectiva} onChange={set('fecha_efectiva')} />
-              </div>
-              <div>
-                <label className="label">Horas reales</label>
-                <input type="number" min="0.5" max="9" step="0.5" className="input" placeholder="—" value={f.horas_reales} onChange={set('horas_reales')} />
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-green-700">Ejecución real ({fmtNum(totalReal)} h)</p>
+              <div className="flex gap-2">
+                <button type="button" onClick={copiar} className="chip border border-green-300 bg-white text-green-700 hover:bg-green-100">⤵ Previsto → real</button>
+                <button type="button" onClick={addEjec} className="chip border border-green-300 bg-white text-green-700 hover:bg-green-100">+ fecha</button>
               </div>
             </div>
-            {totalReal > MAX_HORAS_DIA && (
-              <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-                Lo real de ese día suma {totalReal} h; el convenio limita a {MAX_HORAS_DIA} h ordinarias/día.
-              </p>
+            {f.ejecuciones.length === 0 ? (
+              <p className="text-xs font-medium text-green-700/70">Sin ejecuciones aún. Añade una o varias fechas; sus horas se suman.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {f.ejecuciones.map((e, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input type="date" className="input !py-1.5 flex-1" value={e.fecha || ''} onChange={(ev) => editEjec(i, 'fecha', ev.target.value)} />
+                    <input type="number" min="0.5" step="0.5" className="input !py-1.5 !w-24 text-right" value={e.horas} onChange={(ev) => editEjec(i, 'horas', ev.target.value)} />
+                    <span className="text-xs text-green-700">h</span>
+                    <button type="button" onClick={() => quitEjec(i)} className="text-xs font-bold text-red-400 hover:underline">×</button>
+                  </div>
+                ))}
+                <p className="pt-1 text-right text-xs font-bold text-green-700">Total real: {fmtNum(totalReal)} h</p>
+              </div>
             )}
           </div>
 
@@ -375,6 +390,8 @@ export default function Agenda() {
   const [proyectos, setProyectos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [consultorId, setConsultorId] = useState('');
+  const [equipoSel, setEquipoSel] = useState(new Set()); // consultores incluidos en los relojes (suma)
+  const [tareasEquipo, setTareasEquipo] = useState([]);   // tareas de todo el equipo seleccionado
   const [mes, setMes] = useState(new Date().getFullYear() === YEAR ? new Date().getMonth() : 0);
   const [festivos, setFestivos] = useState([]);
   const [vacaciones, setVacaciones] = useState([]);
@@ -389,7 +406,7 @@ export default function Agenda() {
     listTable('consultores').then((c) => {
       const act = c.filter((x) => x.activo !== false);
       setConsultores(act);
-      if (act.length) setConsultorId(String(act[0].id));
+      if (act.length) { setConsultorId(String(act[0].id)); setEquipoSel(new Set([String(act[0].id)])); }
     }).catch(() => setErr('No se pudieron cargar los consultores.'));
     listTable('proyectos').then(setProyectos).catch(() => {});
     listTable('clientes').then(setClientes).catch(() => {});
@@ -412,13 +429,32 @@ export default function Agenda() {
     })();
   }, [consultorId]);
 
+  // Tareas de TODO el equipo seleccionado (para los relojes sumados).
+  useEffect(() => {
+    const ids = [...equipoSel];
+    if (!ids.length) { setTareasEquipo([]); return; }
+    Promise.all(ids.map((id) => getTareasAgenda(id, YEAR).catch(() => [])))
+      .then((arrs) => setTareasEquipo(arrs.flat()))
+      .catch(() => setTareasEquipo([]));
+  }, [equipoSel, tareas]);
+
   const festivosMap = useMemo(() => new Map(festivos.map((f) => [f.fecha, f.nombre])), [festivos]);
   const festivosSet = useMemo(() => new Set(festivos.map((f) => f.fecha)), [festivos]);
   const vacacionesSet = useMemo(() => new Set(vacaciones.map((v) => v.fecha)), [vacaciones]);
 
   const consultorSel = consultores.find((c) => String(c.id) === String(consultorId));
+  // Capacidad sumada de los consultores incluidos en los relojes.
+  const pctJornadaEquipo = useMemo(() => {
+    const ids = [...equipoSel];
+    if (!ids.length) return consultorSel?.pct_jornada ?? 100;
+    return ids.reduce((s, id) => {
+      const c = consultores.find((x) => String(x.id) === String(id));
+      return s + (c?.pct_jornada ?? 100);
+    }, 0);
+  }, [equipoSel, consultores, consultorSel]);
   const pctJornada = consultorSel?.pct_jornada ?? 100;
-  const anual = useMemo(() => resumenAnual(YEAR, festivosSet, vacacionesSet, tareas, pctJornada), [festivosSet, vacacionesSet, tareas, pctJornada]);
+  // Los relojes usan las tareas del equipo seleccionado y la capacidad sumada.
+  const anual = useMemo(() => resumenAnual(YEAR, festivosSet, vacacionesSet, tareasEquipo, pctJornadaEquipo), [festivosSet, vacacionesSet, tareasEquipo, pctJornadaEquipo]);
   const rMes = anual.meses[mes];
   const tareasMes = useMemo(() => tareas
     .filter(t => t.fecha_prevista && new Date(t.fecha_prevista).getMonth() === mes && new Date(t.fecha_prevista).getFullYear() === YEAR)
@@ -693,6 +729,43 @@ export default function Agenda() {
               );
             })}
           </div>
+        </div>
+
+        {/* Box de equipo: elige qué consultores suman en los relojes */}
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold">Equipo en los relojes</h3>
+            <div className="flex gap-2">
+              <button onClick={() => setEquipoSel(new Set(consultores.map(c => String(c.id))))} className="chip border border-navy-200 text-[11px] font-bold text-navy-500">Todos</button>
+              <button onClick={() => setEquipoSel(new Set([String(consultorId)]))} className="chip border border-navy-200 text-[11px] font-bold text-navy-500">Solo activo</button>
+            </div>
+          </div>
+          <p className="mt-1 text-xs font-medium text-navy-400">Marca los consultores cuya carga se suma en los relojes de arriba.</p>
+          <div className="mt-3 max-h-[28rem] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
+                  <th className="py-2 w-8"></th><th className="py-2">Consultor</th><th className="py-2">Nivel</th><th className="py-2 text-right">Jornada</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-50">
+                {consultores.map(c => {
+                  const on = equipoSel.has(String(c.id));
+                  return (
+                    <tr key={c.id} className={on ? 'bg-brand-orange/5' : ''}>
+                      <td className="py-1.5"><input type="checkbox" checked={on} onChange={() => setEquipoSel(s => { const n = new Set(s); n.has(String(c.id)) ? n.delete(String(c.id)) : n.add(String(c.id)); return n; })} /></td>
+                      <td className="py-1.5 font-medium">{c.nombre} {c.apellidos || ''}</td>
+                      <td className="py-1.5 text-navy-400">{c.nivel || '—'}</td>
+                      <td className="py-1.5 text-right text-navy-400">{c.pct_jornada ?? 100}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 border-t border-navy-50 pt-3 text-xs font-medium text-navy-400">
+            {equipoSel.size} consultor(es) · capacidad sumada {Math.round(pctJornadaEquipo)}%
+          </p>
         </div>
       </div>
 

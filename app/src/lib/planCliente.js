@@ -257,3 +257,13 @@ export function bloquesEjecucion(horas, fechaInicioISO, opts = {}) {
   });
   return colocadas.map(c => ({ horas: c.horas, fecha: c.fecha_estimada }));
 }
+
+// Código legible de tarea/bloque: "CLI001-T005-B2".
+// codigoCliente: el código del cliente (o 'CLI' si no tiene).
+// nTarea: posición de la tarea en el proyecto (1-based).
+// nBloque: posición del bloque (1-based); si se omite, solo "CLI001-T005".
+export function codigoTarea(codigoCliente, nTarea, nBloque) {
+  const cli = (codigoCliente || 'CLI').toString().trim().toUpperCase().replace(/\s+/g, '');
+  const t = `T${String(nTarea).padStart(3, '0')}`;
+  return nBloque ? `${cli}-${t}-B${nBloque}` : `${cli}-${t}`;
+}
