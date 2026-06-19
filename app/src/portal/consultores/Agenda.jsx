@@ -406,6 +406,7 @@ export default function Agenda() {
   const [consultores, setConsultores] = useState([]);
   const [proyectos, setProyectos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [clienteTareas, setClienteTareas] = useState([]);
   const [consultorId, setConsultorId] = useState('');
   const [equipoSel, setEquipoSel] = useState(new Set()); // consultores incluidos en los relojes (suma)
   const [tareasEquipo, setTareasEquipo] = useState([]);   // tareas de todo el equipo seleccionado
@@ -425,8 +426,9 @@ export default function Agenda() {
       setConsultores(act);
       if (act.length) { setConsultorId(String(act[0].id)); setEquipoSel(new Set([String(act[0].id)])); }
     }).catch(() => setErr('No se pudieron cargar los consultores.'));
-    listTable('proyectos').then(setProyectos).catch(() => {});
+    listTable('proyectos_cliente').then(setProyectos).catch(() => { listTable('proyectos').then(setProyectos).catch(() => {}); });
     listTable('clientes').then(setClientes).catch(() => {});
+    listTable('cliente_tareas').then(setClienteTareas).catch(() => setClienteTareas([]));
   }, []);
 
   useEffect(() => {

@@ -181,7 +181,7 @@ export default function Dashboard() {
         <p className="mt-1 text-xs font-medium text-navy-400">Marca los consultores que quieres incluir en la vista de carga.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {equipoConsultores.map(c => {
-            const on = equipoCargaSel.has(String(c.id));
+            const on = equipoCargaSel ? equipoCargaSel.has(String(c.id)) : true;
             return (
               <button key={c.id} onClick={() => setEquipoCargaSel(s => { const n = new Set(s); n.has(String(c.id)) ? n.delete(String(c.id)) : n.add(String(c.id)); return n; })}
                 className={`chip border text-xs font-bold ${on ? 'border-brand-orange bg-brand-orange/15 text-navy-900' : 'border-navy-200 bg-white text-navy-400'}`}>
