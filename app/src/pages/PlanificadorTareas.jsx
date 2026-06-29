@@ -53,6 +53,41 @@ export default function PlanificadorTareas() {
   const totalTareas = useMemo(() => tareas.reduce((s, t) => s + t.neta, 0), [tareas]);
   const totalProyecto = totalTareas + coordinacion;
 
+  // ── Reparto por fases entre los meses del proyecto ──────────────────────
+  // Diagnóstico (PR1 / "diagnóstico" / "análisis inicial") va al primer mes.
+  // Auditoría/certificación (PR6 / "auditoría" / "certificación") va al último mes.
+  // El resto de tareas se reparte de forma uniforme entre todos los meses.
+  // La SUMA de todos los meses = total de horas de tareas (sin perder ni inventar horas).
+  const nMeses = Math.max(parseInt(meses, 10) || 1, 1);
+  const esDiagnostico = (t) => /diagn[oó]stico|an[aá]lisis inicial|\bPR1\b|GAP/i.test(`${t.proceso} ${t.subproceso}`);
+  const esAuditoria = (t) => /auditor[ií]a externa|certificaci[oó]n|acompa[nñ]amiento|\bPR6\b/i.test(`${t.proceso} ${t.subproceso}`);
+
+  const repartoMensual = useMemo(() => {
+    // Inicializa un acumulador de horas por mes (índice 0 = Mes 1).
+    const meses = Array.from({ length: nMeses }, () => 0);
+    const ultimo = nMeses - 1;
+    // Tareas "normales" (ni diagnóstico ni auditoría) → reparto uniforme.
+    const normales = tareas.filter(t => !esDiagnostico(t) && !esAuditoria(t));
+    const diag = tareas.filter(esDiagnostico);
+    const audit = tareas.filter(t => !esDiagnostico(t) && esAuditoria(t));
+    const totalNormales = normales.reduce((s, t) => s + t.neta, 0);
+    // Reparto uniforme de las normales entre todos los meses.
+    for (let m = 0; m < nMeses; m++) meses[m] += totalNormales / nMeses;
+    // Diagnóstico íntegro al primer mes; auditoría íntegra al último.
+    meses[0] += diag.reduce((s, t) => s + t.neta, 0);
+    meses[ultimo] += audit.reduce((s, t) => s + t.neta, 0);
+    // Coordinación: 0,5 h × sistema en cada mes (ya es por-mes por definición).
+    const coordMes = 0.5 * sel.length;
+    return meses.map((horasTareas, i) => ({
+      mes: i + 1,
+      tareas: horasTareas,
+      coordinacion: coordMes,
+      total: horasTareas + coordMes,
+      esPrimero: i === 0,
+      esUltimo: i === ultimo,
+    }));
+  }, [tareas, nMeses, sel.length]);
+
   // Agrupado por sistema para mostrar el desglose por norma de forma independiente.
   const porSistema = useMemo(() => {
     const map = new Map();
@@ -72,7 +107,7 @@ export default function PlanificadorTareas() {
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Tareas y horas del proyecto</h1>
         <p className="mt-3 text-navy-400 font-medium">
           Elige los sistemas, el modelo de relación y la duración. El planificador devuelve las tareas
-          con sus horas totales (una sola ejecución por tarea, sin prorrateo) más la coordinación.
+          con sus horas totales y las reparte por meses (diagnóstico al inicio, auditoría al final).
         </p>
       </div>
 
@@ -138,7 +173,7 @@ export default function PlanificadorTareas() {
                 <label className="label" htmlFor="meses">Duración del proyecto (meses)</label>
                 <input id="meses" type="number" min="1" className="input" value={meses}
                   onChange={e => setMeses(e.target.value)} />
-                <p className="mt-1 text-xs font-medium text-navy-400">Solo afecta a la coordinación (0,5 h × sistema × mes). Las tareas son horas totales, no se multiplican por meses.</p>
+                <p className="mt-1 text-xs font-medium text-navy-400">Las horas totales se reparten entre los meses por fases. La coordinación añade 0,5 h × sistema en cada mes.</p>
               </div>
               <div className="mt-6 flex gap-3">
                 <button onClick={() => setPaso(0)} className="btn-ghost">← Sistemas</button>
@@ -191,6 +226,49 @@ export default function PlanificadorTareas() {
                   );
                 })
               )}
+              {/* Desglose mes a mes (reparto por fases) */}
+              {tareas.length > 0 && (
+                <div className="card">
+                  <h3 className="mb-1 text-base font-extrabold">Reparto por meses</h3>
+                  <p className="mb-3 text-xs font-medium text-navy-400">
+                    Diagnóstico en el Mes 1, auditoría/certificación en el último mes, el resto repartido. La suma de los meses es el total del proyecto.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[420px] text-sm">
+                      <thead>
+                        <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
+                          <th className="py-2">Mes</th>
+                          <th className="py-2 text-right">Tareas</th>
+                          <th className="py-2 text-right">Coordinación</th>
+                          <th className="py-2 text-right">Total mes</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-navy-50">
+                        {repartoMensual.map(m => (
+                          <tr key={m.mes}>
+                            <td className="py-2 font-bold">
+                              Mes {m.mes}
+                              {m.esPrimero && <span className="ml-2 chip bg-navy-50 text-navy-500">diagnóstico</span>}
+                              {m.esUltimo && <span className="ml-2 chip bg-navy-50 text-navy-500">auditoría</span>}
+                            </td>
+                            <td className="py-2 text-right text-navy-500">{fmtH(m.tareas)}</td>
+                            <td className="py-2 text-right text-navy-400">{fmtH(m.coordinacion)}</td>
+                            <td className="py-2 text-right font-extrabold">{fmtH(m.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-navy-100">
+                          <td className="py-2 font-extrabold">Total</td>
+                          <td className="py-2 text-right font-bold">{fmtH(totalTareas)}</td>
+                          <td className="py-2 text-right font-bold">{fmtH(coordinacion)}</td>
+                          <td className="py-2 text-right font-extrabold text-brand-orangeDark">{fmtH(totalProyecto)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-3">
                 <button onClick={() => setPaso(1)} className="btn-ghost">← Modelo</button>
               </div>
@@ -210,7 +288,7 @@ export default function PlanificadorTareas() {
               <p>Coordinación: {fmtH(coordinacion)} ({meses || 1} mes{(meses || 1) > 1 ? 'es' : ''})</p>
             </div>
             <div className="mt-5 border-t border-white/15 pt-4 text-xs font-medium leading-relaxed text-white/50">
-              Horas totales (acto único por tarea, sin prorrateo). La reducción por integración se aplica por tarea desde el catálogo. Coordinación = 0,5 h × sistema × mes.
+              Horas base del proyecto, repartidas por fases entre los meses. La reducción por integración se aplica por tarea. Coordinación = 0,5 h × sistema × mes.
             </div>
           </div>
         </aside>
