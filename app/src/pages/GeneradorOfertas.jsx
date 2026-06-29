@@ -9,7 +9,7 @@ export default function GeneradorOfertas() {
   const { user } = useAuth();
   const [sel, setSel] = useState(['9001']);          // 9001 base obligatoria
   const [modelo, setModelo] = useState('Implicación');
-  const [cli, setCli] = useState({ empresa: '', cif: '', contacto: '', cargo: '' });
+  const [cli, setCli] = useState({ nombre: '', apellidos: '', empresa: '', cif: '', cargo: '', email: '', telefono: '' });
   const [estado, setEstado] = useState(null);        // null | 'gen' | {ok,url_pdf,url_pptx,numero}
   const [error, setError] = useState(null);
 
@@ -22,26 +22,44 @@ export default function GeneradorOfertas() {
   const esImpl = res?.modelo === 'Implantación';
   const esMes = res?.tipo === 'mes' && !esImpl;
 
-  async function generar(formato) {
+  async function generar() {
     if (!res || !cli.empresa.trim()) { setError('Indica al menos la empresa.'); return; }
     setError(null); setEstado('gen');
     try {
       const numero = await siguienteNumeroOferta();
-      // Guardar la oferta como presupuesto interno (queda en el histórico de Ofertas)
+      const comercial = 'Alejandro';
+      const contactoCompleto = `${cli.nombre} ${cli.apellidos}`.trim();
       const precioLead = res.fraccionado ? res.fraccionado.totalSinIva : res.precioCatalogo;
       const tipoLead = res.fraccionado ? 'fraccionado' : res.tipo;
+      // Resumen legible del requerimiento para el comercial (CRM)
+      const nombresNormas = sel.map((id) => NORMAS.find((n) => n.id === id)?.nombre || id).join(' + ');
+      const sufijo = tipoLead === 'mes' ? ' €/mes' : (tipoLead === 'fraccionado' ? ' € (proyecto)' : ' € (único)');
+      const requerimiento = `${nombresNormas} · Modelo ${modelo} · ${precioLead}${sufijo}`;
+      // 1) Guardar la oferta como presupuesto interno (histórico de Ofertas + CRM)
       const fila = await insertRow('presupuestos', {
-        empresa: cli.empresa, nombre: cli.contacto, cif: cli.cif, cargo: cli.cargo,
-        normas: sel, modelo, precio: precioLead, tipo: tipoLead,
-        numero_oferta: numero, comercial: 'Alejandro',
+        empresa: cli.empresa, nombre: contactoCompleto, email: cli.email, telefono: cli.telefono,
+        cif: cli.cif, cargo: cli.cargo, normas: sel, modelo, precio: precioLead, tipo: tipoLead,
+        numero_oferta: numero, comercial, requerimiento,
         ...(user?.id && user.id !== 'demo' ? { user_id: user.id } : {}),
       });
+      // 2) Enviar el lead a Brevo (igual que la Calculadora). No bloquea la generación.
+      if (cli.email) {
+        fetch('/.netlify/functions/brevo-lead', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre: contactoCompleto, empresa: cli.empresa, email: cli.email, telefono: cli.telefono,
+            cif: cli.cif, cargo: cli.cargo, numero_oferta: numero, comercial,
+            normas: sel, modelo, precio: precioLead, tipo: tipoLead, consent: true,
+          }),
+        }).catch(() => {});
+      }
+      // 3) Generar el documento (PDF + PPTX) y guardar las URLs
       const r = await fetch('/.netlify/functions/generar-oferta', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          normas: sel, modelo, empresa: cli.empresa, contacto: cli.contacto,
-          cif: cli.cif, cargo: cli.cargo, ref: numero, comercial: 'Alejandro',
-          presupuesto_id: fila?.id,
+          normas: sel, modelo, empresa: cli.empresa, contacto: contactoCompleto,
+          cif: cli.cif, cargo: cli.cargo, ref: numero, comercial,
+          email: cli.email, presupuesto_id: fila?.id,
         }),
       });
       const j = await r.json();
@@ -110,9 +128,12 @@ export default function GeneradorOfertas() {
             <h2 className="mb-4 text-xs font-extrabold uppercase tracking-wider text-brand-orangeDark">3 · Datos del cliente (para la oferta)</h2>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2"><label className="label">Empresa / Cliente</label><input className="input" placeholder="Residencia Los Olivos S.L." value={cli.empresa} onChange={e => setCli({ ...cli, empresa: e.target.value })} /></div>
+              <div><label className="label">Nombre</label><input className="input" placeholder="Ana" value={cli.nombre} onChange={e => setCli({ ...cli, nombre: e.target.value })} /></div>
+              <div><label className="label">Apellidos</label><input className="input" placeholder="García López" value={cli.apellidos} onChange={e => setCli({ ...cli, apellidos: e.target.value })} /></div>
               <div><label className="label">CIF</label><input className="input" placeholder="B-00000000" value={cli.cif} onChange={e => setCli({ ...cli, cif: e.target.value })} /></div>
               <div><label className="label">Cargo</label><input className="input" placeholder="Director de Calidad" value={cli.cargo} onChange={e => setCli({ ...cli, cargo: e.target.value })} /></div>
-              <div className="sm:col-span-2"><label className="label">Contacto</label><input className="input" placeholder="Nombre y apellidos" value={cli.contacto} onChange={e => setCli({ ...cli, contacto: e.target.value })} /></div>
+              <div><label className="label">Email</label><input className="input" type="email" placeholder="ana@empresa.es" value={cli.email} onChange={e => setCli({ ...cli, email: e.target.value })} /></div>
+              <div><label className="label">Teléfono</label><input className="input" placeholder="600 000 000" value={cli.telefono} onChange={e => setCli({ ...cli, telefono: e.target.value })} /></div>
             </div>
           </section>
         </div>
