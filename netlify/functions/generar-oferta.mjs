@@ -95,7 +95,7 @@ async function generarPDF(r, cli) {
   text(`Referencia: ${cli.ref || '—'}        Fecha: ${HOY()}`, 50, 10, reg, MUTED); y -= 24;
   text('Cliente:', 50, 12, bold, NAVY); text(cli.empresa || '—', 110, 12, reg, NAVY); y -= 18;
   text('CIF:', 50, 11, bold, NAVY); text(cli.cif || '—', 110, 11, reg, NAVY);
-  text('Contacto:', 260, 11, bold, NAVY); text(cli.contacto || '—', 330, 11, reg, NAVY); y -= 36;
+  text('Contacto:', 260, 11, bold, NAVY); text(`${cli.contacto || '—'}${cli.cargo ? ' · ' + cli.cargo : ''}`, 330, 11, reg, NAVY); y -= 36;
 
   text('Alcance de la propuesta', 50, 15, bold, NAVY); y -= 22;
   text('Normas a implantar:', 50, 11, bold, NAVY); text(normNames, 180, 11, reg, NAVY); y -= 18;
@@ -135,6 +135,7 @@ async function generarPDF(r, cli) {
 
   // Pie
   page.drawLine({ start: { x: 50, y: 70 }, end: { x: W - 50, y: 70 }, thickness: 0.5, color: rgb(0.89, 0.91, 0.95) });
+  page.drawText(`Comercial asignado: ${cli.comercial || 'Alejandro'}`, { x: 50, y: 82, size: 9, font: bold, color: NAVY });
   page.drawText('Instituto de Excelencia Europea S.L. · CIF B87093076 · Madrid', { x: 50, y: 56, size: 8, font: reg, color: MUTED });
   page.drawText('Hecho con amor en Madrid por TuConsultor · Desde 2006 gestionando con el corazón.', { x: 50, y: 44, size: 8, font: reg, color: rgb(0.53, 0.59, 0.68) });
 
@@ -153,7 +154,7 @@ async function generarPPTX(r, cli) {
   s.addText('Oferta de servicios de consultoría', { x: 0.6, y: 1.35, w: 9, h: 0.4, fontFace: 'Arial', fontSize: 16, color: MUTED });
   s.addText([{ text: cli.empresa || '—', options: { fontSize: 26, bold: true, color: INK, breakLine: true } },
     { text: `${normNames}  ·  Modelo ${r.modelo}`, options: { fontSize: 15, color: NAVY } }], { x: 0.6, y: 2.5, w: 9, h: 1.2, fontFace: 'Arial' });
-  s.addText(`Referencia ${cli.ref || '—'}   ·   ${HOY()}`, { x: 0.6, y: 4.8, w: 9, h: 0.4, fontFace: 'Arial', fontSize: 12, color: MUTED });
+  s.addText(`Referencia ${cli.ref || '—'}   ·   ${HOY()}   ·   Comercial: ${cli.comercial || 'Alejandro'}`, { x: 0.6, y: 4.8, w: 9, h: 0.4, fontFace: 'Arial', fontSize: 12, color: MUTED });
 
   s = p.addSlide(); s.background = { color: 'FFFFFF' };
   s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: NAVY } });
@@ -197,11 +198,11 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
 
-  const { normas = [], modelo = '', empresa = '', cif = '', contacto = '', ref = '', presupuesto_id } = body;
+  const { normas = [], modelo = '', empresa = '', cif = '', contacto = '', cargo = '', ref = '', comercial = 'Alejandro', presupuesto_id } = body;
   const r = calcular(normas, modelo);
   if (!r) return Response.json({ ok: false, error: 'Normas o modelo no válidos' }, { status: 400 });
 
-  const cli = { empresa, cif, contacto, ref };
+  const cli = { empresa, cif, contacto, cargo, ref, comercial };
   const slug = (ref || empresa || 'oferta').toString().replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'oferta';
   const stamp = Date.now();
   const carpeta = `${new Date().toISOString().slice(0, 7)}`; // YYYY-MM

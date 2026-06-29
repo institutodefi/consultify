@@ -26,13 +26,17 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
 
-  const { email, nombre = '', empresa = '', telefono = '', normas = [], modelo = '', precio = 0, tipo = 'mes', consent } = body;
+  const { email, nombre = '', empresa = '', telefono = '', cif = '', cargo = '', numero_oferta = '', comercial = 'Alejandro', normas = [], modelo = '', precio = 0, tipo = 'mes', consent } = body;
   if (!email || !consent) return Response.json({ ok: false, error: 'Email y consentimiento RGPD obligatorios' }, { status: 400 });
 
   const attributes = {
     NOMBRE: nombre,
     EMPRESA: empresa,
     SMS: telefono || undefined,
+    CIF: cif || undefined,
+    CARGO: cargo || undefined,
+    NUMERO_OFERTA: numero_oferta || undefined,
+    COMERCIAL: comercial || 'Alejandro',
     MODELO: modelo,
     PRECIO_CALCULADO: precio,
     TIPO_PRECIO: tipo === 'mes' ? 'MENSUAL' : (tipo === 'fraccionado' ? 'FRACCIONADO' : 'UNICO'),

@@ -12,7 +12,7 @@ export default function Calculadora() {
   const [sel, setSel] = useState(['9001']);
   const [modelo, setModelo] = useState('Implicación');
   const [comparar, setComparar] = useState(false);
-  const [lead, setLead] = useState({ nombre: '', empresa: '', email: user?.email || '', telefono: '', consent: false });
+  const [lead, setLead] = useState({ nombre: '', apellidos: '', empresa: '', cif: '', cargo: '', email: user?.email || '', telefono: '', consent: false });
   const [leadState, setLeadState] = useState('idle'); // idle | sending | ok | error
 
   const res = useMemo(() => sel.length ? calcular(sel, modelo) : null, [sel, modelo]);
@@ -31,13 +31,20 @@ export default function Calculadora() {
       // Para Implantación el "precio" relevante es el total fraccionado (sin IVA).
       const precioLead = res.fraccionado ? res.fraccionado.totalSinIva : res.precioCatalogo;
       const tipoLead = res.fraccionado ? 'fraccionado' : res.tipo;
+      // Número de oferta automático: OFE-AAAA-XXXXXX (correlativo por tiempo, único)
+      const anio = new Date().getFullYear();
+      const seq = Date.now().toString(36).slice(-6).toUpperCase();
+      const numeroOferta = `OFE-${anio}-${seq}`;
+      const comercial = 'Alejandro'; // Comercial 1 por defecto
+      const contactoCompleto = `${lead.nombre} ${lead.apellidos}`.trim();
       // Resumen legible del requerimiento para el comercial (CRM)
       const nombresNormas = sel.map((id) => NORMAS.find((n) => n.id === id)?.nombre || id).join(' + ');
       const sufijo = tipoLead === 'mes' ? ' €/mes' : (tipoLead === 'fraccionado' ? ' € (proyecto)' : ' € (único)');
       const requerimiento = `${nombresNormas} · Modelo ${modelo} · ${precioLead}${sufijo}`;
       // 1) Guardar presupuesto en Supabase (o demo)
       const filaPresupuesto = await insertRow('presupuestos', {
-        email: lead.email, nombre: lead.nombre, empresa: lead.empresa, telefono: lead.telefono,
+        email: lead.email, nombre: contactoCompleto, empresa: lead.empresa, telefono: lead.telefono,
+        cif: lead.cif, cargo: lead.cargo, numero_oferta: numeroOferta, comercial,
         normas: sel, modelo, precio: precioLead, tipo: tipoLead, requerimiento,
         ...(user?.id && user.id !== 'demo' ? { user_id: user.id } : {}),
       });
@@ -45,7 +52,10 @@ export default function Calculadora() {
       const r = await fetch('/.netlify/functions/brevo-lead', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...lead, normas: sel, modelo, precio: precioLead, tipo: tipoLead }),
+        body: JSON.stringify({
+          ...lead, nombre: contactoCompleto, normas: sel, modelo, precio: precioLead, tipo: tipoLead,
+          numero_oferta: numeroOferta, comercial,
+        }),
       });
       if (!r.ok && r.status !== 404) throw new Error('brevo');
       // 3) Generar automáticamente la oferta (PDF + PPTX) y guardar las URLs.
@@ -55,8 +65,8 @@ export default function Calculadora() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           normas: sel, modelo,
-          empresa: lead.empresa, contacto: lead.nombre,
-          ref: filaPresupuesto?.id ? `OFE-${String(filaPresupuesto.id).slice(0, 8)}` : '',
+          empresa: lead.empresa, contacto: contactoCompleto, cif: lead.cif, cargo: lead.cargo,
+          ref: numeroOferta, comercial,
           presupuesto_id: filaPresupuesto?.id,
         }),
       }).catch(() => {});
@@ -217,9 +227,12 @@ export default function Calculadora() {
                     <h3 className="text-lg font-extrabold">Quiero esta propuesta — llamadme</h3>
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <div><label className="label" htmlFor="l-nombre">Nombre</label><input id="l-nombre" required className="input" value={lead.nombre} onChange={e => setLead({ ...lead, nombre: e.target.value })} /></div>
+                      <div><label className="label" htmlFor="l-apellidos">Apellidos</label><input id="l-apellidos" required className="input" value={lead.apellidos} onChange={e => setLead({ ...lead, apellidos: e.target.value })} /></div>
                       <div><label className="label" htmlFor="l-empresa">Empresa</label><input id="l-empresa" required className="input" value={lead.empresa} onChange={e => setLead({ ...lead, empresa: e.target.value })} /></div>
+                      <div><label className="label" htmlFor="l-cif">CIF</label><input id="l-cif" className="input" placeholder="B-00000000" value={lead.cif} onChange={e => setLead({ ...lead, cif: e.target.value })} /></div>
+                      <div><label className="label" htmlFor="l-cargo">Cargo</label><input id="l-cargo" className="input" placeholder="p. ej. Director de Calidad" value={lead.cargo} onChange={e => setLead({ ...lead, cargo: e.target.value })} /></div>
                       <div><label className="label" htmlFor="l-email">Email</label><input id="l-email" type="email" required className="input" value={lead.email} onChange={e => setLead({ ...lead, email: e.target.value })} /></div>
-                      <div><label className="label" htmlFor="l-tel">Teléfono</label><input id="l-tel" className="input" value={lead.telefono} onChange={e => setLead({ ...lead, telefono: e.target.value })} /></div>
+                      <div className="sm:col-span-2"><label className="label" htmlFor="l-tel">Teléfono</label><input id="l-tel" className="input" value={lead.telefono} onChange={e => setLead({ ...lead, telefono: e.target.value })} /></div>
                     </div>
                     <label className="mt-4 flex items-start gap-2 text-xs font-medium text-navy-400">
                       <input type="checkbox" checked={lead.consent} onChange={e => setLead({ ...lead, consent: e.target.checked })} className="mt-0.5" />
@@ -247,17 +260,23 @@ export default function Calculadora() {
               <>
                 {res.fraccionado ? (
                   <>
-                    <p className="mt-3 text-4xl font-extrabold tracking-tight">{fmtEUR(res.fraccionado.totalConIva)}<span className="text-base font-bold text-white/60"> total</span></p>
-                    <p className="mt-1 text-sm font-semibold text-white/70">IVA incluido · {res.fraccionado.meses} meses de implantación</p>
+                    <p className="mt-3 text-4xl font-extrabold tracking-tight">{fmtEUR(res.fraccionado.totalSinIva)}<span className="text-base font-bold text-white/60"> sin IVA</span></p>
+                    <p className="mt-1 text-sm font-semibold text-white/70">{fmtEUR(res.fraccionado.totalConIva)} con IVA · {res.fraccionado.meses} meses de implantación</p>
                     <div className="mt-3 space-y-1.5 rounded-2xl bg-white/10 p-3 text-sm font-semibold text-white/90">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-brand-orange/90">Pagos (IVA incluido)</p>
                       <p>50% ahora: <strong>{fmtEUR(res.fraccionado.cuota1)}</strong></p>
                       <p>50% antes de auditoría: <strong>{fmtEUR(res.fraccionado.cuota2)}</strong></p>
                     </div>
                   </>
                 ) : (
                   <>
-                    <p className="mt-3 text-4xl font-extrabold tracking-tight">{fmtEUR(res.precioCatalogo)}<span className="text-base font-bold text-white/60">{res.tipo === 'mes' ? ' /mes' : ' pago único'}</span></p>
-                    <p className="mt-1 text-sm font-semibold text-white/70">{fmtEUR(res.totalConIva)} con IVA</p>
+                    <p className="mt-3 text-4xl font-extrabold tracking-tight">{fmtEUR(res.precioCatalogo)}<span className="text-base font-bold text-white/60">{res.tipo === 'mes' ? ' /mes sin IVA' : ' sin IVA'}</span></p>
+                    <p className="mt-1 text-sm font-semibold text-white/70">{fmtEUR(res.totalConIva)} con IVA{res.tipo === 'mes' ? '/mes' : ''}</p>
+                    <div className="mt-3 space-y-1 rounded-2xl bg-white/10 p-3 text-sm font-semibold text-white/90">
+                      <p className="flex justify-between"><span className="text-white/70">Base sin IVA</span><strong>{fmtEUR(res.precioCatalogo)}</strong></p>
+                      <p className="flex justify-between"><span className="text-white/70">IVA 21 %</span><strong>{fmtEUR(res.iva)}</strong></p>
+                      <p className="flex justify-between border-t border-white/15 pt-1"><span className="text-white/70">{res.tipo === 'mes' ? 'Pago mensual' : 'Pago único'} (IVA incl.)</span><strong>{fmtEUR(res.totalConIva)}</strong></p>
+                    </div>
                   </>
                 )}
                 <div className="mt-4 space-y-1.5 text-sm font-medium text-white/80">
@@ -270,6 +289,7 @@ export default function Calculadora() {
             )}
             <div className="mt-5 border-t border-white/15 pt-4 text-xs font-medium leading-relaxed text-white/50">
               Precio de catálogo. Suelo de 350 €/mes en modelos recurrentes. Apoyo no contratable a &lt;60 días de auditoría externa.
+              <span className="mt-2 block font-semibold text-white/65">Canarias: IGIC no aplica (0% / exento). El IVA del 21 % se sustituye por la base sin impuesto.</span>
             </div>
           </div>
         </aside>
