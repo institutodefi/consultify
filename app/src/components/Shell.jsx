@@ -57,6 +57,12 @@ export default function Shell({ children }) {
         <img src="/logo_white.png" alt="" className="mx-auto mb-3 h-7 w-auto opacity-90" />
         <p>Consultify · Instituto de Excelencia Europea S.L. · CIF B87093076 · Madrid</p>
         <p className="mt-1">Precios sin IVA salvo indicación · <a href="/" className="transition hover:text-brand-orange">consultify.pro</a></p>
+        <p className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-[11px]">
+          <a href="/legal/aviso-legal.html" className="transition hover:text-brand-orange">Aviso legal</a>
+          <a href="/legal/privacidad.html" className="transition hover:text-brand-orange">Privacidad</a>
+          <a href="/legal/cookies.html" className="transition hover:text-brand-orange">Cookies</a>
+          <a href="#" className="abrir-cookies transition hover:text-brand-orange">Configurar cookies</a>
+        </p>
         <p className="mt-3 text-[11px] font-semibold italic text-brand-orange/90">Hecho con amor en Madrid por TuConsultor · Desde 2006 gestionando con el corazón</p>
       </footer>
     </div>

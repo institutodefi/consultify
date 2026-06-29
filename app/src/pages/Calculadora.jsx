@@ -234,7 +234,7 @@ export default function Calculadora() {
                     </div>
                     <label className="mt-4 flex items-start gap-2 text-xs font-medium text-navy-400">
                       <input type="checkbox" checked={lead.consent} onChange={e => setLead({ ...lead, consent: e.target.checked })} className="mt-0.5" />
-                      <span>Acepto que Instituto de Excelencia Europea S.L. trate mis datos para contactarme sobre esta propuesta (RGPD). Puedo retirar el consentimiento en cualquier momento.</span>
+                      <span>Acepto que los responsables de TuConsultor traten mis datos para contactarme sobre esta propuesta. He leído la <a href="/legal/privacidad.html" target="_blank" rel="noreferrer" className="font-semibold text-brand-orangeDark underline">política de privacidad</a> (RGPD). Puedo retirar el consentimiento en cualquier momento.</span>
                     </label>
                     {leadState === 'error' && <p className="mt-2 text-sm font-bold text-red-600">No se pudo enviar. Revisa la conexión e inténtalo de nuevo.</p>}
                     <div className="mt-5 flex gap-3">

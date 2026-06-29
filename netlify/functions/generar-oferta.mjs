@@ -37,15 +37,16 @@ const MODELOS = {
 };
 const eur = (v) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(v) + ' €';
 
-function calcular(normaIds, modeloId) {
+function calcular(normaIds, modeloId, opts = {}) {
   const m = MODELOS[modeloId];
   if (!m || !normaIds?.length) return null;
   const normas = normaIds.map((id) => NORMA_BY_ID[id]).filter(Boolean);
   if (!normas.length) return null;
+  const f9001 = opts.tiene9001 ? 0.5 : 1;
   const raw = { J2: 0, J3: 0, Senior: 0 };
-  if (m.tipo === 'bolsa') { for (const n of normas) raw[n.nivel] += n.hApoyo; }
+  if (m.tipo === 'bolsa') { for (const n of normas) raw[n.nivel] += n.hApoyo * (n.id === '9001' ? f9001 : 1); }
   else {
-    for (const n of normas) raw[n.nivel] += m.hSist * (n.solape9001 ?? 1);
+    for (const n of normas) raw[n.nivel] += m.hSist * (n.solape9001 ?? 1) * (n.id === '9001' ? f9001 : 1);
     if (m.hPres > 0) { const lider = normas.some((n) => n.nivel === 'J3') ? 'J3' : 'J2'; raw[lider] += m.hPres; }
   }
   const coord = (raw.J2 + raw.J3) * 0.10;
@@ -60,12 +61,15 @@ function calcular(normaIds, modeloId) {
   const totalConIva = Math.round((precioCatalogo + iva) * 100) / 100;
   let fraccionado = null;
   if (modeloId === 'Implantación') {
-    const totalSinIva = precioCatalogo * MESES_IMPL;
+    const meses = Math.max(parseInt(opts.meses, 10) || MESES_IMPL, 1);
+    const totalSinIva = precioCatalogo * meses;
     const totalConIvaFrac = Math.round(totalSinIva * (1 + IVA) * 100) / 100;
-    const mitad = Math.round((totalConIvaFrac / 2) * 100) / 100;
-    fraccionado = { meses: MESES_IMPL, totalSinIva, totalConIva: totalConIvaFrac, cuota1: mitad, cuota2: Math.round((totalConIvaFrac - mitad) * 100) / 100 };
+    const r2 = (x) => Math.round(x * 100) / 100;
+    const cuota1 = r2(totalConIvaFrac * 0.50), cuota2 = r2(totalConIvaFrac * 0.25);
+    const cuota3 = r2(totalConIvaFrac - cuota1 - cuota2);
+    fraccionado = { meses, totalSinIva, totalConIva: totalConIvaFrac, cuota1, cuota2, cuota3, plan: '50 % por adelantado · 25 % a mitad de proyecto · 25 % al finalizar' };
   }
-  return { modelo: modeloId, tipo: m.tipo, normas: normas.map((n) => n.id), nSistemas: normas.length, horas: h, hTotal, coste, precioExacto, precioCatalogo, iva, totalConIva, fraccionado, leyenda: m.leyenda };
+  return { modelo: modeloId, tipo: m.tipo, normas: normas.map((n) => n.id), nSistemas: normas.length, tiene9001: !!opts.tiene9001, horas: h, hTotal, coste, precioExacto, precioCatalogo, iva, totalConIva, fraccionado, leyenda: m.leyenda };
 }
 
 // ======================= GENERADORES =======================
@@ -100,6 +104,7 @@ async function generarPDF(r, cli) {
   text('Alcance de la propuesta', 50, 15, bold, NAVY); y -= 22;
   text('Normas a implantar:', 50, 11, bold, NAVY); text(normNames, 180, 11, reg, NAVY); y -= 18;
   text('Modelo de servicio:', 50, 11, bold, NAVY); text(r.modelo, 180, 11, reg, NAVY); y -= 18;
+  if (r.tiene9001) { text('Descuento ISO 9001:', 50, 11, bold, NAVY); text('Cliente ya certificado · −50% en horas de ISO 9001', 180, 11, reg, NAVY); y -= 18; }
   text(`Dedicación: ${r.hTotal} h/mes · ${r.nSistemas} sistema(s)`, 50, 10, reg, MUTED); y -= 34;
 
   text('Condiciones económicas', 50, 15, bold, NAVY); y -= 24;
@@ -117,7 +122,8 @@ async function generarPDF(r, cli) {
     linea('IVA (21%)', eur(r.fraccionado.totalConIva - r.fraccionado.totalSinIva));
     linea('Total con IVA', eur(r.fraccionado.totalConIva), true);
     linea('1er pago (50% por adelantado)', eur(r.fraccionado.cuota1));
-    linea('2º pago (50% antes de auditoría)', eur(r.fraccionado.cuota2));
+    linea('2º pago (25% a mitad de proyecto)', eur(r.fraccionado.cuota2));
+    linea('3er pago (25% al finalizar)', eur(r.fraccionado.cuota3));
   } else {
     linea(esMes ? 'Cuota mensual (base)' : 'Bolsa de horas (base)', eur(r.precioCatalogo) + (esMes ? '/mes' : ''));
     linea('IVA (21%)', eur(r.iva));
@@ -243,8 +249,8 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
 
-  const { normas = [], modelo = '', empresa = '', cif = '', contacto = '', cargo = '', ref = '', comercial = 'Alejandro', presupuesto_id, email = '' } = body;
-  const r = calcular(normas, modelo);
+  const { normas = [], modelo = '', empresa = '', cif = '', contacto = '', cargo = '', ref = '', comercial = 'Alejandro', presupuesto_id, email = '', meses, tiene9001 = false } = body;
+  const r = calcular(normas, modelo, { meses, tiene9001 });
   if (!r) return Response.json({ ok: false, error: 'Normas o modelo no válidos' }, { status: 400 });
 
   // Número de oferta correlativo (OFE-AAAA-NNN): si no viene dado, lo pedimos

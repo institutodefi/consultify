@@ -26,7 +26,7 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
 
-  const { email, nombre = '', empresa = '', telefono = '', cif = '', cargo = '', numero_oferta = '', comercial = 'Alejandro', normas = [], modelo = '', precio = 0, tipo = 'mes', consent } = body;
+  const { email, nombre = '', empresa = '', telefono = '', cif = '', cargo = '', numero_oferta = '', comercial = 'Alejandro', normas = [], modelo = '', precio = 0, tipo = 'mes', meses, tiene9001 = false, consent } = body;
   if (!email || !consent) return Response.json({ ok: false, error: 'Email y consentimiento RGPD obligatorios' }, { status: 400 });
 
   const attributes = {
@@ -40,6 +40,10 @@ export default async (req) => {
     MODELO: modelo,
     PRECIO_CALCULADO: precio,
     TIPO_PRECIO: tipo === 'mes' ? 'MENSUAL' : (tipo === 'fraccionado' ? 'FRACCIONADO' : 'UNICO'),
+    MESES: meses != null && meses !== '' ? Number(meses) : undefined,
+    YA_TIENE_9001: !!tiene9001,
+    CONSENT_RGPD: !!consent,
+    FECHA_CONSENT: new Date().toISOString().slice(0, 10),
     FECHA_SIMULACION: new Date().toISOString().slice(0, 10),
   };
   for (const [id, attr] of Object.entries(NORMA_ATTR)) attributes[attr] = normas.includes(id);

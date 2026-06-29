@@ -108,18 +108,28 @@ export function mesesPorModelo(modelo, nSistemas = 1) {
  *  - Precio catálogo = redondeo hacia arriba al paso (25 € recurrentes,
  *    100 € Apoyo) con suelo de 350 €/mes en recurrentes.
  */
-export function calcular(normaIds, modeloId) {
+export function calcular(normaIds, modeloId, opts = {}) {
   const m = MODELOS[modeloId];
   if (!m || !normaIds?.length) return null;
   const normas = normaIds.map(id => NORMA_BY_ID[id]).filter(Boolean);
   if (!normas.length) return null;
 
+  // Factor de descuento sobre la 9001 si el cliente ya la tiene certificada (−50% en horas).
+  const tiene9001 = !!opts.tiene9001;
+  const f9001 = tiene9001 ? 0.5 : 1;
+
+  // Meses del proyecto: los indicados o el mínimo del modelo.
+  const minMeses = mesesPorModelo(modeloId, normas.length);
+  const mesesProyecto = Math.max(parseInt(opts.meses, 10) || minMeses, 1);
+  // Validación de plazo mínimo (no bloquea el cálculo; el front decide si genera).
+  const plazoOk = mesesProyecto >= minMeses;
+
   const raw = { J2: 0, J3: 0, Senior: 0 };
 
   if (m.tipo === 'bolsa') {
-    for (const n of normas) raw[n.nivel] += n.hApoyo;
+    for (const n of normas) raw[n.nivel] += n.hApoyo * (n.id === '9001' ? f9001 : 1);
   } else {
-    for (const n of normas) raw[n.nivel] += m.hSist * (n.solape9001 ?? 1);
+    for (const n of normas) raw[n.nivel] += m.hSist * (n.solape9001 ?? 1) * (n.id === '9001' ? f9001 : 1);
     if (m.hPres > 0) {
       const lider = normas.some(n => n.nivel === 'J3') ? 'J3' : 'J2';
       raw[lider] += m.hPres; // por cliente, no por sistema
@@ -145,21 +155,23 @@ export function calcular(normaIds, modeloId) {
   const iva = Math.round(precioCatalogo * IVA * 100) / 100;
   const totalConIva = Math.round((precioCatalogo + iva) * 100) / 100;
 
-  // Implantación: el precio se cobra como pago único fraccionado 50%+50%
-  // (50% por adelantado, 50% antes de la auditoría externa). El importe total
-  // es la cuota mensual × meses de implantación.
+  // Implantación: pago único fraccionado en 3 tramos:
+  // 50% por adelantado, 25% a mitad del proyecto, 25% al final.
+  // El importe total es la cuota mensual × meses de implantación.
   let fraccionado = null;
   if (modeloId === 'Implantación') {
-    const meses = MESES_MODELO.Implantación || 6;
-    const totalSinIva = precioCatalogo * meses;
+    const totalSinIva = precioCatalogo * mesesProyecto;
     const totalConIvaFrac = Math.round(totalSinIva * (1 + IVA) * 100) / 100;
-    const mitad = Math.round((totalConIvaFrac / 2) * 100) / 100;
+    const r2 = (x) => Math.round(x * 100) / 100;
+    const cuota1 = r2(totalConIvaFrac * 0.50);   // 50% por adelantado
+    const cuota2 = r2(totalConIvaFrac * 0.25);   // 25% a mitad de proyecto
+    const cuota3 = r2(totalConIvaFrac - cuota1 - cuota2); // 25% al final (ajuste de redondeo)
     fraccionado = {
-      meses,
+      meses: mesesProyecto,
       totalSinIva,
       totalConIva: totalConIvaFrac,
-      cuota1: mitad,                                   // 50% por adelantado
-      cuota2: Math.round((totalConIvaFrac - mitad) * 100) / 100, // 50% antes de auditoría
+      cuota1, cuota2, cuota3,
+      plan: '50 % por adelantado · 25 % a mitad de proyecto · 25 % al finalizar',
     };
   }
 
@@ -169,6 +181,10 @@ export function calcular(normaIds, modeloId) {
     cobro: modeloId === 'Implantación' ? 'fraccionado' : m.tipo,
     normas: normas.map(n => n.id),
     nSistemas: normas.length,
+    meses: mesesProyecto,
+    minMeses,
+    plazoOk,
+    tiene9001,
     horas: h,
     hTotal,
     coste,

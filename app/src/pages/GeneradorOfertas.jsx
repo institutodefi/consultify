@@ -9,7 +9,10 @@ export default function GeneradorOfertas() {
   const { user } = useAuth();
   const [sel, setSel] = useState(['9001']);          // 9001 base obligatoria
   const [modelo, setModelo] = useState('Implicación');
+  const [meses, setMeses] = useState('');            // vacío = usa el mínimo del modelo
+  const [tiene9001, setTiene9001] = useState(false); // "ya tengo la 9001" → −50% horas 9001
   const [cli, setCli] = useState({ nombre: '', apellidos: '', empresa: '', cif: '', cargo: '', email: '', telefono: '' });
+  const [consent, setConsent] = useState(false);
   const [estado, setEstado] = useState(null);        // null | 'gen' | {ok,url_pdf,url_pptx,numero}
   const [error, setError] = useState(null);
 
@@ -18,12 +21,18 @@ export default function GeneradorOfertas() {
     setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
   };
 
-  const res = useMemo(() => calcular(sel, modelo), [sel, modelo]);
+  const res = useMemo(() => calcular(sel, modelo, { meses, tiene9001 }), [sel, modelo, meses, tiene9001]);
   const esImpl = res?.modelo === 'Implantación';
+  const esApoyo = res?.modelo === 'Apoyo';
   const esMes = res?.tipo === 'mes' && !esImpl;
+  const plazoMal = res && !res.plazoOk;
 
   async function generar() {
     if (!res || !cli.empresa.trim()) { setError('Indica al menos la empresa.'); return; }
+    if (!res.plazoOk) {
+      setError(`El modelo ${modelo} requiere un mínimo de ${res.minMeses} meses. Ajusta la duración.`);
+      return;
+    }
     setError(null); setEstado('gen');
     try {
       const numero = await siguienteNumeroOferta();
@@ -43,13 +52,14 @@ export default function GeneradorOfertas() {
         ...(user?.id && user.id !== 'demo' ? { user_id: user.id } : {}),
       });
       // 2) Enviar el lead a Brevo (igual que la Calculadora). No bloquea la generación.
-      if (cli.email) {
+      if (cli.email && consent) {
         fetch('/.netlify/functions/brevo-lead', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             nombre: contactoCompleto, empresa: cli.empresa, email: cli.email, telefono: cli.telefono,
             cif: cli.cif, cargo: cli.cargo, numero_oferta: numero, comercial,
-            normas: sel, modelo, precio: precioLead, tipo: tipoLead, consent: true,
+            normas: sel, modelo, precio: precioLead, tipo: tipoLead,
+            meses: res.meses, tiene9001, consent: true,
           }),
         }).catch(() => {});
       }
@@ -59,6 +69,7 @@ export default function GeneradorOfertas() {
         body: JSON.stringify({
           normas: sel, modelo, empresa: cli.empresa, contacto: contactoCompleto,
           cif: cli.cif, cargo: cli.cargo, ref: numero, comercial,
+          meses: res.meses, tiene9001,
           email: cli.email, presupuesto_id: fila?.id,
         }),
       });
@@ -104,6 +115,13 @@ export default function GeneradorOfertas() {
                 );
               })}
             </div>
+            <label className="mt-3 flex items-start gap-2.5 rounded-xl border-[1.5px] border-navy-100 bg-navy-50/50 p-3 cursor-pointer">
+              <input type="checkbox" checked={tiene9001} onChange={e => setTiene9001(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-orange" />
+              <span className="text-sm">
+                <span className="font-bold">Ya tengo la ISO 9001 certificada</span>
+                <span className="block text-[12px] text-navy-400">Aplica un 50 % de descuento sobre las horas de la ISO 9001 (sistema base ya implantado).</span>
+              </span>
+            </label>
           </section>
 
           {/* 2 · Modelo */}
@@ -121,6 +139,19 @@ export default function GeneradorOfertas() {
                 );
               })}
             </div>
+            <div className="mt-4 max-w-[220px]">
+              <label className="label">Duración del proyecto (meses)</label>
+              <input type="number" min="1" className={`input ${plazoMal ? '!border-red-400' : ''}`}
+                placeholder={res ? `mín. ${res.minMeses}` : ''} value={meses}
+                onChange={e => setMeses(e.target.value)} />
+              {res && (
+                <p className={`mt-1 text-xs font-medium ${plazoMal ? 'text-red-600' : 'text-navy-400'}`}>
+                  {plazoMal
+                    ? `El modelo ${modelo} exige un mínimo de ${res.minMeses} meses.`
+                    : `Mínimo para ${modelo}: ${res.minMeses} meses. En uso: ${res.meses}.`}
+                </p>
+              )}
+            </div>
           </section>
 
           {/* 3 · Datos del cliente */}
@@ -135,6 +166,10 @@ export default function GeneradorOfertas() {
               <div><label className="label">Email</label><input className="input" type="email" placeholder="ana@empresa.es" value={cli.email} onChange={e => setCli({ ...cli, email: e.target.value })} /></div>
               <div><label className="label">Teléfono</label><input className="input" placeholder="600 000 000" value={cli.telefono} onChange={e => setCli({ ...cli, telefono: e.target.value })} /></div>
             </div>
+            <label className="mt-4 flex items-start gap-2.5 text-[13px] text-navy-500 cursor-pointer">
+              <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-orange" />
+              <span>El cliente acepta que los responsables de TuConsultor traten sus datos para gestionar esta oferta y contactarle. Ha sido informado de la <a href="/legal/privacidad.html" target="_blank" rel="noreferrer" className="font-semibold text-brand-orangeDark underline">política de privacidad</a> (RGPD).</span>
+            </label>
           </section>
         </div>
 
@@ -159,13 +194,33 @@ export default function GeneradorOfertas() {
                 )}
                 <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
                   <div className="rounded-xl bg-white/10 p-3"><span className="text-white/60 text-xs">Sistemas</span><b className="block text-lg font-extrabold">{res.nSistemas}</b></div>
-                  <div className="rounded-xl bg-white/10 p-3"><span className="text-white/60 text-xs">Horas{esMes ? '/mes' : ''}</span><b className="block text-lg font-extrabold">{res.hTotal}</b></div>
+                  <div className="rounded-xl bg-white/10 p-3"><span className="text-white/60 text-xs">{esMes ? 'Horas/mes' : 'Horas totales'}</span><b className="block text-lg font-extrabold">{res.hTotal}</b></div>
                 </div>
-                <p className="mt-4 rounded-xl bg-white/10 p-3 text-xs font-medium leading-relaxed text-white/80">{res.leyenda}</p>
+
+                {res.tiene9001 && (
+                  <p className="mt-3 rounded-xl bg-brand-orange/20 p-2.5 text-xs font-bold text-brand-orange">ISO 9001 ya certificada: −50 % en sus horas aplicado.</p>
+                )}
+
+                {/* Plan de pagos según modelo */}
+                <div className="mt-4 rounded-xl bg-white/10 p-3 text-xs leading-relaxed text-white/85">
+                  <p className="font-extrabold text-white/90 mb-1">Forma de pago</p>
+                  {esApoyo && <p>Pago único prepagado al 100 % (bolsa de horas). Acompañamiento a auditoría aparte (600 €/jornada).</p>}
+                  {esImpl && res.fraccionado && (
+                    <>
+                      <p>{res.fraccionado.plan}, sobre el total con IVA ({res.fraccionado.meses} meses):</p>
+                      <div className="mt-1.5 space-y-0.5">
+                        <p>1) Por adelantado · <b>{fmtEUR(res.fraccionado.cuota1)}</b></p>
+                        <p>2) A mitad de proyecto · <b>{fmtEUR(res.fraccionado.cuota2)}</b></p>
+                        <p>3) Al finalizar · <b>{fmtEUR(res.fraccionado.cuota3)}</b></p>
+                      </div>
+                    </>
+                  )}
+                  {esMes && <p>Cuota mensual recurrente. Permanencia mínima 12 meses.</p>}
+                </div>
 
                 <div className="mt-4 flex gap-2">
-                  <button onClick={() => generar('pdf')} disabled={estado === 'gen'} className="flex-1 rounded-xl bg-white py-3 text-sm font-extrabold text-navy-900 transition hover:bg-white/90 disabled:opacity-50">
-                    {estado === 'gen' ? 'Generando…' : 'Generar oferta'}
+                  <button onClick={() => generar('pdf')} disabled={estado === 'gen' || plazoMal} className="flex-1 rounded-xl bg-white py-3 text-sm font-extrabold text-navy-900 transition hover:bg-white/90 disabled:opacity-50">
+                    {estado === 'gen' ? 'Generando…' : plazoMal ? `Mínimo ${res.minMeses} meses` : 'Generar oferta'}
                   </button>
                 </div>
                 {error && <p className="mt-3 rounded-lg bg-red-500/20 p-2 text-xs font-bold text-red-100">{error}</p>}
