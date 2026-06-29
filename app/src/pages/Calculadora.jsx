@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { NORMAS, MODELOS, MODELO_IDS, calcular, compararModelos, fmtEUR, ACOMPANAMIENTO_AUDITORIA_DIA } from '../lib/calcEngine.js';
-import { insertRow } from '../lib/data.js';
+import { insertRow, siguienteNumeroOferta } from '../lib/data.js';
 import { useAuth } from '../lib/auth.jsx';
 
 const PASOS = ['Normas', 'Modelo', 'Tu precio'];
@@ -31,10 +31,8 @@ export default function Calculadora() {
       // Para Implantación el "precio" relevante es el total fraccionado (sin IVA).
       const precioLead = res.fraccionado ? res.fraccionado.totalSinIva : res.precioCatalogo;
       const tipoLead = res.fraccionado ? 'fraccionado' : res.tipo;
-      // Número de oferta automático: OFE-AAAA-XXXXXX (correlativo por tiempo, único)
-      const anio = new Date().getFullYear();
-      const seq = Date.now().toString(36).slice(-6).toUpperCase();
-      const numeroOferta = `OFE-${anio}-${seq}`;
+      // Número de oferta correlativo limpio (OFE-AAAA-NNN), asignado atómicamente en Postgres
+      const numeroOferta = await siguienteNumeroOferta();
       const comercial = 'Alejandro'; // Comercial 1 por defecto
       const contactoCompleto = `${lead.nombre} ${lead.apellidos}`.trim();
       // Resumen legible del requerimiento para el comercial (CRM)

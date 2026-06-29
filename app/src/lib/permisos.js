@@ -23,6 +23,7 @@ export const TABS_PORTAL = [
   { to: 'equipo',        label: 'Equipo',             roles: ['superadmin', 'admin'] },
   { to: 'sistemas',      label: 'Sistemas',           roles: ['superadmin', 'admin'] },
   { to: 'clientes',      label: 'Clientes',           roles: ['superadmin', 'admin', 'gestion'] },
+  { to: 'ofertas',       label: 'Ofertas',            roles: ['superadmin', 'admin', 'gestion'] },
   { to: 'proyectos',     label: 'Proyectos',          roles: ['superadmin', 'admin', 'gestion', 'consultor'] },
 ];
 

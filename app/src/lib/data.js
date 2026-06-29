@@ -34,6 +34,19 @@ export async function insertRow(table, row) {
   return data;
 }
 
+// Correlativo limpio de oferta (OFE-AAAA-NNN) vía secuencia atómica en Postgres.
+// En modo demo o si la RPC falla, devuelve un número de respaldo basado en tiempo.
+export async function siguienteNumeroOferta() {
+  const anio = new Date().getFullYear();
+  const fallback = () => `OFE-${anio}-${Date.now().toString(36).slice(-5).toUpperCase()}`;
+  if (DEMO) return fallback();
+  try {
+    const { data, error } = await supabase.rpc('siguiente_numero_oferta');
+    if (error || !data) return fallback();
+    return data;
+  } catch { return fallback(); }
+}
+
 export async function updateRow(table, id, patch) {
   if (DEMO) { const t = demo()[table]; const i = t.findIndex(r => r.id === id); if (i >= 0) t[i] = { ...t[i], ...patch }; return t[i]; }
   const { data, error } = await supabase.from(table).update(patch).eq('id', id).select().single();
