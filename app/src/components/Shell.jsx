@@ -55,7 +55,7 @@ export default function Shell({ children }) {
       <main className="flex-1">{children}</main>
       <footer className="border-t border-white/10 bg-navy-900 py-8 text-center text-xs text-white/55">
         <img src="/logo_white.png" alt="" className="mx-auto mb-3 h-7 w-auto opacity-90" />
-        <p>Consultify · Instituto de Excelencia Europea S.L. · CIF B87063076 · Madrid</p>
+        <p>Consultify · Instituto de Excelencia Europea S.L. · CIF B87093076 · Madrid</p>
         <p className="mt-1">Precios sin IVA salvo indicación · <a href="/" className="transition hover:text-brand-orange">consultify.pro</a></p>
         <p className="mt-3 text-[11px] font-semibold italic text-brand-orange/90">Hecho con amor en Madrid por TuConsultor · Desde 2006 gestionando con el corazón</p>
       </footer>

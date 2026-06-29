@@ -31,10 +31,14 @@ export default function Calculadora() {
       // Para Implantación el "precio" relevante es el total fraccionado (sin IVA).
       const precioLead = res.fraccionado ? res.fraccionado.totalSinIva : res.precioCatalogo;
       const tipoLead = res.fraccionado ? 'fraccionado' : res.tipo;
+      // Resumen legible del requerimiento para el comercial (CRM)
+      const nombresNormas = sel.map((id) => NORMAS.find((n) => n.id === id)?.nombre || id).join(' + ');
+      const sufijo = tipoLead === 'mes' ? ' €/mes' : (tipoLead === 'fraccionado' ? ' € (proyecto)' : ' € (único)');
+      const requerimiento = `${nombresNormas} · Modelo ${modelo} · ${precioLead}${sufijo}`;
       // 1) Guardar presupuesto en Supabase (o demo)
       await insertRow('presupuestos', {
         email: lead.email, nombre: lead.nombre, empresa: lead.empresa, telefono: lead.telefono,
-        normas: sel, modelo, precio: precioLead, tipo: tipoLead,
+        normas: sel, modelo, precio: precioLead, tipo: tipoLead, requerimiento,
         ...(user?.id && user.id !== 'demo' ? { user_id: user.id } : {}),
       });
       // 2) Enviar a Brevo vía Netlify Function (la API key vive en el servidor)

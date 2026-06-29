@@ -7,7 +7,14 @@
 const NORMA_ATTR = {
   '9001': 'ISO_9001', '14001': 'ISO_14001', '45001': 'ISO_45001', '27001': 'ISO_27001',
   '42001': 'ISO_42001', '56001': 'ISO_56001', '21001': 'ISO_21001', '9004': 'ISO_9004',
-  'une93200': 'UNE_93200',
+  'une93200': 'UNE_93200', 'une158101': 'UNE_158101',
+};
+
+// Nombres legibles para construir el resumen del requerimiento (lo que verá el comercial)
+const NORMA_NOMBRE = {
+  '9001': 'ISO 9001', '14001': 'ISO 14001', '45001': 'ISO 45001', '27001': 'ISO 27001',
+  '42001': 'ISO 42001', '56001': 'ISO 56001', '21001': 'ISO 21001', '9004': 'ISO 9004',
+  'une93200': 'UNE 93200', 'une158101': 'UNE 158101',
 };
 
 export default async (req) => {
@@ -28,10 +35,15 @@ export default async (req) => {
     SMS: telefono || undefined,
     MODELO: modelo,
     PRECIO_CALCULADO: precio,
-    TIPO_PRECIO: tipo === 'mes' ? 'MENSUAL' : 'UNICO',
+    TIPO_PRECIO: tipo === 'mes' ? 'MENSUAL' : (tipo === 'fraccionado' ? 'FRACCIONADO' : 'UNICO'),
     FECHA_SIMULACION: new Date().toISOString().slice(0, 10),
   };
   for (const [id, attr] of Object.entries(NORMA_ATTR)) attributes[attr] = normas.includes(id);
+
+  // Resumen legible del requerimiento exacto, para que el comercial prepare la oferta (PDF/PPT)
+  const nombresNormas = normas.map((id) => NORMA_NOMBRE[id] || id).join(' + ');
+  const sufijoPrecio = tipo === 'mes' ? ' €/mes' : (tipo === 'fraccionado' ? ' € (proyecto)' : ' € (único)');
+  attributes.REQUERIMIENTO = `${nombresNormas || '—'} · Modelo ${modelo} · ${precio}${sufijoPrecio}`;
 
   const payload = {
     email,
