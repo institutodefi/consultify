@@ -44,14 +44,37 @@ function Servicios() {
 function Presupuestos() {
   const { user } = useAuth();
   const [rows, setRows] = useState(null);
+  const [genId, setGenId] = useState(null); // id en generación
   useEffect(() => { misPresupuestos(user).then(setRows).catch(() => setRows([])); }, [user]);
+
+  async function generar(r) {
+    setGenId(r.id);
+    try {
+      const resp = await fetch('/.netlify/functions/generar-oferta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          normas: r.normas, modelo: r.modelo,
+          empresa: r.empresa || '', contacto: r.nombre || '',
+          ref: `OFE-${String(r.id).slice(0, 8)}`,
+          presupuesto_id: r.id,
+        }),
+      });
+      const j = await resp.json();
+      if (j.ok) {
+        setRows(rs => rs.map(x => x.id === r.id ? { ...x, url_pdf: j.url_pdf, url_pptx: j.url_pptx } : x));
+      }
+    } catch { /* sin bloquear */ }
+    setGenId(null);
+  }
+
   if (!rows) return <p className="font-semibold text-navy-400">Cargando…</p>;
   if (!rows.length) return <div className="card text-center"><p className="font-extrabold">No tienes presupuestos guardados</p><a href="/app/calculadora" className="btn-orange mt-4">Calcular uno ahora</a></div>;
   return (
     <div className="card overflow-x-auto">
-      <table className="w-full min-w-[560px] text-sm">
+      <table className="w-full min-w-[680px] text-sm">
         <thead><tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
-          <th className="py-2">Fecha</th><th className="py-2">Normas</th><th className="py-2">Modelo</th><th className="py-2 text-right">Precio</th>
+          <th className="py-2">Fecha</th><th className="py-2">Normas</th><th className="py-2">Modelo</th><th className="py-2 text-right">Precio</th><th className="py-2 text-right">Oferta</th>
         </tr></thead>
         <tbody className="divide-y divide-navy-50">
           {rows.map(r => (
@@ -60,6 +83,18 @@ function Presupuestos() {
               <td className="py-2.5 font-bold">{(r.normas || []).map(id => NORMA_BY_ID[id]?.nombre || id).join(' + ')}</td>
               <td className="py-2.5 font-semibold">{r.modelo}</td>
               <td className="py-2.5 text-right font-extrabold">{fmtEUR(r.precio)}{r.tipo === 'mes' ? '/mes' : ''}</td>
+              <td className="py-2.5 text-right whitespace-nowrap">
+                {(r.url_pdf || r.url_pptx) ? (
+                  <span className="inline-flex gap-2">
+                    {r.url_pdf && <a href={r.url_pdf} target="_blank" rel="noreferrer" className="font-bold text-brand-orangeDark hover:underline">PDF</a>}
+                    {r.url_pptx && <a href={r.url_pptx} target="_blank" rel="noreferrer" className="font-bold text-brand-orangeDark hover:underline">PPT</a>}
+                  </span>
+                ) : (
+                  <button onClick={() => generar(r)} disabled={genId === r.id} className="text-xs font-bold text-navy-700 hover:underline disabled:opacity-50">
+                    {genId === r.id ? 'Generando…' : 'Generar'}
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

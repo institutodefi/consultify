@@ -9,6 +9,12 @@
   to = "/.netlify/functions/agenda-feed"
   status = 200
 
+# Generación automática de oferta (PDF + PPTX)
+[[redirects]]
+  from = "/api/generar-oferta"
+  to = "/.netlify/functions/generar-oferta"
+  status = 200
+
 # SPA: cualquier ruta bajo /app/ sirve la app React
 [[redirects]]
   from = "/app/*"

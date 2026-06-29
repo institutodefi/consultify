@@ -36,7 +36,7 @@ export default function Calculadora() {
       const sufijo = tipoLead === 'mes' ? ' €/mes' : (tipoLead === 'fraccionado' ? ' € (proyecto)' : ' € (único)');
       const requerimiento = `${nombresNormas} · Modelo ${modelo} · ${precioLead}${sufijo}`;
       // 1) Guardar presupuesto en Supabase (o demo)
-      await insertRow('presupuestos', {
+      const filaPresupuesto = await insertRow('presupuestos', {
         email: lead.email, nombre: lead.nombre, empresa: lead.empresa, telefono: lead.telefono,
         normas: sel, modelo, precio: precioLead, tipo: tipoLead, requerimiento,
         ...(user?.id && user.id !== 'demo' ? { user_id: user.id } : {}),
@@ -48,6 +48,18 @@ export default function Calculadora() {
         body: JSON.stringify({ ...lead, normas: sel, modelo, precio: precioLead, tipo: tipoLead }),
       });
       if (!r.ok && r.status !== 404) throw new Error('brevo');
+      // 3) Generar automáticamente la oferta (PDF + PPTX) y guardar las URLs.
+      //    No bloquea el éxito del lead: si falla, el comercial puede regenerarla a mano.
+      fetch('/.netlify/functions/generar-oferta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          normas: sel, modelo,
+          empresa: lead.empresa, contacto: lead.nombre,
+          ref: filaPresupuesto?.id ? `OFE-${String(filaPresupuesto.id).slice(0, 8)}` : '',
+          presupuesto_id: filaPresupuesto?.id,
+        }),
+      }).catch(() => {});
       setLeadState('ok');
     } catch {
       setLeadState('error');
