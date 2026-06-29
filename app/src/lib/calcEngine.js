@@ -15,6 +15,7 @@ export const NORMAS = [
   { id: '21001',    nombre: 'ISO 21001', desc: 'Organizaciones educativas · complementaria a ISO 9001', nivel: 'J3', hApoyo: 19, solape9001: 0.5 },
   { id: '9004',     nombre: 'ISO 9004',  desc: 'Calidad sostenible · complementaria a ISO 9001', nivel: 'J3', hApoyo: 11, solape9001: 0.5 },
   { id: 'une93200', nombre: 'UNE 93200', desc: 'Cartas de Servicios',            nivel: 'J3', hApoyo: 25 },
+  { id: 'une158101', nombre: 'UNE 158101', desc: 'Gestión de centros residenciales', nivel: 'J3', hApoyo: 40 },
 ];
 
 export const NORMA_BY_ID = Object.fromEntries(NORMAS.map(n => [n.id, n]));
