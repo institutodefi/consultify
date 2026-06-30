@@ -22,9 +22,21 @@ export async function listAll(table, order = 'creado') {
 
 export async function listTable(table) {
   if (DEMO) return demo()[table];
-  const { data, error } = await supabase.from(table).select('*');
-  if (error) throw error;
-  return data;
+  // PostgREST devuelve como máximo 1000 filas por petición. Tablas grandes como
+  // tareas_catalogo (~1000+ filas) se cortaban y dejaban fuera las últimas normas
+  // (p. ej. UNE 158101). Paginamos por rangos hasta traerlas todas.
+  const PAGE = 1000;
+  let desde = 0;
+  let todas = [];
+  for (;;) {
+    const { data, error } = await supabase.from(table).select('*').range(desde, desde + PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    todas = todas.concat(data);
+    if (data.length < PAGE) break;   // última página
+    desde += PAGE;
+  }
+  return todas;
 }
 
 export async function insertRow(table, row) {
