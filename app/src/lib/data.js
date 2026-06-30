@@ -29,15 +29,19 @@ export async function listTable(table) {
 
 export async function insertRow(table, row) {
   if (DEMO) { const r = { id: uid(), creado: new Date().toISOString(), ...row }; demo()[table].unshift(r); return r; }
+  // 1) Intento normal: insertar y devolver la fila creada.
   const { data, error } = await supabase.from(table).insert(row).select().single();
   if (!error) return data;
-  // Caso conocido: el INSERT se ejecuta, pero la política de SELECT que devuelve
-  // la fila consulta auth.users y lanza "permission denied for table users".
-  // El alta SÍ se ha guardado; no reintentamos (evitamos duplicar) y devolvemos
-  // la fila sin id. La solución definitiva es la migración v33 (política sin auth.users).
+  // 2) Si falla por RLS o permisos, casi siempre es porque la política de SELECT
+  //    no deja LEER la fila de vuelta a un usuario anónimo (insert .select()).
+  //    El INSERT en sí está permitido (check true), así que reintentamos SIN select.
   const msg = (error.message || '').toLowerCase();
-  if (msg.includes('permission denied') && msg.includes('users')) {
-    return { ...row };
+  const esRls = msg.includes('row-level security') || msg.includes('row level security') ||
+                (msg.includes('permission denied') && msg.includes('users'));
+  if (esRls) {
+    const { error: e2 } = await supabase.from(table).insert(row);
+    if (!e2) return { ...row };          // alta correcta; sin id de vuelta
+    throw e2;                            // si también falla, propagamos el real
   }
   throw error;
 }

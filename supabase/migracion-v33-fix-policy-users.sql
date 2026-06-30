@@ -1,26 +1,51 @@
 -- ============================================================
--- migracion-v33-fix-policy-users.sql
--- Arregla el error "permission denied for table users" al crear ofertas.
+-- migracion-v33-fix-policy-users.sql  (REFORZADA)
+-- Arregla los dos errores encadenados al crear ofertas:
+--   1) "permission denied for table users"  -> política de SELECT que leía auth.users
+--   2) "new row violates row-level security policy" -> insert no permitido / select de vuelta bloqueado
 --
--- Causa: la política de SELECT de 'presupuestos' consultaba auth.users
--- (select email from auth.users ...), tabla a la que los roles anon /
--- authenticated no tienen permiso. Como el alta hace INSERT ... SELECT
--- (devuelve la fila creada), esa lectura disparaba la política y fallaba.
---
--- Solución: comparar contra el email del JWT con auth.jwt(), que no
--- requiere acceso a auth.users.
--- Idempotente: se puede ejecutar varias veces.
+-- Estrategia: políticas explícitas por rol (anon, authenticated) y separar el
+-- SELECT de vuelta del INSERT para que el alta pública nunca se bloquee.
+-- Idempotente: re-ejecutable sin problemas.
 -- ============================================================
 
-drop policy if exists presupuestos_owner_read on presupuestos;
+-- Aseguramos que RLS está activado (pero con políticas correctas).
+alter table presupuestos enable row level security;
 
-create policy presupuestos_owner_read on presupuestos for select
+-- ---------- Limpiamos políticas previas de presupuestos ----------
+drop policy if exists presupuestos_anon_insert on presupuestos;
+drop policy if exists presupuestos_owner_read on presupuestos;
+drop policy if exists presupuestos_insert_all on presupuestos;
+drop policy if exists presupuestos_select_own on presupuestos;
+drop policy if exists presupuestos_update_team on presupuestos;
+
+-- ---------- INSERT: cualquiera (anónimo o autenticado) puede crear ----------
+-- Generador público y portal interno dan de alta ofertas/consultas.
+create policy presupuestos_insert_all on presupuestos
+  for insert
+  to anon, authenticated
+  with check (true);
+
+-- ---------- SELECT: dueño por email del JWT, dueño por user_id, o equipo ----------
+-- NO consultamos auth.users (eso causaba "permission denied for table users").
+-- Importante: que el alta NO dependa de poder leer la fila de vuelta.
+create policy presupuestos_select_own on presupuestos
+  for select
+  to anon, authenticated
   using (
     user_id = auth.uid()
     or email = (auth.jwt() ->> 'email')
-    or mi_rol() in ('consultor', 'admin')
+    or coalesce(mi_rol(), '') in ('consultor', 'admin', 'superadmin', 'gestion')
   );
 
--- Aseguramos que la política de inserción sigue permitiendo el alta (anónimo + interno).
-drop policy if exists presupuestos_anon_insert on presupuestos;
-create policy presupuestos_anon_insert on presupuestos for insert with check (true);
+-- ---------- UPDATE: solo equipo interno ----------
+create policy presupuestos_update_team on presupuestos
+  for update
+  to authenticated
+  using (coalesce(mi_rol(), '') in ('consultor', 'admin', 'superadmin', 'gestion'))
+  with check (coalesce(mi_rol(), '') in ('consultor', 'admin', 'superadmin', 'gestion'));
+
+-- ---------- Permisos de tabla (grant) para los roles de la API ----------
+-- RLS filtra filas, pero el rol necesita el privilegio base sobre la tabla.
+grant insert, select on presupuestos to anon, authenticated;
+grant update on presupuestos to authenticated;
