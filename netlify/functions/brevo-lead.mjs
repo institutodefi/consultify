@@ -1,8 +1,12 @@
 // netlify/functions/brevo-lead.mjs
 // Crea/actualiza el contacto en Brevo con los atributos de la simulación.
 // Requiere variables de entorno en Netlify:
-//   BREVO_API_KEY   → API key v3 de Brevo
-//   BREVO_LIST_ID   → (opcional) ID numérico de la lista de leads de la calculadora
+//   BREVO_API_KEY       → API key v3 de Brevo
+//   BREVO_LIST_ID       → (opcional) lista final de leads
+//   BREVO_LIST_DOI_ID   → (opcional) lista TEMPORAL de doble opt-in (pendientes de confirmar).
+//                         Si está definida, el contacto entra aquí en vez de en la lista final:
+//                         una automatización de Brevo le envía el email de confirmación y, al
+//                         confirmar, lo pasa a la lista final. Tiene prioridad sobre BREVO_LIST_ID.
 
 const NORMA_ATTR = {
   '9001': 'ISO_9001', '14001': 'ISO_14001', '45001': 'ISO_45001', '27001': 'ISO_27001',
@@ -53,11 +57,17 @@ export default async (req) => {
   const sufijoPrecio = tipo === 'mes' ? ' €/mes' : (tipo === 'fraccionado' ? ' € (proyecto)' : ' € (único)');
   attributes.REQUERIMIENTO = `${nombresNormas || '—'} · Modelo ${modelo} · ${precio}${sufijoPrecio}`;
 
+  // Lista de destino: si hay lista de doble opt-in (temporal), el contacto entra ahí
+  // y la automatización de Brevo lo moverá a la final tras confirmar. Si no, lista final directa.
+  const listaDestino = process.env.BREVO_LIST_DOI_ID || process.env.BREVO_LIST_ID;
+  const usaDOI = !!process.env.BREVO_LIST_DOI_ID;
+  attributes.DOI_PENDIENTE = usaDOI; // marca útil para segmentar pendientes de confirmar
+
   const payload = {
     email,
     attributes,
     updateEnabled: true,
-    ...(process.env.BREVO_LIST_ID ? { listIds: [Number(process.env.BREVO_LIST_ID)] } : {}),
+    ...(listaDestino ? { listIds: [Number(listaDestino)] } : {}),
   };
 
   const r = await fetch('https://api.brevo.com/v3/contacts', {
