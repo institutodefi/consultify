@@ -1,45 +1,70 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listTable } from '../../lib/data.js';
 import { getTareasAgenda, TIPO_BY_ID } from '../../lib/agenda.js';
-import BoxEquipo from './BoxEquipo.jsx';
+import { useAuth } from '../../lib/auth.jsx';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const YEAR = new Date().getFullYear();
 const fmtH = (h) => `${(Math.round((h || 0) * 100) / 100).toLocaleString('es-ES')} h`;
 
+// Reloj de jornada: medidor semicircular previsto (naranja) vs efectivo (navy) sobre la capacidad.
+function RelojJornada({ titulo, valor, capacidad, color, sub }) {
+  const R = 80, CX = 100, CY = 100, START = 135, SWEEP = 270;
+  const MAXG = capacidad > 0 ? capacidad : 1;
+  const ang = (h) => START + SWEEP * Math.min(h / MAXG, 1) ;
+  const polar = (deg, r) => { const a = (deg * Math.PI) / 180; return [CX + r * Math.cos(a), CY + r * Math.sin(a)]; };
+  const arco = (d1, d2, r) => {
+    const [x1, y1] = polar(d1, r), [x2, y2] = polar(d2, r);
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${d2 - d1 > 180 ? 1 : 0} 1 ${x2} ${y2}`;
+  };
+  const pct = Math.round((valor / MAXG) * 100);
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-navy-100 p-3">
+      <p className="text-xs font-bold uppercase tracking-wider text-navy-300">{titulo}</p>
+      <svg viewBox="0 0 200 170" className="w-full max-w-[180px]">
+        <path d={arco(START, START + SWEEP, R)} fill="none" stroke="#EEF2FA" strokeWidth="13" strokeLinecap="round" />
+        {valor > 0 && <path d={arco(START, ang(valor), R)} fill="none" stroke={color} strokeWidth="13" strokeLinecap="round" />}
+        <text x={CX} y={CY + 6} textAnchor="middle" fontSize="24" fontWeight="800" fill="#0A1530">{Math.round(valor).toLocaleString('es-ES')}</text>
+        <text x={CX} y={CY + 24} textAnchor="middle" fontSize="11" fill="#5B6680">horas · {pct}%</text>
+      </svg>
+      <p className="text-[11px] font-medium text-navy-400">{sub}</p>
+    </div>
+  );
+}
+
 export default function MiAgenda() {
-  const [equipo, setEquipo] = useState([]);
-  const [equipoSel, setEquipoSel] = useState(new Set());
+  const { user } = useAuth();
+  const [yo, setYo] = useState(null);          // mi ficha de consultor
   const [tareas, setTareas] = useState([]);
   const [mesesSel, setMesesSel] = useState(new Set([new Date().getMonth()]));
+  const [cargado, setCargado] = useState(false);
 
+  // Identifica MI consultor por el email del usuario logueado.
   useEffect(() => {
     listTable('consultores').then(cs => {
       const act = cs.filter(c => c.activo !== false);
-      setEquipo(act);
-      if (act[0]) setEquipoSel(new Set([String(act[0].id)]));
-    }).catch(() => {});
-  }, []);
+      const mail = (user?.email || '').toLowerCase();
+      const mio = act.find(c => (c.email || '').toLowerCase() === mail) || act[0] || null;
+      setYo(mio); setCargado(true);
+    }).catch(() => setCargado(true));
+  }, [user]);
 
-  // Carga las tareas de todos los consultores seleccionados (suma).
+  // Carga SOLO mis tareas.
   useEffect(() => {
-    const ids = [...equipoSel];
-    if (!ids.length) { setTareas([]); return; }
-    Promise.all(ids.map(id => getTareasAgenda(id, YEAR).catch(() => [])))
-      .then(arrs => setTareas(arrs.flat())).catch(() => setTareas([]));
-  }, [equipoSel]);
+    if (!yo?.id) { setTareas([]); return; }
+    getTareasAgenda(yo.id, YEAR).then(setTareas).catch(() => setTareas([]));
+  }, [yo]);
 
-  const capacidad = useMemo(() =>
-    [...equipoSel].reduce((s, id) => s + (equipo.find(c => String(c.id) === String(id))?.pct_jornada ?? 100), 0),
-    [equipoSel, equipo]);
+  const capacidad = yo?.pct_jornada ?? 100;       // % de jornada → usamos como tope del reloj (h productivas/mes aprox.)
+  const capacidadH = Math.round((capacidad / 100) * 160 * 0.7); // 160 h/mes × 70% productivo, escalado a meses elegidos
+  const nMeses = Math.max(mesesSel.size, 1);
+  const topeJornada = capacidadH * nMeses;
 
   const toggleMes = (m) => setMesesSel(s => { const n = new Set(s); n.has(m) ? n.delete(m) : n.add(m); return n; });
   const todos = () => setMesesSel(new Set(MESES.map((_, i) => i)));
   const ninguno = () => setMesesSel(new Set());
-
   const mesDe = (iso) => iso ? new Date(iso).getMonth() : null;
 
-  // Resumen por mes seleccionado
   const filas = useMemo(() => {
     return [...mesesSel].sort((a, b) => a - b).map(m => {
       const delMes = tareas.filter(t => mesDe(t.fecha_prevista) === m);
@@ -61,13 +86,15 @@ export default function MiAgenda() {
     <div className="space-y-6">
       <div>
         <p className="eyebrow">Mi agenda</p>
-        <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight">Previsto, efectivo y pendiente</h1>
+        <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight">Mis tareas y mi jornada</h1>
+        {yo && <p className="mt-1 text-sm font-medium text-navy-400">{yo.nombre} {yo.apellidos || ''} · jornada {capacidad}%</p>}
       </div>
 
-      {/* Equipo (suma en los totales) */}
-      <BoxEquipo consultores={equipo} sel={equipoSel} setSel={setEquipoSel} capacidad={capacidad} titulo="Equipo" />
+      {cargado && !yo && (
+        <div className="card"><p className="text-sm font-medium text-navy-400">No encontramos tu ficha de consultor. Pide que asocien tu correo en Equipo.</p></div>
+      )}
 
-      {/* Selector de meses (aspas) */}
+      {/* Selector de meses */}
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="label !mb-0">Meses</p>
@@ -86,20 +113,11 @@ export default function MiAgenda() {
         </div>
       </div>
 
-      {/* Totales */}
+      {/* Relojes de jornada */}
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl bg-navy-900 p-4 text-white">
-          <p className="text-xs font-bold uppercase tracking-wider text-white/60">Agenda prevista</p>
-          <p className="mt-1 text-2xl font-extrabold">{fmtH(tot.prev)}</p>
-        </div>
-        <div className="rounded-2xl border border-navy-100 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-navy-300">Agenda efectiva</p>
-          <p className="mt-1 text-2xl font-extrabold">{fmtH(tot.efe)}</p>
-        </div>
-        <div className="rounded-2xl border border-navy-100 p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-navy-300">Pendiente</p>
-          <p className="mt-1 text-2xl font-extrabold text-brand-orangeDark">{fmtH(tot.pend)}</p>
-        </div>
+        <RelojJornada titulo="Jornada prevista" valor={tot.prev} capacidad={topeJornada} color="#F5A623" sub={`de ${fmtH(topeJornada)} disponibles`} />
+        <RelojJornada titulo="Jornada efectiva" valor={tot.efe} capacidad={topeJornada} color="#061B45" sub={`imputado de ${fmtH(topeJornada)}`} />
+        <RelojJornada titulo="Jornada pendiente" valor={tot.pend} capacidad={topeJornada} color="#d8910e" sub="aún por ejecutar" />
       </div>
 
       {/* Tabla por mes */}
@@ -129,9 +147,9 @@ export default function MiAgenda() {
 
       {/* Tareas pendientes */}
       <div className="card">
-        <h4 className="font-extrabold">Tareas pendientes ({tareasPendientes.length})</h4>
+        <h4 className="font-extrabold">Mis tareas pendientes ({tareasPendientes.length})</h4>
         {tareasPendientes.length === 0 ? (
-          <p className="mt-3 text-sm font-medium text-navy-300">No hay tareas pendientes en los meses elegidos.</p>
+          <p className="mt-3 text-sm font-medium text-navy-300">No tienes tareas pendientes en los meses elegidos.</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">

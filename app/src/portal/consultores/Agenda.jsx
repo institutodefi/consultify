@@ -652,8 +652,8 @@ export default function Agenda() {
           alerta={vacRestantes < 0} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="card lg:col-span-2">
+      <div className="grid gap-6">
+        <div className="card">
           <div className="mb-3 flex gap-2">
             <button onClick={() => setVista('calendario')} className={`chip text-xs font-bold ${vista === 'calendario' ? 'bg-navy-800 text-white' : 'border border-navy-200 text-navy-500'}`}>📅 Calendario</button>
             <button onClick={() => setVista('lista')} className={`chip text-xs font-bold ${vista === 'lista' ? 'bg-navy-800 text-white' : 'border border-navy-200 text-navy-500'}`}>☰ Lista</button>
