@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { NORMAS, MODELOS, MODELO_IDS, calcular, fmtEUR } from '../lib/calcEngine.js';
 import { insertRow, siguienteNumeroOferta } from '../lib/data.js';
+import { linkWhatsApp } from '../lib/telefono.js';
 import { useAuth } from '../lib/auth.jsx';
 
 // Generador de ofertas: selección de normas + modelo + datos del cliente,
@@ -30,7 +31,19 @@ export default function GeneradorOfertas({ publico = false }) {
   const plazoMal = res && !res.plazoOk;
 
   async function generar() {
-    if (!res || !cli.empresa.trim()) { setError('Indica al menos la empresa.'); return; }
+    if (!res) return;
+    // Todos los datos del cliente son obligatorios.
+    const faltan = [];
+    if (!cli.empresa.trim()) faltan.push('Empresa');
+    if (!cli.nombre.trim()) faltan.push('Nombre');
+    if (!cli.apellidos.trim()) faltan.push('Apellidos');
+    if (!cli.email.trim()) faltan.push('Email');
+    if (!cli.telefono.trim()) faltan.push('Teléfono');
+    if (!cli.cif.trim()) faltan.push('CIF');
+    if (!cli.cargo.trim()) faltan.push('Cargo');
+    if (faltan.length) { setError(`Faltan datos obligatorios: ${faltan.join(', ')}.`); return; }
+    if (!/^\S+@\S+\.\S+$/.test(cli.email)) { setError('El email no tiene un formato válido.'); return; }
+    if (!consent) { setError('Debes aceptar la política de privacidad para continuar.'); return; }
     if (!res.plazoOk) {
       setError(`El modelo ${modelo} requiere un mínimo de ${res.minMeses} meses. Ajusta la duración.`);
       return;
@@ -53,8 +66,9 @@ export default function GeneradorOfertas({ publico = false }) {
       numero = `OFE-${new Date().getFullYear()}-${Date.now().toString(36).slice(-5).toUpperCase()}`;
     }
 
-    // 2) Guardar el presupuesto. Si falla, NO abortamos: seguimos para captar el lead y/o generar doc.
+    // 2) Guardar el presupuesto. Es el alta en la base de datos: si falla, lo informamos.
     let fila = null;
+    let errorInsert = null;
     try {
       fila = await insertRow('presupuestos', {
         empresa: cli.empresa, nombre: contactoCompleto, email: cli.email, telefono: cli.telefono,
@@ -63,6 +77,7 @@ export default function GeneradorOfertas({ publico = false }) {
         ...(user?.id && user.id !== 'demo' ? { user_id: user.id } : {}),
       });
     } catch (e) {
+      errorInsert = e?.message || e?.error_description || String(e);
       console.error('insertRow presupuestos', e);
     }
 
@@ -93,16 +108,19 @@ export default function GeneradorOfertas({ publico = false }) {
       // La función podría devolver HTML (404/500) en vez de JSON: lo controlamos.
       let j = null;
       try { j = await r.json(); } catch { j = null; }
-      if (j && j.ok) {
-        setEstado({ ok: true, ...j, numero });
-      } else if (fila) {
-        // La oferta quedó registrada en el CRM, pero el documento falló.
-        // Mostramos el motivo real para poder diagnosticarlo (y marcamos éxito parcial).
-        setEstado({ ok: true, numero, parcial: true });
-        if (j && j.error) setError(`Oferta ${numero} registrada, pero el documento falló: ${j.error}`);
+      const okDoc = !!(j && j.ok);
+      if (okDoc || fila) {
+        // Hubo éxito (documento y/o alta en BD). Avisamos si algo quedó a medias.
+        setEstado({ ok: true, numero, parcial: !okDoc, ...(okDoc ? j : {}) });
+        if (errorInsert) {
+          setError(`Aviso: la oferta ${numero} no se guardó en la base de datos (${errorInsert}). Revisa permisos/RLS de la tabla "presupuestos".`);
+        } else if (!okDoc && j?.error) {
+          setError(`Oferta ${numero} registrada, pero el documento falló: ${j.error}`);
+        }
       } else {
         setEstado(null);
-        setError((j && j.error) ? `No se pudo generar: ${j.error}` : `No se pudo generar la oferta (código ${r.status}).`);
+        const motivo = errorInsert ? `alta en BD: ${errorInsert}` : (j?.error || `código ${r.status}`);
+        setError(`No se pudo generar la oferta (${motivo}).`);
       }
     } catch (e) {
       if (fila) {
@@ -118,15 +136,27 @@ export default function GeneradorOfertas({ publico = false }) {
   async function enviarSolicitudInfo() {
     if (!cli.email || !consent) { setError('Indica email y acepta la política para enviar la solicitud.'); return; }
     setError(null); setInfoState('sending');
+    const contactoCompleto = `${cli.nombre} ${cli.apellidos}`.trim();
+    const requerimiento = `SOLICITUD DE INFORMACIÓN · Otra norma · ${cli.normaInteres || 'sin especificar'}`;
+    // 1) Alta en base de datos (queda como lead en el CRM con tipo 'consulta')
     try {
-      const contactoCompleto = `${cli.nombre} ${cli.apellidos}`.trim();
+      let numero;
+      try { numero = await siguienteNumeroOferta(); } catch { numero = `OFE-${new Date().getFullYear()}-${Date.now().toString(36).slice(-5).toUpperCase()}`; }
+      await insertRow('presupuestos', {
+        empresa: cli.empresa, nombre: contactoCompleto, email: cli.email, telefono: cli.telefono,
+        cif: cli.cif, cargo: cli.cargo, requerimiento, comercial: 'Alejandro',
+        numero_oferta: numero, tipo: 'consulta',
+        ...(user?.id && user.id !== 'demo' ? { user_id: user.id } : {}),
+      });
+    } catch (e) { console.error('insertRow consulta', e); }
+    // 2) Enviar a Brevo (no bloquea)
+    try {
       await fetch('/.netlify/functions/brevo-lead', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombre: contactoCompleto, empresa: cli.empresa, email: cli.email, telefono: cli.telefono,
           cif: cli.cif, cargo: cli.cargo, comercial: 'Alejandro',
-          requerimiento: `SOLICITUD DE INFORMACIÓN · Otra norma · ${cli.normaInteres || 'sin especificar'}`,
-          consent: true,
+          requerimiento, consent: true,
         }),
       });
       setInfoState('ok');
@@ -295,14 +325,15 @@ export default function GeneradorOfertas({ publico = false }) {
                 <div className="mt-4 border-t border-white/15 pt-4">
                   <p className="mb-2 text-xs font-extrabold uppercase tracking-wider text-brand-orange">Tus datos {publico ? 'para recibir la propuesta' : 'para la oferta'}</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <input className="col-span-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Empresa / Cliente *" value={cli.empresa} onChange={e => setCli({ ...cli, empresa: e.target.value })} />
-                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Nombre" value={cli.nombre} onChange={e => setCli({ ...cli, nombre: e.target.value })} />
-                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Apellidos" value={cli.apellidos} onChange={e => setCli({ ...cli, apellidos: e.target.value })} />
-                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" type="email" placeholder="Email" value={cli.email} onChange={e => setCli({ ...cli, email: e.target.value })} />
-                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Teléfono" value={cli.telefono} onChange={e => setCli({ ...cli, telefono: e.target.value })} />
-                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="CIF" value={cli.cif} onChange={e => setCli({ ...cli, cif: e.target.value })} />
-                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Cargo" value={cli.cargo} onChange={e => setCli({ ...cli, cargo: e.target.value })} />
+                    <input required className="col-span-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Empresa / Cliente *" value={cli.empresa} onChange={e => setCli({ ...cli, empresa: e.target.value })} />
+                    <input required className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Nombre *" value={cli.nombre} onChange={e => setCli({ ...cli, nombre: e.target.value })} />
+                    <input required className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Apellidos *" value={cli.apellidos} onChange={e => setCli({ ...cli, apellidos: e.target.value })} />
+                    <input required type="email" className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Email *" value={cli.email} onChange={e => setCli({ ...cli, email: e.target.value })} />
+                    <input required type="tel" className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Teléfono *" value={cli.telefono} onChange={e => setCli({ ...cli, telefono: e.target.value })} />
+                    <input required className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="CIF *" value={cli.cif} onChange={e => setCli({ ...cli, cif: e.target.value })} />
+                    <input required className="col-span-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Cargo *" value={cli.cargo} onChange={e => setCli({ ...cli, cargo: e.target.value })} />
                   </div>
+                  <p className="mt-1.5 text-[11px] font-medium text-white/40">Todos los campos son obligatorios.</p>
                   <label className="mt-3 flex items-start gap-2 text-[11.5px] text-white/70 cursor-pointer">
                     <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-orange" />
                     <span>Acepto que TuConsultor trate mis datos para gestionar esta solicitud. <a href="/legal/privacidad.html" target="_blank" rel="noreferrer" className="font-semibold text-brand-orange underline">Política de privacidad</a> (RGPD).</span>
@@ -329,6 +360,14 @@ export default function GeneradorOfertas({ publico = false }) {
                         {estado.url_pdf && <a href={estado.url_pdf} target="_blank" rel="noreferrer" className="font-bold text-white underline">PDF</a>}
                         {estado.url_pptx && <a href={estado.url_pptx} target="_blank" rel="noreferrer" className="font-bold text-white underline">PowerPoint</a>}
                       </div>
+                    )}
+                    {!publico && cli.telefono.trim() && (
+                      <a href={linkWhatsApp(cli.telefono, `Hola ${cli.nombre}, te enviamos la oferta ${estado.numero} de TuConsultor.`)}
+                        target="_blank" rel="noreferrer"
+                        className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#25D366] px-3 py-2 text-xs font-extrabold text-white transition hover:opacity-90">
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.946C.16 5.335 5.495 0 12.05 0a11.82 11.82 0 018.413 3.488 11.82 11.82 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.51 5.26l-.999 3.648 3.978-.607zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.693.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                        Enviar por WhatsApp
+                      </a>
                     )}
                   </div>
                 )}
