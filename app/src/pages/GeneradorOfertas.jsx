@@ -36,36 +36,51 @@ export default function GeneradorOfertas({ publico = false }) {
       return;
     }
     setError(null); setEstado('gen');
+
+    const comercial = 'Alejandro';
+    const contactoCompleto = `${cli.nombre} ${cli.apellidos}`.trim();
+    const precioLead = res.fraccionado ? res.fraccionado.totalSinIva : res.precioCatalogo;
+    const tipoLead = res.fraccionado ? 'fraccionado' : res.tipo;
+    const nombresNormas = sel.map((id) => NORMAS.find((n) => n.id === id)?.nombre || id).join(' + ');
+    const sufijo = tipoLead === 'mes' ? ' €/mes' : (tipoLead === 'fraccionado' ? ' € (proyecto)' : ' € (único)');
+    const requerimiento = `${nombresNormas} · Modelo ${modelo} · ${precioLead}${sufijo}`;
+
+    // 1) Número de oferta. Si la RPC falla, generamos uno de respaldo en cliente (no bloquea).
+    let numero;
     try {
-      const numero = await siguienteNumeroOferta();
-      const comercial = 'Alejandro';
-      const contactoCompleto = `${cli.nombre} ${cli.apellidos}`.trim();
-      const precioLead = res.fraccionado ? res.fraccionado.totalSinIva : res.precioCatalogo;
-      const tipoLead = res.fraccionado ? 'fraccionado' : res.tipo;
-      // Resumen legible del requerimiento para el comercial (CRM)
-      const nombresNormas = sel.map((id) => NORMAS.find((n) => n.id === id)?.nombre || id).join(' + ');
-      const sufijo = tipoLead === 'mes' ? ' €/mes' : (tipoLead === 'fraccionado' ? ' € (proyecto)' : ' € (único)');
-      const requerimiento = `${nombresNormas} · Modelo ${modelo} · ${precioLead}${sufijo}`;
-      // 1) Guardar la oferta como presupuesto interno (histórico de Ofertas + CRM)
-      const fila = await insertRow('presupuestos', {
+      numero = await siguienteNumeroOferta();
+    } catch {
+      numero = `OFE-${new Date().getFullYear()}-${Date.now().toString(36).slice(-5).toUpperCase()}`;
+    }
+
+    // 2) Guardar el presupuesto. Si falla, NO abortamos: seguimos para captar el lead y/o generar doc.
+    let fila = null;
+    try {
+      fila = await insertRow('presupuestos', {
         empresa: cli.empresa, nombre: contactoCompleto, email: cli.email, telefono: cli.telefono,
         cif: cli.cif, cargo: cli.cargo, normas: sel, modelo, precio: precioLead, tipo: tipoLead,
         numero_oferta: numero, comercial, requerimiento,
         ...(user?.id && user.id !== 'demo' ? { user_id: user.id } : {}),
       });
-      // 2) Enviar el lead a Brevo (igual que la Calculadora). No bloquea la generación.
-      if (cli.email && consent) {
-        fetch('/.netlify/functions/brevo-lead', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nombre: contactoCompleto, empresa: cli.empresa, email: cli.email, telefono: cli.telefono,
-            cif: cli.cif, cargo: cli.cargo, numero_oferta: numero, comercial,
-            normas: sel, modelo, precio: precioLead, tipo: tipoLead,
-            meses: res.meses, tiene9001, consent: true,
-          }),
-        }).catch(() => {});
-      }
-      // 3) Generar el documento (PDF + PPTX) y guardar las URLs
+    } catch (e) {
+      console.error('insertRow presupuestos', e);
+    }
+
+    // 3) Enviar el lead a Brevo (no bloquea).
+    if (cli.email && consent) {
+      fetch('/.netlify/functions/brevo-lead', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: contactoCompleto, empresa: cli.empresa, email: cli.email, telefono: cli.telefono,
+          cif: cli.cif, cargo: cli.cargo, numero_oferta: numero, comercial,
+          normas: sel, modelo, precio: precioLead, tipo: tipoLead,
+          meses: res.meses, tiene9001, consent: true,
+        }),
+      }).catch(() => {});
+    }
+
+    // 4) Generar el documento (PDF + PPTX). Aquí sí informamos del error real si lo hay.
+    try {
       const r = await fetch('/.netlify/functions/generar-oferta', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -75,11 +90,25 @@ export default function GeneradorOfertas({ publico = false }) {
           email: cli.email, presupuesto_id: fila?.id,
         }),
       });
-      const j = await r.json();
-      if (j.ok) setEstado({ ok: true, ...j, numero });
-      else { setEstado(null); setError(j.error || 'No se pudo generar la oferta.'); }
+      // La función podría devolver HTML (404/500) en vez de JSON: lo controlamos.
+      let j = null;
+      try { j = await r.json(); } catch { j = null; }
+      if (j && j.ok) {
+        setEstado({ ok: true, ...j, numero });
+      } else if (fila) {
+        // El documento falló pero la oferta quedó registrada: éxito parcial, no error duro.
+        setEstado({ ok: true, numero, parcial: true });
+      } else {
+        setEstado(null);
+        setError((j && j.error) ? `No se pudo generar: ${j.error}` : `No se pudo generar la oferta (código ${r.status}).`);
+      }
     } catch (e) {
-      setEstado(null); setError('No se pudo generar la oferta. Inténtalo de nuevo.');
+      if (fila) {
+        setEstado({ ok: true, numero, parcial: true });
+      } else {
+        setEstado(null);
+        setError('No se pudo registrar la oferta. Revisa la conexión e inténtalo de nuevo.');
+      }
     }
   }
 
@@ -213,23 +242,6 @@ export default function GeneradorOfertas({ publico = false }) {
             </div>
           </section>
 
-          {/* 3 · Datos del cliente */}
-          <section className="card">
-            <h2 className="mb-4 text-xs font-extrabold uppercase tracking-wider text-brand-orangeDark">3 · Datos del cliente (para la oferta)</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2"><label className="label">Empresa / Cliente</label><input className="input" placeholder="Residencia Los Olivos S.L." value={cli.empresa} onChange={e => setCli({ ...cli, empresa: e.target.value })} /></div>
-              <div><label className="label">Nombre</label><input className="input" placeholder="Ana" value={cli.nombre} onChange={e => setCli({ ...cli, nombre: e.target.value })} /></div>
-              <div><label className="label">Apellidos</label><input className="input" placeholder="García López" value={cli.apellidos} onChange={e => setCli({ ...cli, apellidos: e.target.value })} /></div>
-              <div><label className="label">CIF</label><input className="input" placeholder="B-00000000" value={cli.cif} onChange={e => setCli({ ...cli, cif: e.target.value })} /></div>
-              <div><label className="label">Cargo</label><input className="input" placeholder="Director de Calidad" value={cli.cargo} onChange={e => setCli({ ...cli, cargo: e.target.value })} /></div>
-              <div><label className="label">Email</label><input className="input" type="email" placeholder="ana@empresa.es" value={cli.email} onChange={e => setCli({ ...cli, email: e.target.value })} /></div>
-              <div><label className="label">Teléfono</label><input className="input" placeholder="600 000 000" value={cli.telefono} onChange={e => setCli({ ...cli, telefono: e.target.value })} /></div>
-            </div>
-            <label className="mt-4 flex items-start gap-2.5 text-[13px] text-navy-500 cursor-pointer">
-              <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-orange" />
-              <span>El cliente acepta que los responsables de TuConsultor traten sus datos para gestionar esta oferta y contactarle. Ha sido informado de la <a href="/legal/privacidad.html" target="_blank" rel="noreferrer" className="font-semibold text-brand-orangeDark underline">política de privacidad</a> (RGPD).</span>
-            </label>
-          </section>
         </div>
 
         {/* Panel precio */}
@@ -277,19 +289,45 @@ export default function GeneradorOfertas({ publico = false }) {
                   {esMes && <p>Cuota mensual recurrente. Permanencia mínima 12 meses.</p>}
                 </div>
 
+                {/* Datos del cliente, dentro del panel para no perder al usuario */}
+                <div className="mt-4 border-t border-white/15 pt-4">
+                  <p className="mb-2 text-xs font-extrabold uppercase tracking-wider text-brand-orange">Tus datos {publico ? 'para recibir la propuesta' : 'para la oferta'}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input className="col-span-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Empresa / Cliente *" value={cli.empresa} onChange={e => setCli({ ...cli, empresa: e.target.value })} />
+                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Nombre" value={cli.nombre} onChange={e => setCli({ ...cli, nombre: e.target.value })} />
+                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Apellidos" value={cli.apellidos} onChange={e => setCli({ ...cli, apellidos: e.target.value })} />
+                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" type="email" placeholder="Email" value={cli.email} onChange={e => setCli({ ...cli, email: e.target.value })} />
+                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Teléfono" value={cli.telefono} onChange={e => setCli({ ...cli, telefono: e.target.value })} />
+                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="CIF" value={cli.cif} onChange={e => setCli({ ...cli, cif: e.target.value })} />
+                    <input className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Cargo" value={cli.cargo} onChange={e => setCli({ ...cli, cargo: e.target.value })} />
+                  </div>
+                  <label className="mt-3 flex items-start gap-2 text-[11.5px] text-white/70 cursor-pointer">
+                    <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-orange" />
+                    <span>Acepto que TuConsultor trate mis datos para gestionar esta solicitud. <a href="/legal/privacidad.html" target="_blank" rel="noreferrer" className="font-semibold text-brand-orange underline">Política de privacidad</a> (RGPD).</span>
+                  </label>
+                </div>
+
                 <div className="mt-4 flex gap-2">
                   <button onClick={() => generar('pdf')} disabled={estado === 'gen' || plazoMal} className="flex-1 rounded-xl bg-white py-3 text-sm font-extrabold text-navy-900 transition hover:bg-white/90 disabled:opacity-50">
-                    {estado === 'gen' ? 'Generando…' : plazoMal ? `Mínimo ${res.minMeses} meses` : 'Generar oferta'}
+                    {estado === 'gen' ? 'Generando…' : plazoMal ? `Mínimo ${res.minMeses} meses` : (publico ? 'Recibir mi propuesta' : 'Generar oferta')}
                   </button>
                 </div>
                 {error && <p className="mt-3 rounded-lg bg-red-500/20 p-2 text-xs font-bold text-red-100">{error}</p>}
                 {estado?.ok && (
                   <div className="mt-3 rounded-xl bg-brand-orange/15 p-3 text-sm">
-                    <p className="font-extrabold text-brand-orange">Oferta {estado.numero} generada</p>
-                    <div className="mt-2 flex gap-3">
-                      {estado.url_pdf && <a href={estado.url_pdf} target="_blank" rel="noreferrer" className="font-bold text-white underline">PDF</a>}
-                      {estado.url_pptx && <a href={estado.url_pptx} target="_blank" rel="noreferrer" className="font-bold text-white underline">PowerPoint</a>}
-                    </div>
+                    <p className="font-extrabold text-brand-orange">{publico ? 'Solicitud registrada' : `Oferta ${estado.numero} generada`}</p>
+                    {estado.parcial ? (
+                      <p className="mt-1 text-xs font-medium text-white/80">
+                        {publico
+                          ? 'Hemos recibido tu solicitud. Un asesor te enviará la propuesta en PDF muy pronto.'
+                          : `Oferta ${estado.numero} registrada. El documento se está generando; si no aparece, puedes regenerarlo desde Ofertas.`}
+                      </p>
+                    ) : (
+                      <div className="mt-2 flex gap-3">
+                        {estado.url_pdf && <a href={estado.url_pdf} target="_blank" rel="noreferrer" className="font-bold text-white underline">PDF</a>}
+                        {estado.url_pptx && <a href={estado.url_pptx} target="_blank" rel="noreferrer" className="font-bold text-white underline">PowerPoint</a>}
+                      </div>
+                    )}
                   </div>
                 )}
               </>
