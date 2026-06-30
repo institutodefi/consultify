@@ -30,8 +30,16 @@ export async function listTable(table) {
 export async function insertRow(table, row) {
   if (DEMO) { const r = { id: uid(), creado: new Date().toISOString(), ...row }; demo()[table].unshift(r); return r; }
   const { data, error } = await supabase.from(table).insert(row).select().single();
-  if (error) throw error;
-  return data;
+  if (!error) return data;
+  // Caso conocido: el INSERT se ejecuta, pero la política de SELECT que devuelve
+  // la fila consulta auth.users y lanza "permission denied for table users".
+  // El alta SÍ se ha guardado; no reintentamos (evitamos duplicar) y devolvemos
+  // la fila sin id. La solución definitiva es la migración v33 (política sin auth.users).
+  const msg = (error.message || '').toLowerCase();
+  if (msg.includes('permission denied') && msg.includes('users')) {
+    return { ...row };
+  }
+  throw error;
 }
 
 // Correlativo limpio de oferta (OFE-AAAA-NNN) vía secuencia atómica en Postgres.

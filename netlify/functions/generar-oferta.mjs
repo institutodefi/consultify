@@ -11,6 +11,37 @@
 
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import PptxGenJS from 'pptxgenjs';
+import { CATALOGO_ANEXO } from './catalogo-anexo.mjs';
+import { generarPDFOferta } from './documento-oferta.mjs';
+
+// Mapa de prefijo de proceso → nombre de bloque legible (para agrupar el Anexo I).
+const BLOQUES = {
+  PE1: 'Planificación estratégica', PE2: 'Evaluación del desempeño', PE3: 'Mejora continua',
+  PE4: 'Gestión de la cartera de innovación', PE5: 'Gobernanza de IA',
+  PA1: 'Gestión de personas', PA2: 'Gestión medioambiental', PA3: 'Gestión del conocimiento e información',
+  PA4: 'Gestión de infraestructuras y activos', PA5: 'Gestión de seguridad de la información',
+  PA6: 'Gestión de partes subcontratadas', PA7: 'Gestión económica y administrativa',
+  PA8: 'Gestión de PI y vigilancia', PA9: 'Gestión de alianzas', PA10: 'Gestión de datos para IA',
+  PA11: 'Información a partes interesadas', PA12: 'Uso responsable de IA', PA13: 'Relaciones con terceros',
+  PI1: 'Proceso de innovación', PI2: 'Gestión de iniciativas de innovación', PI3: 'Ciclo de vida del sistema de IA',
+  PR1: 'Incorporación de usuarios', PR2: 'Atención al usuario', PR3: 'Baja y servicios generales',
+};
+// Agrupa los subprocesos del modelo (solo los que aplican a las normas elegidas) por bloque legible.
+function tareasPorBloque(normaIds, modeloId) {
+  const filas = CATALOGO_ANEXO[modeloId] || CATALOGO_ANEXO['Implantación'] || [];
+  const grupos = new Map();
+  for (const f of filas) {
+    const aplica = f.normas.some((id) => normaIds.includes(id));
+    if (!aplica) continue;
+    const pref = (f.proc.split(' ')[0] || '').toUpperCase();
+    const bloque = BLOQUES[pref] || f.proc;
+    if (!grupos.has(bloque)) grupos.set(bloque, []);
+    // Limpiar el nombre del subproceso (quitar prefijo Sx y código) para legibilidad
+    const limpio = f.sub.replace(/^S\d+\s+/, '').replace(/\s*\(.*?\)\s*$/, '').trim();
+    grupos.get(bloque).push(limpio);
+  }
+  return [...grupos.entries()].map(([bloque, subs]) => ({ bloque, subs }));
+}
 
 // ======================= MOTOR (réplica de calcEngine.js) =======================
 const NORMAS = [
@@ -23,7 +54,10 @@ const NORMAS = [
   { id: '21001', nombre: 'ISO 21001', desc: 'Organizaciones educativas', nivel: 'J3', hApoyo: 19, solape9001: 0.5 },
   { id: '9004', nombre: 'ISO 9004', desc: 'Calidad sostenible', nivel: 'J3', hApoyo: 11, solape9001: 0.5 },
   { id: 'une93200', nombre: 'UNE 93200', desc: 'Cartas de Servicios', nivel: 'J3', hApoyo: 25 },
-  { id: 'une158101', nombre: 'UNE 158101', desc: 'Centros residenciales', nivel: 'J3', hApoyo: 40 },
+  { id: 'une158101', nombre: 'UNE 158101', desc: 'Centros residenciales', nivel: 'J3', hApoyo: 91 },
+  { id: 'une66181', nombre: 'UNE 66181', desc: 'Calidad de la formación virtual', nivel: 'J3', hApoyo: 30 },
+  { id: 'igualdad', nombre: 'Plan de Igualdad', desc: 'Plan de igualdad de empresa', nivel: 'J2', hApoyo: 30 },
+  { id: 'madridexcelente', nombre: 'Madrid Excelente', desc: 'Marca de garantía de la Comunidad de Madrid', nivel: 'J3', hApoyo: 30 },
 ];
 const NORMA_BY_ID = Object.fromEntries(NORMAS.map((n) => [n.id, n]));
 const TARIFA = { J1: 30, J2: 40, J3: 55, Senior: 75 };
@@ -78,106 +112,70 @@ const ORANGE = rgb(0.961, 0.651, 0.137); // #F5A623
 const MUTED = rgb(0.357, 0.42, 0.525);
 const HOY = () => new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
 
-async function generarPDF(r, cli) {
-  const pdf = await PDFDocument.create();
-  const page = pdf.addPage([595, 842]);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const reg = await pdf.embedFont(StandardFonts.Helvetica);
-  const W = 595;
-  let y = 800;
-  const text = (t, x, size, font, color) => page.drawText(String(t), { x, y, size, font, color });
-
-  // Cabecera
-  text('CONSULTIFY', 50, 22, bold, NAVY);
-  text('· Oferta de servicios', 200, 12, reg, MUTED);
-  page.drawRectangle({ x: 50, y: y - 10, width: W - 100, height: 3, color: ORANGE });
-  y -= 50;
-
-  const normNames = r.normas.map((id) => NORMA_BY_ID[id].nombre).join(' + ');
-  const esImpl = r.modelo === 'Implantación', esMes = r.tipo === 'mes' && !esImpl;
-
-  text(`Referencia: ${cli.ref || '—'}        Fecha: ${HOY()}`, 50, 10, reg, MUTED); y -= 24;
-  text('Cliente:', 50, 12, bold, NAVY); text(cli.empresa || '—', 110, 12, reg, NAVY); y -= 18;
-  text('CIF:', 50, 11, bold, NAVY); text(cli.cif || '—', 110, 11, reg, NAVY);
-  text('Contacto:', 260, 11, bold, NAVY); text(`${cli.contacto || '—'}${cli.cargo ? ' · ' + cli.cargo : ''}`, 330, 11, reg, NAVY); y -= 36;
-
-  text('Alcance de la propuesta', 50, 15, bold, NAVY); y -= 22;
-  text('Normas a implantar:', 50, 11, bold, NAVY); text(normNames, 180, 11, reg, NAVY); y -= 18;
-  text('Modelo de servicio:', 50, 11, bold, NAVY); text(r.modelo, 180, 11, reg, NAVY); y -= 18;
-  if (r.tiene9001) { text('Descuento ISO 9001:', 50, 11, bold, NAVY); text('Cliente ya certificado · −50% en horas de ISO 9001', 180, 11, reg, NAVY); y -= 18; }
-  text(`Dedicación: ${r.hTotal} h/mes · ${r.nSistemas} sistema(s)`, 50, 10, reg, MUTED); y -= 34;
-
-  text('Condiciones económicas', 50, 15, bold, NAVY); y -= 24;
-  const linea = (lbl, val, b) => {
-    page.drawText(lbl, { x: 50, y, size: 11, font: b ? bold : reg, color: b ? NAVY : MUTED });
-    const vw = (b ? bold : reg).widthOfTextAtSize(val, 11);
-    page.drawText(val, { x: W - 50 - vw, y, size: 11, font: b ? bold : reg, color: NAVY });
-    page.drawLine({ start: { x: 50, y: y - 6 }, end: { x: W - 50, y: y - 6 }, thickness: 0.5, color: rgb(0.89, 0.91, 0.95) });
-    y -= 22;
-  };
-  if (esImpl) {
-    linea('Cuota mensual (fase implantación)', eur(r.precioCatalogo) + '/mes');
-    linea('Duración estimada', `${r.fraccionado.meses} meses`);
-    linea('Total proyecto (sin IVA)', eur(r.fraccionado.totalSinIva));
-    linea('IVA (21%)', eur(r.fraccionado.totalConIva - r.fraccionado.totalSinIva));
-    linea('Total con IVA', eur(r.fraccionado.totalConIva), true);
-    linea('1er pago (50% por adelantado)', eur(r.fraccionado.cuota1));
-    linea('2º pago (25% a mitad de proyecto)', eur(r.fraccionado.cuota2));
-    linea('3er pago (25% al finalizar)', eur(r.fraccionado.cuota3));
-  } else {
-    linea(esMes ? 'Cuota mensual (base)' : 'Bolsa de horas (base)', eur(r.precioCatalogo) + (esMes ? '/mes' : ''));
-    linea('IVA (21%)', eur(r.iva));
-    linea(esMes ? 'Total mensual con IVA' : 'Total con IVA', eur(r.totalConIva) + (esMes ? '/mes' : ''), true);
-  }
-  y -= 16;
-  text('Condiciones', 50, 12, bold, NAVY); y -= 18;
-  // leyenda con wrap simple
-  const words = r.leyenda.split(' '); let line = '';
-  for (const w of words) {
-    if (reg.widthOfTextAtSize(line + w, 9) > W - 100) { text(line, 50, 9, reg, MUTED); y -= 13; line = ''; }
-    line += w + ' ';
-  }
-  if (line) { text(line, 50, 9, reg, MUTED); y -= 13; }
-
-  // Pie
-  page.drawLine({ start: { x: 50, y: 70 }, end: { x: W - 50, y: 70 }, thickness: 0.5, color: rgb(0.89, 0.91, 0.95) });
-  page.drawText(`Comercial asignado: ${cli.comercial || 'Alejandro'}`, { x: 50, y: 82, size: 9, font: bold, color: NAVY });
-  page.drawText('Instituto de Excelencia Europea S.L. · CIF B87093076 · Madrid', { x: 50, y: 56, size: 8, font: reg, color: MUTED });
-  page.drawText('Hecho con amor en Madrid por TuConsultor · Desde 2006 gestionando con el corazón.', { x: 50, y: 44, size: 8, font: reg, color: rgb(0.53, 0.59, 0.68) });
-
-  return Buffer.from(await pdf.save());
+async function generarPDF(r, cli, anexo) {
+  // Estructura "Knowledgefy": delega en el módulo documento-oferta.mjs.
+  const buf = await generarPDFOferta(r, cli, anexo);
+  return Buffer.from(buf);
 }
 
-async function generarPPTX(r, cli) {
-  const NAVY = '061B45', ORANGE = 'F5A623', MUTED = '5B6B86', INK = '0C1424';
-  const normNames = r.normas.map((id) => NORMA_BY_ID[id].nombre).join(' + ');
+async function generarPPTX(r, cli, anexo) {
+  const NAVY = '061B45', ORANGE = 'F5A623', MUTED = '5B6B86', INK = '0C1424', SOFT = 'F3F6FB';
+  const normNames = r.normaNombres.join(' + ');
   const esImpl = r.modelo === 'Implantación', esMes = r.tipo === 'mes' && !esImpl;
+  const eur = (v) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + ' €';
   const p = new PptxGenJS(); p.defineLayout({ name: 'W', width: 10, height: 5.63 }); p.layout = 'W';
 
+  // --- Slide 1: portada ---
   let s = p.addSlide(); s.background = { color: 'FFFFFF' };
   s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.12, fill: { color: ORANGE } });
-  s.addText('CONSULTIFY', { x: 0.6, y: 0.7, w: 9, h: 0.6, fontFace: 'Arial', fontSize: 34, bold: true, color: NAVY });
-  s.addText('Oferta de servicios de consultoría', { x: 0.6, y: 1.35, w: 9, h: 0.4, fontFace: 'Arial', fontSize: 16, color: MUTED });
-  s.addText([{ text: cli.empresa || '—', options: { fontSize: 26, bold: true, color: INK, breakLine: true } },
-    { text: `${normNames}  ·  Modelo ${r.modelo}`, options: { fontSize: 15, color: NAVY } }], { x: 0.6, y: 2.5, w: 9, h: 1.2, fontFace: 'Arial' });
-  s.addText(`Referencia ${cli.ref || '—'}   ·   ${HOY()}   ·   Comercial: ${cli.comercial || 'Alejandro'}`, { x: 0.6, y: 4.8, w: 9, h: 0.4, fontFace: 'Arial', fontSize: 12, color: MUTED });
+  s.addText('Consultify', { x: 0.6, y: 0.55, w: 9, h: 0.6, fontFace: 'Arial', fontSize: 30, bold: true, color: NAVY });
+  s.addText('OFERTA DE SERVICIO', { x: 0.6, y: 1.7, w: 9, h: 0.7, fontFace: 'Arial', fontSize: 32, bold: true, color: NAVY });
+  s.addText(`${normNames}  ·  Modelo ${r.modelo}${esImpl ? `  ·  Cronograma ${r.meses} meses` : ''}`, { x: 0.6, y: 2.5, w: 9, h: 0.4, fontFace: 'Arial', fontSize: 15, bold: true, color: 'D8910E' });
+  s.addText([{ text: cli.empresa || '—', options: { fontSize: 22, bold: true, color: INK, breakLine: true } },
+    { text: `Nº oferta ${cli.ref || '—'}  ·  ${HOY()}  ·  Comercial: ${cli.comercial || 'Alejandro'}`, options: { fontSize: 12, color: MUTED } }], { x: 0.6, y: 3.4, w: 9, h: 1.0, fontFace: 'Arial' });
+  s.addText('Consultify, una empresa de TuConsultor · CIF B84867670 · hola@tuconsultor.com', { x: 0.6, y: 5.15, w: 9, h: 0.3, fontFace: 'Arial', fontSize: 9, color: '8896AD' });
 
+  // --- Slide 2: objeto + presupuesto ---
   s = p.addSlide(); s.background = { color: 'FFFFFF' };
   s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: NAVY } });
-  s.addText('Alcance y condiciones económicas', { x: 0.6, y: 0.5, w: 9, h: 0.5, fontFace: 'Arial', fontSize: 22, bold: true, color: NAVY });
-  const precioTxt = esMes ? `${eur(r.precioCatalogo)}/mes` : esImpl ? `${eur(r.precioCatalogo)}/mes` : `${eur(r.precioCatalogo)}`;
-  s.addShape(p.ShapeType.roundRect, { x: 0.6, y: 1.3, w: 4.1, h: 1.5, fill: { color: 'F5F8FF' }, line: { color: 'E3E9F2', width: 1 }, rectRadius: 0.1 });
-  s.addText([{ text: precioTxt, options: { fontSize: 28, bold: true, color: NAVY, breakLine: true } },
-    { text: esImpl ? `Total proyecto c/IVA: ${eur(r.fraccionado.totalConIva)}` : esMes ? `IVA incl.: ${eur(r.totalConIva)}/mes` : `Total c/IVA: ${eur(r.totalConIva)}`, options: { fontSize: 13, color: MUTED } }], { x: 0.8, y: 1.55, w: 3.8, h: 1, fontFace: 'Arial' });
+  s.addText('Objeto y condiciones económicas', { x: 0.6, y: 0.4, w: 9, h: 0.5, fontFace: 'Arial', fontSize: 22, bold: true, color: NAVY });
+  const objeto = esImpl
+    ? `Implantación del sistema de gestión ${normNames}. Programa completo ejecutado por el equipo consultor en ${r.meses} meses, hasta dejar la organización lista para la auditoría externa.`
+    : `Consultoría para el sistema de gestión ${normNames}, en modelo ${r.modelo}.`;
+  s.addText(objeto, { x: 0.6, y: 1.0, w: 9, h: 0.9, fontFace: 'Arial', fontSize: 12, color: INK, valign: 'top' });
 
-  const rows = [[{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: { color: NAVY } } }, { text: 'Detalle', options: { bold: true, color: 'FFFFFF', fill: { color: NAVY }, align: 'right' } }]];
-  const rr = (a, b) => rows.push([{ text: a, options: { color: INK } }, { text: b, options: { color: INK, align: 'right' } }]);
-  rr('Normas', normNames); rr('Modelo', r.modelo); rr('Sistemas', String(r.nSistemas)); rr('Dedicación', `${r.hTotal} h/mes`);
-  if (esImpl) { rr('Duración', `${r.fraccionado.meses} meses`); rr('Pago', '50% + 50% pre-auditoría'); }
-  else rr('Cobro', esMes ? 'Mensual · permanencia 12 m' : 'Pago único 100% prepago');
-  s.addTable(rows, { x: 5, y: 1.3, w: 4.4, colW: [2.0, 2.4], fontFace: 'Arial', fontSize: 11, border: { type: 'solid', color: 'EEF2F8', pt: 1 }, rowH: 0.32, valign: 'middle' });
-  s.addText(r.leyenda, { x: 0.6, y: 3.2, w: 4.1, h: 1.6, fontFace: 'Arial', fontSize: 11, color: MUTED, valign: 'top' });
-  s.addText('Instituto de Excelencia Europea S.L. · CIF B87093076 · Madrid\nHecho con amor en Madrid por TuConsultor · Desde 2006 gestionando con el corazón.', { x: 0.6, y: 5.0, w: 9, h: 0.5, fontFace: 'Arial', fontSize: 9, color: '8896AD' });
+  const precioTxt = esImpl ? eur(r.fraccionado.totalConIva) : (esMes ? `${eur(r.totalConIva)}/mes` : eur(r.totalConIva));
+  s.addShape(p.ShapeType.roundRect, { x: 0.6, y: 2.0, w: 4.0, h: 1.4, fill: { color: SOFT }, line: { color: 'E3E9F2', width: 1 }, rectRadius: 0.08 });
+  s.addText([{ text: precioTxt, options: { fontSize: 26, bold: true, color: NAVY, breakLine: true } },
+    { text: esImpl ? 'Total programa (IVA incl.)' : (esMes ? 'Cuota mensual IVA incl.' : 'Total IVA incl.'), options: { fontSize: 12, color: MUTED } }], { x: 0.8, y: 2.25, w: 3.6, h: 1, fontFace: 'Arial' });
+
+  const rows = [[{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: { color: NAVY } } }, { text: 'Importe', options: { bold: true, color: 'FFFFFF', fill: { color: NAVY }, align: 'right' } }]];
+  const rr = (a, b, hl) => rows.push([{ text: a, options: { color: hl ? 'FFFFFF' : INK, bold: !!hl, fill: hl ? { color: ORANGE } : undefined } }, { text: b, options: { color: hl ? 'FFFFFF' : INK, bold: true, align: 'right', fill: hl ? { color: ORANGE } : undefined } }]);
+  if (esImpl) {
+    rr('Programa completo (sin IVA)', eur(r.fraccionado.totalSinIva));
+    rr('IVA (21%)', eur(r.fraccionado.totalConIva - r.fraccionado.totalSinIva));
+    rr('TOTAL (IVA incl.)', eur(r.fraccionado.totalConIva), true);
+    rr('1.ª cuota — 50% inicio', eur(r.fraccionado.cuota1));
+    rr('2.ª cuota — 25% mitad', eur(r.fraccionado.cuota2));
+    rr('3.ª cuota — 25% final', eur(r.fraccionado.cuota3));
+  } else {
+    rr(esMes ? 'Cuota mensual (base)' : 'Bolsa de horas (base)', eur(r.precioCatalogo) + (esMes ? '/mes' : ''));
+    rr('IVA (21%)', eur(r.iva));
+    rr(esMes ? 'TOTAL MENSUAL' : 'TOTAL', eur(r.totalConIva) + (esMes ? '/mes' : ''), true);
+  }
+  s.addTable(rows, { x: 4.9, y: 2.0, w: 4.5, colW: [2.7, 1.8], fontFace: 'Arial', fontSize: 11, border: { type: 'solid', color: 'EEF2F8', pt: 1 }, rowH: 0.3, valign: 'middle' });
+  s.addText('Pago: ' + (esImpl ? '50% inicio · 25% mitad · 25% antes de auditoría' : (esMes ? 'mensual · permanencia 12 meses' : '100% prepago')), { x: 0.6, y: 3.6, w: 4.0, h: 0.5, fontFace: 'Arial', fontSize: 11, color: MUTED });
+  s.addText('Consultify, una empresa de TuConsultor · CIF B84867670 · hola@tuconsultor.com', { x: 0.6, y: 5.2, w: 9, h: 0.3, fontFace: 'Arial', fontSize: 9, color: '8896AD' });
+
+  // --- Slide 3: bloques de proceso (Anexo resumido) ---
+  if (anexo && anexo.length) {
+    s = p.addSlide(); s.background = { color: 'FFFFFF' };
+    s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: NAVY } });
+    s.addText('Plan de trabajo · bloques de proceso', { x: 0.6, y: 0.4, w: 9, h: 0.5, fontFace: 'Arial', fontSize: 22, bold: true, color: NAVY });
+    const items = anexo.map(b => ({ text: b.bloque, options: { fontSize: 13, bold: true, color: NAVY, bullet: { code: '2022' }, breakLine: true, paraSpaceAfter: 6 } }));
+    s.addText(items, { x: 0.7, y: 1.1, w: 8.6, h: 4.0, fontFace: 'Arial', valign: 'top' });
+    s.addText('Detalle de subprocesos en el Anexo I del PDF.', { x: 0.7, y: 5.2, w: 9, h: 0.3, fontFace: 'Arial', fontSize: 9, color: '8896AD' });
+  }
 
   return await p.write({ outputType: 'nodebuffer' });
 }
@@ -249,9 +247,14 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
 
-  const { normas = [], modelo = '', empresa = '', cif = '', contacto = '', cargo = '', ref = '', comercial = 'Alejandro', presupuesto_id, email = '', meses, tiene9001 = false } = body;
+  const { normas = [], modelo = '', empresa = '', cif = '', contacto = '', cargo = '', ref = '', comercial = 'Alejandro', presupuesto_id, email = '', meses, tiene9001 = false, direccion = '' } = body;
   const r = calcular(normas, modelo, { meses, tiene9001 });
   if (!r) return Response.json({ ok: false, error: 'Normas o modelo no válidos' }, { status: 400 });
+  // Enriquecer el resultado con nombres de norma y meses para el documento.
+  r.normaNombres = normas.map((id) => (NORMA_BY_ID[id]?.nombre || id));
+  r.meses = Math.max(parseInt(meses, 10) || (r.fraccionado?.meses) || 3, 1);
+  // Anexo I: tareas por bloque (solo las que aplican a las normas elegidas).
+  const anexo = tareasPorBloque(normas, modelo);
 
   // Número de oferta correlativo (OFE-AAAA-NNN): si no viene dado, lo pedimos
   // a la secuencia atómica en Postgres vía RPC.
@@ -268,13 +271,13 @@ export default async (req) => {
   }
   if (!numeroOferta) numeroOferta = `OFE-${new Date().getFullYear()}-${Date.now().toString(36).slice(-5).toUpperCase()}`;
 
-  const cli = { empresa, cif, contacto, cargo, ref: numeroOferta, comercial };
+  const cli = { empresa, cif, contacto, cargo, ref: numeroOferta, comercial, direccion, email };
   const slug = (ref || empresa || 'oferta').toString().replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'oferta';
   const stamp = Date.now();
   const carpeta = `${new Date().toISOString().slice(0, 7)}`; // YYYY-MM
 
   try {
-    const [pdfBuf, pptxBuf] = await Promise.all([generarPDF(r, cli), generarPPTX(r, cli)]);
+    const [pdfBuf, pptxBuf] = await Promise.all([generarPDF(r, cli, anexo), generarPPTX(r, cli, anexo)]);
     const [url_pdf, url_pptx] = await Promise.all([
       subir(base, key, `${carpeta}/${slug}_${stamp}.pdf`, pdfBuf, 'application/pdf'),
       subir(base, key, `${carpeta}/${slug}_${stamp}.pptx`, pptxBuf, 'application/vnd.openxmlformats-officedocument.presentationml.presentation'),

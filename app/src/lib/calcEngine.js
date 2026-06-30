@@ -15,7 +15,7 @@ export const NORMAS = [
   { id: '21001',    nombre: 'ISO 21001', desc: 'Organizaciones educativas · complementaria a ISO 9001', nivel: 'J3', hApoyo: 19, solape9001: 0.5 },
   { id: '9004',     nombre: 'ISO 9004',  desc: 'Calidad sostenible · complementaria a ISO 9001', nivel: 'J3', hApoyo: 11, solape9001: 0.5 },
   { id: 'une93200', nombre: 'UNE 93200', desc: 'Cartas de Servicios',            nivel: 'J3', hApoyo: 25 },
-  { id: 'une158101', nombre: 'UNE 158101', desc: 'Gestión de centros residenciales', nivel: 'J3', hApoyo: 40 },
+  { id: 'une158101', nombre: 'UNE 158101', desc: 'Gestión de centros residenciales', nivel: 'J3', hApoyo: 91 },
   { id: 'une66181', nombre: 'UNE 66181', desc: 'Calidad de la formación virtual', nivel: 'J3', hApoyo: 30 },
   { id: 'igualdad', nombre: 'Plan de Igualdad', desc: 'Plan de igualdad de empresa', nivel: 'J3', hApoyo: 30 },
   { id: 'madridexcelente', nombre: 'Madrid Excelente', desc: 'Marca de garantía de la Comunidad de Madrid', nivel: 'J3', hApoyo: 30 },

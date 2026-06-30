@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listTable } from '../lib/data.js';
 import { NORMAS, MODELO_IDS } from '../lib/calcEngine.js';
+import { CATALOGO_TAREAS } from '../lib/tareas.js';
+
+// Normas que tienen tareas reales en el catálogo del planificador.
+const NORMAS_CON_TAREAS = new Set(
+  Object.values(CATALOGO_TAREAS).flat().flatMap(f => Object.keys(f.h))
+);
 
 const PASOS = ['Sistemas', 'Modelo', 'Tareas'];
 const fmtH = (h) => `${(Math.round(h * 100) / 100).toLocaleString('es-ES')} h`;
@@ -136,6 +142,7 @@ export default function PlanificadorTareas() {
                 {NORMAS.map(n => {
                   const on = sel.includes(n.id);
                   const fija = n.id === '9001';
+                  const sinTareas = !NORMAS_CON_TAREAS.has(n.id);
                   return (
                     <button key={n.id} onClick={() => toggle(n.id)} aria-disabled={fija}
                       className={`card text-left transition ${on ? '!border-brand-orange ring-2 ring-brand-orange/30' : 'hover:border-navy-300'} ${fija ? 'cursor-default' : ''}`}>
@@ -144,6 +151,9 @@ export default function PlanificadorTareas() {
                         <span className={`chip ${fija ? 'bg-navy-800 text-white' : on ? 'bg-brand-orange text-navy-900' : 'bg-navy-50 text-navy-300'}`}>{fija ? 'Siempre' : on ? '✓' : '+'}</span>
                       </div>
                       <p className="mt-1 text-sm font-medium text-navy-400">{n.desc}</p>
+                      {sinTareas && (
+                        <p className="mt-2 text-xs font-bold text-amber-600">⚠ Sin catálogo de tareas todavía · el precio sí se calcula, pero el plan no incluirá sus tareas</p>
+                      )}
                     </button>
                   );
                 })}

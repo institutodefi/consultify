@@ -12,7 +12,7 @@ export default function GeneradorOfertas({ publico = false }) {
   const [modelo, setModelo] = useState('Implicación');
   const [meses, setMeses] = useState('');            // vacío = usa el mínimo del modelo
   const [tiene9001, setTiene9001] = useState(false); // "ya tengo la 9001" → −50% horas 9001
-  const [cli, setCli] = useState({ nombre: '', apellidos: '', empresa: '', cif: '', cargo: '', email: '', telefono: '' });
+  const [cli, setCli] = useState({ nombre: '', apellidos: '', empresa: '', cif: '', cargo: '', email: '', telefono: '', direccion: '' });
   const [consent, setConsent] = useState(false);
   const [estado, setEstado] = useState(null);        // null | 'gen' | {ok,url_pdf,url_pptx,numero}
   const [error, setError] = useState(null);
@@ -101,7 +101,7 @@ export default function GeneradorOfertas({ publico = false }) {
         body: JSON.stringify({
           normas: sel, modelo, empresa: cli.empresa, contacto: contactoCompleto,
           cif: cli.cif, cargo: cli.cargo, ref: numero, comercial,
-          meses: res.meses, tiene9001,
+          meses: res.meses, tiene9001, direccion: cli.direccion,
           email: cli.email, presupuesto_id: fila?.id,
         }),
       });
@@ -332,6 +332,7 @@ export default function GeneradorOfertas({ publico = false }) {
                     <input required autoComplete="tel" type="tel" className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Teléfono *" value={cli.telefono} onChange={e => setCli({ ...cli, telefono: e.target.value })} />
                     <input required autoComplete="off" className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="CIF *" value={cli.cif} onChange={e => setCli({ ...cli, cif: e.target.value })} />
                     <input required autoComplete="organization-title" className="col-span-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Cargo *" value={cli.cargo} onChange={e => setCli({ ...cli, cargo: e.target.value })} />
+                    <input autoComplete="street-address" className="col-span-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-brand-orange focus:outline-none" placeholder="Dirección (opcional, sale en la oferta)" value={cli.direccion} onChange={e => setCli({ ...cli, direccion: e.target.value })} />
                   </div>
                   <p className="mt-1.5 text-[11px] font-medium text-white/40">Todos los campos son obligatorios.</p>
                   <label className="mt-3 flex items-start gap-2 text-[11.5px] text-white/70 cursor-pointer">
