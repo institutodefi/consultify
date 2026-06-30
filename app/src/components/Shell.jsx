@@ -21,7 +21,7 @@ export default function Shell({ children }) {
             <nav className="hidden gap-6 text-sm font-semibold md:flex">
               <a href="/" className="text-navy-900/75 transition hover:text-navy-700">Web</a>
               {/* La calculadora es económica: solo superadmin (o sin login, para captar leads) */}
-              {(!user || verEconomico) && <NavLink to="/calculadora" className={navItem}>Calculadora</NavLink>}
+              {(!user || verEconomico) && <NavLink to="/calculadora" className={navItem}>Calcula tu oferta</NavLink>}
               {user && esCliente && <NavLink to="/clientes" className={navItem}>Zona clientes</NavLink>}
               {user && esEquipo && <NavLink to="/consultores" className={navItem}>Zona interna</NavLink>}
             </nav>

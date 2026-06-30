@@ -1,37 +1,11 @@
 -- ==============================================================
--- MIGRACIONES PENDIENTES AGRUPADAS · Consultify
--- Ejecuta este archivo completo en el SQL Editor de Supabase.
--- Resuelve el error 'No se pudo generar la oferta':
---   v24: tipo de presupuesto (fraccionado) + requerimiento
---   v25: bucket de Storage 'ofertas' (necesario para PDF/PPT)
---   v26: columnas cif, cargo, numero_oferta, comercial
---   v27: RPC correlativo OFE-AAAA-NNN
---   v29: horas base reales (incluye las tareas de UNE 158101)
---   v30: normas nuevas (66181, igualdad, madrid excelente)
+-- MIGRACIONES PENDIENTES AGRUPADAS · Consultify (actualizado)
+-- Ejecuta este archivo COMPLETO en el SQL Editor de Supabase.
+-- Es seguro re-ejecutarlo (idempotente).
+--
+-- Resuelve: alta de ofertas en BD, correlativo, storage de PDF/PPT,
+-- tareas de UNE 158101 y normas nuevas.
 -- ==============================================================
-
-
--- ▼▼▼ migracion-v24-presupuestos-tipo.sql ▼▼▼
--- ============================================================
--- migracion-v24-presupuestos-tipo.sql
--- Amplía el CHECK de 'tipo' en presupuestos para admitir 'fraccionado'
--- (modelo Implantación) y mantiene 'mes' y 'bolsa'.
--- También añade una columna opcional 'requerimiento' (texto legible
--- de lo que pidió el lead) para que el comercial prepare la oferta.
--- ============================================================
-
-BEGIN;
-
--- 1) Reemplazar la restricción de 'tipo'
-ALTER TABLE presupuestos DROP CONSTRAINT IF EXISTS presupuestos_tipo_check;
-ALTER TABLE presupuestos
-  ADD CONSTRAINT presupuestos_tipo_check
-  CHECK (tipo IN ('mes', 'bolsa', 'fraccionado'));
-
--- 2) Columna legible del requerimiento (no rompe inserts existentes)
-ALTER TABLE presupuestos ADD COLUMN IF NOT EXISTS requerimiento text;
-
-COMMIT;
 
 
 -- ▼▼▼ migracion-v25-storage-ofertas.sql ▼▼▼
@@ -61,22 +35,6 @@ create policy "ofertas_public_read"
 -- 3) Columnas de enlace en presupuestos (idempotente)
 alter table presupuestos add column if not exists url_pdf  text;
 alter table presupuestos add column if not exists url_pptx text;
-
-
--- ▼▼▼ migracion-v26-presupuestos-campos.sql ▼▼▼
--- ============================================================
--- migracion-v26-presupuestos-campos.sql
--- Campos adicionales del lead para la oferta:
---   cif, cargo, numero_oferta, comercial
--- ============================================================
-
-alter table presupuestos add column if not exists cif            text;
-alter table presupuestos add column if not exists cargo          text;
-alter table presupuestos add column if not exists numero_oferta  text;
-alter table presupuestos add column if not exists comercial      text default 'Alejandro';
-
--- Índice para localizar rápido por número de oferta
-create index if not exists idx_presupuestos_numero_oferta on presupuestos(numero_oferta);
 
 
 -- ▼▼▼ migracion-v27-correlativo-ofertas.sql ▼▼▼
@@ -1149,4 +1107,46 @@ on conflict (id) do update
       nivel = excluded.nivel,
       h_apoyo = excluded.h_apoyo,
       activa = excluded.activa;
+
+
+-- ▼▼▼ migracion-v32-presupuestos-integral.sql ▼▼▼
+-- ============================================================
+-- migracion-v32-presupuestos-integral.sql
+-- Deja la tabla 'presupuestos' lista para TODOS los flujos del
+-- generador de ofertas y del formulario de solicitud de info.
+-- Es idempotente: se puede ejecutar varias veces sin romper nada.
+--
+-- Resuelve el fallo silencioso de alta en base de datos:
+--   · columnas que faltaban (cif, cargo, numero_oferta, comercial,
+--     requerimiento, url_pdf, url_pptx)
+--   · NOT NULL en modelo/precio/email que bloqueaban las consultas
+--   · CHECK de 'tipo' ampliado a mes/bolsa/fraccionado/consulta
+-- ============================================================
+
+-- 1) Columnas nuevas (si no existen)
+alter table presupuestos add column if not exists cif           text;
+alter table presupuestos add column if not exists cargo         text;
+alter table presupuestos add column if not exists numero_oferta text;
+alter table presupuestos add column if not exists comercial     text default 'Alejandro';
+alter table presupuestos add column if not exists requerimiento text;
+alter table presupuestos add column if not exists url_pdf       text;
+alter table presupuestos add column if not exists url_pptx      text;
+
+-- 2) Quitar NOT NULL de campos que no siempre vienen (solicitudes de info)
+alter table presupuestos alter column email  drop not null;
+alter table presupuestos alter column modelo drop not null;
+alter table presupuestos alter column precio drop not null;
+
+-- 3) CHECK de 'tipo' ampliado (mes, bolsa, fraccionado, consulta)
+alter table presupuestos drop constraint if exists presupuestos_tipo_check;
+alter table presupuestos
+  add constraint presupuestos_tipo_check
+  check (tipo in ('mes','bolsa','fraccionado','consulta'));
+
+-- 4) Índice por número de oferta (búsquedas en el CRM)
+create index if not exists idx_presupuestos_numero on presupuestos(numero_oferta);
+
+-- 5) Asegurar que la política de insert existe (anónimo + interno)
+drop policy if exists presupuestos_anon_insert on presupuestos;
+create policy presupuestos_anon_insert on presupuestos for insert with check (true);
 
