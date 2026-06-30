@@ -1,7 +1,12 @@
 [build]
-  command = "cd app && npm install && npm run build"
+  command = "cd app && npm install && npm run build && cd ../netlify/functions && npm install"
   publish = "dist"
   functions = "netlify/functions"
+
+# Empaquetado de funciones: esbuild incluye las dependencias (pdf-lib, pptxgenjs)
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["pdf-lib", "pptxgenjs"]
 
 # Feed .ics suscribible de la agenda
 [[redirects]]

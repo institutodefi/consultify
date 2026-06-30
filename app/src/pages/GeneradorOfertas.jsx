@@ -96,8 +96,10 @@ export default function GeneradorOfertas({ publico = false }) {
       if (j && j.ok) {
         setEstado({ ok: true, ...j, numero });
       } else if (fila) {
-        // El documento falló pero la oferta quedó registrada: éxito parcial, no error duro.
+        // La oferta quedó registrada en el CRM, pero el documento falló.
+        // Mostramos el motivo real para poder diagnosticarlo (y marcamos éxito parcial).
         setEstado({ ok: true, numero, parcial: true });
+        if (j && j.error) setError(`Oferta ${numero} registrada, pero el documento falló: ${j.error}`);
       } else {
         setEstado(null);
         setError((j && j.error) ? `No se pudo generar: ${j.error}` : `No se pudo generar la oferta (código ${r.status}).`);
