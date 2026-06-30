@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/auth.jsx';
 import Shell from './components/Shell.jsx';
 import Calculadora from './pages/Calculadora.jsx';
+import GeneradorOfertas from './pages/GeneradorOfertas.jsx';
 import Acceso from './pages/Acceso.jsx';
 import ClientePortal from './portal/ClientePortal.jsx';
 import ConsultorPortal from './portal/ConsultorPortal.jsx';
@@ -24,7 +25,7 @@ function App() {
         <Shell>
           <Routes>
             <Route path="/" element={<Navigate to="/calculadora" replace />} />
-            <Route path="/calculadora" element={<Calculadora />} />
+            <Route path="/calculadora" element={<GeneradorOfertas publico />} />
             <Route path="/acceso" element={<Acceso />} />
             <Route path="/clientes/*" element={<Protected allow={['cliente','admin']}><ClientePortal /></Protected>} />
             <Route path="/consultores/*" element={<Protected allow={['consultor','admin']}><ConsultorPortal /></Protected>} />

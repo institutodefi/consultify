@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth.jsx';
 
 // Generador de ofertas: selección de normas + modelo + datos del cliente,
 // precio en vivo (sin/con IVA) y exportación a PDF/PPTX vía la función serverless.
-export default function GeneradorOfertas() {
+export default function GeneradorOfertas({ publico = false }) {
   const { user } = useAuth();
   const [sel, setSel] = useState(['9001']);          // 9001 base obligatoria
   const [modelo, setModelo] = useState('Implicación');
@@ -15,6 +15,8 @@ export default function GeneradorOfertas() {
   const [consent, setConsent] = useState(false);
   const [estado, setEstado] = useState(null);        // null | 'gen' | {ok,url_pdf,url_pptx,numero}
   const [error, setError] = useState(null);
+  const [pideInfo, setPideInfo] = useState(false);   // "Otra norma · pide info": abre formulario de solicitud
+  const [infoState, setInfoState] = useState('idle');// idle | sending | ok | error
 
   const toggle = (id) => {
     if (id === '9001') return;
@@ -81,12 +83,31 @@ export default function GeneradorOfertas() {
     }
   }
 
+  // Solicitud de información para normas no listadas ("Otra norma · pide info").
+  async function enviarSolicitudInfo() {
+    if (!cli.email || !consent) { setError('Indica email y acepta la política para enviar la solicitud.'); return; }
+    setError(null); setInfoState('sending');
+    try {
+      const contactoCompleto = `${cli.nombre} ${cli.apellidos}`.trim();
+      await fetch('/.netlify/functions/brevo-lead', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: contactoCompleto, empresa: cli.empresa, email: cli.email, telefono: cli.telefono,
+          cif: cli.cif, cargo: cli.cargo, comercial: 'Alejandro',
+          requerimiento: `SOLICITUD DE INFORMACIÓN · Otra norma · ${cli.normaInteres || 'sin especificar'}`,
+          consent: true,
+        }),
+      });
+      setInfoState('ok');
+    } catch (e) { setInfoState('error'); }
+  }
+
   return (
     <div>
       <div className="mb-6 max-w-2xl">
-        <p className="eyebrow">Generador de ofertas</p>
-        <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight">Crea una oferta en 60 segundos</h1>
-        <p className="mt-2 text-sm font-medium text-navy-400">Elige normas y modelo, mira el precio en vivo y exporta la oferta en PDF y PowerPoint.</p>
+        <p className="eyebrow">{publico ? 'Calcula tu oferta' : 'Generador de ofertas'}</p>
+        <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight">{publico ? 'Tu sistema de gestión, con precio en 60 segundos' : 'Crea una oferta en 60 segundos'}</h1>
+        <p className="mt-2 text-sm font-medium text-navy-400">Elige normas y modelo, mira el precio en vivo y {publico ? 'recibe tu propuesta personalizada.' : 'exporta la oferta en PDF y PowerPoint.'}</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px] items-start">
@@ -114,7 +135,45 @@ export default function GeneradorOfertas() {
                   </button>
                 );
               })}
+              {/* Otra norma · pide info → abre el formulario de solicitud */}
+              <button onClick={() => setPideInfo(v => !v)}
+                className={`flex items-start gap-3 rounded-xl border-[1.5px] border-dashed p-3 text-left transition ${pideInfo ? 'border-brand-orange bg-brand-orange/5' : 'border-navy-200 bg-white hover:border-brand-orange'}`}>
+                <span className="mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border-[1.5px] border-brand-orange text-[13px] font-bold text-brand-orangeDark">?</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold leading-tight text-brand-orangeDark">¿Quieres otra norma?</span>
+                  <span className="mt-0.5 block text-[11.5px] leading-snug text-navy-400">No dudes en pedirnos información. Te asesoramos sin compromiso.</span>
+                </span>
+              </button>
             </div>
+
+            {/* Formulario de solicitud de información */}
+            {pideInfo && (
+              <div className="mt-4 rounded-xl border-[1.5px] border-brand-orange/40 bg-brand-orange/5 p-4">
+                {infoState === 'ok' ? (
+                  <p className="text-sm font-bold text-brand-orangeDark">¡Gracias! Hemos recibido tu solicitud. Te contactaremos muy pronto.</p>
+                ) : (
+                  <>
+                    <p className="mb-3 text-sm font-bold text-navy-800">Cuéntanos qué norma te interesa y te asesoramos.</p>
+                    <div className="grid gap-2.5 sm:grid-cols-2">
+                      <input className="input sm:col-span-2" placeholder="¿Qué norma o certificación te interesa?" value={cli.normaInteres || ''} onChange={e => setCli({ ...cli, normaInteres: e.target.value })} />
+                      <input className="input" placeholder="Nombre" value={cli.nombre} onChange={e => setCli({ ...cli, nombre: e.target.value })} />
+                      <input className="input" placeholder="Empresa" value={cli.empresa} onChange={e => setCli({ ...cli, empresa: e.target.value })} />
+                      <input className="input" type="email" placeholder="Email" value={cli.email} onChange={e => setCli({ ...cli, email: e.target.value })} />
+                      <input className="input" placeholder="Teléfono" value={cli.telefono} onChange={e => setCli({ ...cli, telefono: e.target.value })} />
+                    </div>
+                    <label className="mt-3 flex items-start gap-2.5 text-[12.5px] text-navy-500 cursor-pointer">
+                      <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-orange" />
+                      <span>Acepto que TuConsultor trate mis datos para contactarme. <a href="/legal/privacidad.html" target="_blank" rel="noreferrer" className="font-semibold text-brand-orangeDark underline">Política de privacidad</a> (RGPD).</span>
+                    </label>
+                    <button onClick={enviarSolicitudInfo} disabled={infoState === 'sending'}
+                      className="mt-3 rounded-xl bg-brand-orange px-5 py-2.5 text-sm font-extrabold text-white transition hover:bg-brand-orangeDark disabled:opacity-50">
+                      {infoState === 'sending' ? 'Enviando…' : 'Solicitar información'}
+                    </button>
+                    {infoState === 'error' && <p className="mt-2 text-xs font-bold text-red-600">No se pudo enviar. Inténtalo de nuevo.</p>}
+                  </>
+                )}
+              </div>
+            )}
             <label className="mt-3 flex items-start gap-2.5 rounded-xl border-[1.5px] border-navy-100 bg-navy-50/50 p-3 cursor-pointer">
               <input type="checkbox" checked={tiene9001} onChange={e => setTiene9001(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-orange" />
               <span className="text-sm">
