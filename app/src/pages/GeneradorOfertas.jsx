@@ -164,7 +164,7 @@ export default function GeneradorOfertas({ publico = false }) {
   }
 
   return (
-    <div>
+    <div className={publico ? 'mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10' : ''}>
       <div className="mb-6 max-w-2xl">
         <p className="eyebrow">{publico ? 'Calcula tu oferta' : 'Generador de ofertas'}</p>
         <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight">{publico ? 'Tu sistema de gestión, con precio en 60 segundos' : 'Crea una oferta en 60 segundos'}</h1>
