@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { NORMAS, MODELOS, MODELO_IDS, calcular, fmtEUR } from '../lib/calcEngine.js';
-import { insertRow, siguienteNumeroOferta } from '../lib/data.js';
+import { insertRow, siguienteNumeroOferta, upsertClienteDesdeFormulario } from '../lib/data.js';
 import { linkWhatsApp } from '../lib/telefono.js';
 import { useAuth } from '../lib/auth.jsx';
 
@@ -92,6 +92,18 @@ export default function GeneradorOfertas({ publico = false }) {
           meses: res.meses, tiene9001, consent: true,
         }),
       }).catch(() => {});
+    }
+
+    // 3-bis) Con consentimiento RGPD, el solicitante queda como cliente
+    // (código CL-NNNN autogenerado, Fátima como Director de Proyecto por defecto).
+    // Si ya existe (mismo email o CIF), se actualiza en vez de duplicar.
+    if (cli.email && consent) {
+      try {
+        await upsertClienteDesdeFormulario({
+          empresa: cli.empresa, contacto: contactoCompleto,
+          email: cli.email, telefono: cli.telefono, cif: cli.cif,
+        });
+      } catch (e) { console.error('upsert cliente', e); }
     }
 
     // 4) Generar el documento (PDF + PPTX). Aquí sí informamos del error real si lo hay.

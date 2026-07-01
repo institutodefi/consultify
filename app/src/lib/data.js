@@ -71,6 +71,80 @@ export async function siguienteNumeroOferta() {
   } catch { return fallback(); }
 }
 
+/**
+ * Siguiente código de cliente correlativo con formato CL-NNNN (CL-0001, CL-0002…).
+ * Mira los códigos existentes y devuelve el siguiente. No es atómico, pero para el
+ * volumen de altas manuales/formulario es suficiente; ante colisión, el upsert
+ * reintenta con el siguiente hueco.
+ */
+export async function siguienteCodigoCliente() {
+  const fmt = (n) => `CL-${String(n).padStart(4, '0')}`;
+  try {
+    const filas = await listTable('clientes');
+    let max = 0;
+    for (const c of (filas || [])) {
+      const m = /^CL-(\d+)$/i.exec((c.codigo || '').trim());
+      if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }
+    }
+    return fmt(max + 1);
+  } catch {
+    return fmt(1);
+  }
+}
+
+/**
+ * Crea o actualiza un cliente a partir de los datos del formulario público.
+ * - Si ya existe un cliente con el mismo email o CIF, lo actualiza (no duplica).
+ * - Si es nuevo, le asigna un código CL-NNNN correlativo.
+ * - Director de Proyecto por defecto: Fátima (si se encuentra en el equipo).
+ * Devuelve el cliente resultante (o null en DEMO/errores no críticos).
+ */
+export async function upsertClienteDesdeFormulario({ empresa, contacto, email, telefono, cif }) {
+  if (DEMO) return { id: uid(), codigo: 'CL-0001', empresa, contacto, email, telefono, cif };
+  const emailN = (email || '').trim().toLowerCase();
+  const cifN = (cif || '').trim().toUpperCase();
+
+  // 1) Buscar cliente existente por email o CIF.
+  let existente = null;
+  try {
+    const filas = await listTable('clientes');
+    existente = (filas || []).find((c) =>
+      (emailN && (c.email || '').trim().toLowerCase() === emailN) ||
+      (cifN && (c.cif || '').trim().toUpperCase() === cifN)
+    ) || null;
+  } catch { /* si no podemos leer, seguimos como alta nueva */ }
+
+  // 2) Director de Proyecto por defecto = Fátima.
+  let directorId = null;
+  try {
+    const equipo = await listTable('consultores');
+    const fatima = (equipo || []).find((p) => `${p.nombre || ''} ${p.apellidos || ''}`.toLowerCase().includes('fátima')
+      || (p.nombre || '').toLowerCase().includes('fatima'));
+    if (fatima?.id) directorId = fatima.id;
+  } catch { /* opcional */ }
+
+  // 3) Actualizar si existe.
+  if (existente?.id) {
+    const patch = {};
+    if (empresa) patch.empresa = empresa;
+    if (contacto) patch.contacto = contacto;
+    if (emailN) patch.email = email;
+    if (telefono) patch.telefono = telefono;
+    if (cifN) patch.cif = cif;
+    if (!existente.director_proyecto_id && directorId) patch.director_proyecto_id = directorId;
+    if (!existente.codigo) patch.codigo = await siguienteCodigoCliente();
+    try { return await updateRow('clientes', existente.id, patch); }
+    catch { return existente; }
+  }
+
+  // 4) Crear nuevo con código correlativo.
+  const codigo = await siguienteCodigoCliente();
+  const datos = { codigo, empresa: empresa || contacto || email, contacto, email, telefono, cif,
+    ...(directorId ? { director_proyecto_id: directorId } : {}) };
+  try { return await insertRow('clientes', datos); }
+  catch { return null; }
+}
+
 export async function updateRow(table, id, patch) {
   if (DEMO) { const t = demo()[table]; const i = t.findIndex(r => r.id === id); if (i >= 0) t[i] = { ...t[i], ...patch }; return t[i]; }
   const { data, error } = await supabase.from(table).update(patch).eq('id', id).select().single();

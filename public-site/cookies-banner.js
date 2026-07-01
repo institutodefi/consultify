@@ -68,11 +68,23 @@
     if (cfg) cfg.onclick = function () { render(true); };
     accept.onclick = function () {
       var an = config ? !!(document.getElementById('cky-an') && document.getElementById('cky-an').checked) : true;
-      guardar({ necesarias: true, analiticas: an, ts: Date.now() }); quitar(); mostrarFab();
+      guardar({ necesarias: true, analiticas: an, ts: Date.now() }); aplicarConsentGTM(an); quitar(); mostrarFab();
     };
     reject.onclick = function () {
-      guardar({ necesarias: true, analiticas: false, ts: Date.now() }); quitar(); mostrarFab();
+      guardar({ necesarias: true, analiticas: false, ts: Date.now() }); aplicarConsentGTM(false); quitar(); mostrarFab();
     };
+  }
+
+  // Comunica la elección a Google Consent Mode v2 (si GTM está presente).
+  function aplicarConsentGTM(analiticas) {
+    if (typeof window.gtag !== 'function') return;
+    var estado = analiticas ? 'granted' : 'denied';
+    window.gtag('consent', 'update', {
+      'analytics_storage': estado,
+      'ad_storage': estado,
+      'ad_user_data': estado,
+      'ad_personalization': estado
+    });
   }
 
   // Mostrar solo si no hay elección previa; si la hay, dejar el botón flotante para revisarla.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { listTable, insertRow, updateRow, deleteRow } from '../../lib/data.js';
+import { listTable, insertRow, updateRow, deleteRow, siguienteCodigoCliente } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
 
 const VACIO = { codigo: '', empresa: '', contacto: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
@@ -68,6 +68,16 @@ export default function Clientes() {
   const normasCliente = useMemo(() => [...new Set(
     emps.flatMap(e => normasEmp.filter(n => String(n.empresa_id) === String(e.id)).map(n => n.norma_id))
   )], [emps, normasEmp]);
+
+  // Prepara el formulario de alta con código CL-NNNN autogenerado y Fátima
+  // como Director de Proyecto por defecto (si está en el equipo).
+  async function nuevoCliente() {
+    setMsg(null);
+    const codigo = await siguienteCodigoCliente().catch(() => '');
+    const fatima = equipo.find(c => `${c.nombre || ''} ${c.apellidos || ''}`.toLowerCase().includes('fátima')
+      || (c.nombre || '').toLowerCase().includes('fatima'));
+    setForm({ ...VACIO, codigo, director_proyecto_id: fatima?.id || '' });
+  }
 
   async function guardarCliente(e) {
     e.preventDefault(); setMsg(null);
@@ -139,7 +149,7 @@ export default function Clientes() {
             </select>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setForm({ ...VACIO })} className="btn-orange !px-4 !py-2">+ Nuevo cliente</button>
+            <button onClick={nuevoCliente} className="btn-orange !px-4 !py-2">+ Nuevo cliente</button>
             {cliente && <button onClick={() => setForm({ ...VACIO, ...cliente })} className="btn-ghost !px-4 !py-2">Editar datos</button>}
           </div>
         </div>
