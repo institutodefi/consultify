@@ -14,6 +14,49 @@ const tipoTarea = (t) => {
 };
 const TIPO_LABEL = { produccion: 'Producción', gestion: 'Gestión', coordinacion: 'Coordinación' };
 
+// Editor de bloques de ejecución con ESTADO LOCAL: permite escribir la fecha y las
+// horas con libertad y solo persiste al salir del campo (onBlur) o al añadir/quitar.
+// Sin esto, cada pulsación disparaba un guardado asíncrono que revertía la edición
+// de la fecha (no dejaba escribirla entera).
+function EditorBloques({ tarea, bloquesIniciales, onPersistir, onAdd, onQuitar }) {
+  const [locales, setLocales] = useState(bloquesIniciales);
+
+  // Si cambian los bloques por fuera (añadir/quitar/recargar), reflejarlo.
+  useEffect(() => { setLocales(bloquesIniciales); }, [JSON.stringify(bloquesIniciales)]);
+
+  const setCampo = (i, campo, val) =>
+    setLocales(bs => bs.map((b, j) => j === i ? { ...b, [campo]: val } : b));
+
+  const persistir = (bloques) => onPersistir(tarea, bloques);
+
+  return (
+    <div className="space-y-1.5">
+      {locales.map((b, bi) => (
+        <div key={bi} className="flex items-center gap-2">
+          <span className="w-14 text-xs font-bold text-navy-400">Bloque {bi + 1}</span>
+          <input
+            type="date"
+            className="input !py-1 !text-xs !w-auto"
+            value={b.fecha || ''}
+            onChange={e => setCampo(bi, 'fecha', e.target.value)}
+            onBlur={() => persistir(locales)}
+          />
+          <input
+            type="number" min="0.5" step="0.5"
+            className="input !py-1 !text-xs !w-20 text-right"
+            value={b.horas}
+            onChange={e => setCampo(bi, 'horas', Number(e.target.value) || 0)}
+            onBlur={() => persistir(locales)}
+          />
+          <span className="text-xs text-navy-400">h</span>
+          <button onClick={() => onQuitar(tarea, bi)} className="text-xs font-bold text-red-400 hover:underline">×</button>
+        </div>
+      ))}
+      <button onClick={() => onAdd(tarea)} className="chip border border-brand-orange bg-brand-orange/10 text-[11px] font-bold text-brand-orangeDark">+ bloque</button>
+    </div>
+  );
+}
+
 export default function Proyectos() {
   const [clientes, setClientes] = useState([]);
   const [proyectos, setProyectos] = useState([]);
@@ -133,22 +176,18 @@ export default function Proyectos() {
 
   // Edita una tarea ya distribuida: marca editada_manual para que la sincronización
   // del catálogo no la pise, y refleja el cambio en la agenda.
-  // Edita un bloque de ejecución y resincroniza la agenda automáticamente.
-  async function editarBloque(t, idx, campos) {
-    const base = Array.isArray(t.bloques_ejecucion) && t.bloques_ejecucion.length
-      ? t.bloques_ejecucion
-      : trocearEnBloques(t.horas).map(h => ({ horas: h, fecha: t.fecha_estimada }));
-    const bloques = base.map((b, i) => i === idx ? { ...b, ...campos } : b);
-    await guardarBloques(t, bloques);
-  }
   async function addBloque(t) {
-    const base = Array.isArray(t.bloques_ejecucion) ? [...t.bloques_ejecucion] : [];
+    const base = Array.isArray(t.bloques_ejecucion) && t.bloques_ejecucion.length
+      ? [...t.bloques_ejecucion]
+      : trocearEnBloques(t.horas).map(h => ({ horas: h, fecha: t.fecha_estimada }));
     base.push({ horas: 4, fecha: t.fecha_estimada });
     await guardarBloques(t, base);
   }
   async function quitarBloque(t, idx) {
-    const base = (Array.isArray(t.bloques_ejecucion) ? t.bloques_ejecucion : []).filter((_, i) => i !== idx);
-    await guardarBloques(t, base);
+    const base = Array.isArray(t.bloques_ejecucion) && t.bloques_ejecucion.length
+      ? t.bloques_ejecucion
+      : trocearEnBloques(t.horas).map(h => ({ horas: h, fecha: t.fecha_estimada }));
+    await guardarBloques(t, base.filter((_, i) => i !== idx));
   }
   async function guardarBloques(t, bloques) {
     const upd = { bloques_ejecucion: bloques, editada_manual: true };
@@ -566,18 +605,13 @@ export default function Proyectos() {
                           <td></td>
                           <td colSpan={6} className="py-2 pr-3">
                             <p className="mb-2 text-xs font-bold uppercase tracking-wider text-navy-300">Bloques de ejecución (4h por defecto, editables)</p>
-                            <div className="space-y-1.5">
-                              {(bloques.length ? bloques : trocearEnBloques(t.horas).map(h => ({ horas: h, fecha: t.fecha_estimada }))).map((b, bi) => (
-                                <div key={bi} className="flex items-center gap-2">
-                                  <span className="w-14 text-xs font-bold text-navy-400">Bloque {bi + 1}</span>
-                                  <input type="date" className="input !py-1 !text-xs !w-auto" value={b.fecha || ''} onChange={e => editarBloque(t, bi, { fecha: e.target.value })} />
-                                  <input type="number" min="0.5" step="0.5" className="input !py-1 !text-xs !w-20 text-right" value={b.horas} onChange={e => editarBloque(t, bi, { horas: Number(e.target.value) || 0 })} />
-                                  <span className="text-xs text-navy-400">h</span>
-                                  <button onClick={() => quitarBloque(t, bi)} className="text-xs font-bold text-red-400 hover:underline">×</button>
-                                </div>
-                              ))}
-                              <button onClick={() => addBloque(t)} className="chip border border-brand-orange bg-brand-orange/10 text-[11px] font-bold text-brand-orangeDark">+ bloque</button>
-                            </div>
+                            <EditorBloques
+                              tarea={t}
+                              bloquesIniciales={bloques.length ? bloques : trocearEnBloques(t.horas).map(h => ({ horas: h, fecha: t.fecha_estimada }))}
+                              onPersistir={guardarBloques}
+                              onAdd={addBloque}
+                              onQuitar={quitarBloque}
+                            />
                           </td>
                         </tr>
                       )}

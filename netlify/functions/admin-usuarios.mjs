@@ -60,7 +60,11 @@ async function autorizarSuperadmin(token) {
 export default async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return json({ ok: false, error: 'Backend no configurado' }, 500);
+    const faltan = [
+      !process.env.SUPABASE_URL && 'SUPABASE_URL',
+      !process.env.SUPABASE_SERVICE_ROLE_KEY && 'SUPABASE_SERVICE_ROLE_KEY',
+    ].filter(Boolean).join(' y ');
+    return json({ ok: false, error: `Backend no configurado: falta la variable de entorno ${faltan} en Netlify. Añádela en Site configuration → Environment variables y vuelve a desplegar.` }, 500);
   }
 
   const auth = req.headers.get('authorization') || '';
