@@ -35,7 +35,7 @@ export function AuthProvider({ children }) {
     setRealRole(data?.rol || 'cliente');
     setLoading(false);
     // Marca de último acceso (no bloqueante).
-    supabase.rpc('marcar_acceso').catch(() => {});
+    Promise.resolve(supabase.rpc('marcar_acceso')).catch(() => {});
   }
 
   async function login(email, password) {
@@ -58,7 +58,7 @@ export function AuthProvider({ children }) {
       await supabase.auth.signOut();
       throw new Error('Tu cuenta está desactivada. Contacta con el administrador.');
     }
-    supabase.rpc('marcar_acceso').catch(() => {});
+    Promise.resolve(supabase.rpc('marcar_acceso')).catch(() => {});
     return { role: p?.rol || 'cliente' };
   }
 

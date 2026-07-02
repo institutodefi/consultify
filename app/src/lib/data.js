@@ -55,6 +55,19 @@ export async function insertRow(table, row) {
     if (!e2) return { ...row };          // alta correcta; sin id de vuelta
     throw e2;                            // si también falla, propagamos el real
   }
+  // 3) Columna ausente en el schema cache de PostgREST (p.ej. migración pendiente
+  //    o cache sin recargar). Reintentamos SIN esa columna para no abortar la
+  //    operación completa. Es una red de seguridad: conviene aplicar la migración
+  //    y recargar el schema, pero al menos la fila se crea con el resto de campos.
+  const colMatch = (error.message || '').match(/could not find the '([^']+)' column/i)
+                || (error.message || '').match(/'([^']+)' column of '[^']+' in the schema cache/i);
+  const esColumnaFaltante = error.code === 'PGRST204' || msg.includes('schema cache') || !!colMatch;
+  if (esColumnaFaltante && colMatch && colMatch[1] in row) {
+    const col = colMatch[1];
+    const { [col]: _omit, ...resto } = row;
+    if (import.meta.env.DEV) console.warn(`[insertRow] Columna '${col}' ausente en el schema cache de '${table}'. Reintento sin ella. Aplica la migración correspondiente y recarga el schema.`);
+    return insertRow(table, resto);      // reintento recursivo, puede faltar más de una
+  }
   throw error;
 }
 
