@@ -6,7 +6,7 @@ import BoxEquipo from './BoxEquipo.jsx';
 import { EFICIENCIA } from '../../lib/calcEngine.js';
 import {
   YEAR_AGENDA, FESTIVOS_2026, MESES, TOPE_ANUAL, MAX_HORAS_DIA, DIAS_VACACIONES,
-  PCT_PRODUCTIVO, PCT_GESTION, PCT_COORDINACION, TIPOS_TAREA, TIPO_BY_ID,
+  PCT_PRODUCTIVO, PCT_GESTION, PCT_COORDINACION, PCT_PROC_INTERNO, TIPOS_TAREA, TIPO_BY_ID,
   toISO, hoyISO, diasDelMes, esLaborable, horasDia, resumenAnual,
   getFestivos, getVacaciones, toggleVacacion,
   getTareasAgenda, crearTareaAgenda, actualizarTareaAgenda, borrarTareaAgenda,
@@ -65,7 +65,7 @@ function RelojAnual({ previstas, reales, proyeccion, ritmo, capacidad }) {
 }
 
 // ════════════════ MODAL DE TAREA ════════════════
-function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, clientes, clienteTareas = [], tareasDelDia, onGuardar, onBorrar, onCerrar }) {
+function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, clientes, clienteTareas = [], tareasDelDia, procesosInternos = [], equipo = [], onGuardar, onBorrar, onCerrar }) {
   const fmtNum = (n) => (Math.round((n || 0) * 100) / 100).toLocaleString('es-ES');
   const editando = Boolean(tarea?.id);
   // Una tarea que viene de un proyecto tiene origen_cliente_tarea_id: su título,
@@ -82,6 +82,8 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
       ? tarea.ejecuciones
       : (tarea?.fecha_efectiva ? [{ fecha: tarea.fecha_efectiva, horas: Number(tarea.horas_reales) || 0 }] : []),
     proyecto_id: tarea?.proyecto_id ?? '',
+    proceso_interno_id: tarea?.proceso_interno_id ?? '',
+    colaboradores: Array.isArray(tarea?.colaboradores) ? tarea.colaboradores : [],
     tipo: tarea?.tipo ?? 'produccion',
     hora_inicio: tarea?.hora_inicio ?? '09:00',
     hora_fin: tarea?.hora_fin ?? '',
@@ -123,7 +125,9 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
         ejecuciones: f.ejecuciones,
         fecha_efectiva: f.ejecuciones[0]?.fecha || null,
         horas_reales: f.ejecuciones.length ? f.ejecuciones.reduce((s, e) => s + (Number(e.horas) || 0), 0) : null,
-        proyecto_id: f.proyecto_id || null,
+        proyecto_id: f.tipo === 'proceso_interno' ? null : (f.proyecto_id || null),
+        proceso_interno_id: f.tipo === 'proceso_interno' ? (f.proceso_interno_id || null) : null,
+        colaboradores: f.colaboradores || [],
         codigo: f.codigo || null,
         tipo: f.tipo,
         hora_inicio: f.hora_inicio || '09:00',
@@ -174,9 +178,14 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
               </select>
             </div>
             <div>
-              <label className="label">Proyecto</label>
+              <label className="label">{f.tipo === 'proceso_interno' ? 'Proceso interno' : 'Proyecto'}</label>
               {deProyecto ? (
                 <div className="input bg-navy-50/60 text-navy-700 font-medium">{proyectoAuto}</div>
+              ) : f.tipo === 'proceso_interno' ? (
+                <select className="input" value={f.proceso_interno_id} onChange={set('proceso_interno_id')}>
+                  <option value="">— Elige proceso interno —</option>
+                  {procesosInternos.filter((p) => p.activo !== false).map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
               ) : (
                 <select className="input" value={f.proyecto_id} onChange={set('proyecto_id')}>
                   <option value="">— Sin proyecto —</option>
@@ -196,7 +205,30 @@ function ModalTarea({ tarea, fecha, consultorId, consultores, proyectos, cliente
                   }`}>{t.nombre}</button>
               ))}
             </div>
-            <p className="mt-1 text-[11px] font-medium text-navy-300">Cada tipo consume su bolsa de jornada: producción {PCT_PRODUCTIVO * 100} % · gestión {PCT_GESTION * 100} % · coordinación {PCT_COORDINACION * 100} %.</p>
+            <p className="mt-1 text-[11px] font-medium text-navy-300">Cada tipo consume su bolsa de jornada: producción {PCT_PRODUCTIVO * 100} % · gestión {PCT_GESTION * 100} % · coordinación {PCT_COORDINACION * 100} % · procesos internos {PCT_PROC_INTERNO * 100} %.</p>
+          </div>
+
+          {/* Colaboradores invitados (gestión manual) */}
+          <div>
+            <label className="label">Colaboradores <span className="font-normal text-navy-300">(equipo invitado a esta tarea)</span></label>
+            <div className="flex flex-wrap gap-1.5">
+              {equipo.filter((c) => String(c.id) !== String(f.consultor_id)).map((c) => {
+                const inv = (f.colaboradores || []).some((x) => String(x.id) === String(c.id));
+                return (
+                  <button key={c.id} type="button"
+                    onClick={() => setF((x) => ({
+                      ...x,
+                      colaboradores: inv
+                        ? x.colaboradores.filter((y) => String(y.id) !== String(c.id))
+                        : [...x.colaboradores, { id: c.id, nombre: c.nombre, email: c.email || null }],
+                    }))}
+                    className={`chip border transition ${inv ? 'border-brand-orange bg-brand-orange/15 text-brand-orangeDark' : 'border-navy-200 bg-white text-navy-400 hover:border-navy-400'}`}>
+                    {inv ? '✓ ' : '+ '}{c.nombre}
+                  </button>
+                );
+              })}
+              {equipo.length <= 1 && <span className="text-xs text-navy-300">No hay más miembros de equipo para invitar.</span>}
+            </div>
           </div>
 
           {/* Planificado */}
@@ -412,6 +444,7 @@ export default function Agenda() {
   const YEAR = YEAR_AGENDA;
   const [consultores, setConsultores] = useState([]);
   const [proyectos, setProyectos] = useState([]);
+  const [procesosInternos, setProcesosInternos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [clienteTareas, setClienteTareas] = useState([]);
   const [consultorId, setConsultorId] = useState('');
@@ -434,6 +467,7 @@ export default function Agenda() {
       if (act.length) { setConsultorId(String(act[0].id)); setEquipoSel(new Set([String(act[0].id)])); }
     }).catch(() => setErr('No se pudieron cargar los consultores.'));
     listTable('proyectos_cliente').then(setProyectos).catch(() => { listTable('proyectos').then(setProyectos).catch(() => {}); });
+    listTable('procesos_internos').then(setProcesosInternos).catch(() => setProcesosInternos([]));
     listTable('clientes').then(setClientes).catch(() => {});
     listTable('cliente_tareas').then(setClienteTareas).catch(() => setClienteTareas([]));
   }, []);
@@ -805,6 +839,7 @@ export default function Agenda() {
           tarea={modal.tarea} fecha={modal.fecha ?? modal.tarea?.fecha_prevista}
           consultorId={consultorId} consultores={consultores}
           proyectos={proyectos} clientes={clientes} clienteTareas={clienteTareas} tareasDelDia={tareas}
+          procesosInternos={procesosInternos} equipo={consultores}
           onGuardar={guardarTarea} onBorrar={borrarTarea} onCerrar={() => setModal(null)}
         />
       )}

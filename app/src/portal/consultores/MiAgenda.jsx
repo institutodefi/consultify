@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { listTable } from '../../lib/data.js';
 import { getTareasAgenda, TIPO_BY_ID } from '../../lib/agenda.js';
 import { useAuth } from '../../lib/auth.jsx';
+import CalendarioPlanning from './CalendarioPlanning.jsx';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const YEAR = new Date().getFullYear();
@@ -38,6 +39,7 @@ export default function MiAgenda() {
   const [tareas, setTareas] = useState([]);
   const [mesesSel, setMesesSel] = useState(new Set([new Date().getMonth()]));
   const [cargado, setCargado] = useState(false);
+  const [vista, setVista] = useState('lista'); // 'lista' | 'planning'
 
   // Identifica MI consultor por el email del usuario logueado.
   useEffect(() => {
@@ -84,16 +86,27 @@ export default function MiAgenda() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="eyebrow">Mi agenda</p>
-        <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight">Mis tareas y mi jornada</h1>
-        {yo && <p className="mt-1 text-sm font-medium text-navy-400">{yo.nombre} {yo.apellidos || ''} · jornada {capacidad}%</p>}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="eyebrow">Mi agenda</p>
+          <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight">Mis tareas y mi jornada</h1>
+          {yo && <p className="mt-1 text-sm font-medium text-navy-400">{yo.nombre} {yo.apellidos || ''} · jornada {capacidad}%</p>}
+        </div>
+        <div className="inline-flex rounded-xl border border-navy-200 p-0.5">
+          <button onClick={() => setVista('lista')} className={`rounded-lg px-3 py-1.5 text-sm font-bold transition ${vista === 'lista' ? 'bg-navy-800 text-white' : 'text-navy-400 hover:text-navy-700'}`}>Lista</button>
+          <button onClick={() => setVista('planning')} className={`rounded-lg px-3 py-1.5 text-sm font-bold transition ${vista === 'planning' ? 'bg-navy-800 text-white' : 'text-navy-400 hover:text-navy-700'}`}>Planning</button>
+        </div>
       </div>
 
       {cargado && !yo && (
         <div className="card"><p className="text-sm font-medium text-navy-400">No encontramos tu ficha de consultor. Pide que asocien tu correo en Equipo.</p></div>
       )}
 
+      {vista === 'planning' && yo && (
+        <CalendarioPlanning year={YEAR} monthInicial={[...mesesSel][0] ?? new Date().getMonth()} tareas={tareas} />
+      )}
+
+      {vista === 'lista' && <>
       {/* Selector de meses */}
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -172,6 +185,7 @@ export default function MiAgenda() {
           </div>
         )}
       </div>
+      </>}
     </div>
   );
 }

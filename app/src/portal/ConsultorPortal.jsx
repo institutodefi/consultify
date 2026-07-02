@@ -9,6 +9,7 @@ import Agenda from './consultores/Agenda.jsx';
 import MiAgenda from './consultores/MiAgenda.jsx';
 import Sistemas from './consultores/Sistemas.jsx';
 import Accesos from './consultores/Accesos.jsx';
+import ProcesosInternos from './consultores/ProcesosInternos.jsx';
 import GeneradorOfertas from '../pages/GeneradorOfertas.jsx';
 import BarraVerComo from '../components/BarraVerComo.jsx';
 import { useAuth } from '../lib/auth.jsx';
@@ -27,6 +28,7 @@ const Icon = ({ name, className = 'h-5 w-5' }) => {
     'folder-kanban': <><path d="M4 20a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2Z" /><path d="M8 10v4M12 10v2M16 10v6" /></>,
     'user-cog': <><circle cx="9" cy="7" r="4" /><path d="M2 21v-2a4 4 0 0 1 4-4h5" /><circle cx="18" cy="16" r="3" /><path d="M18 12v1M18 19v1M21.5 14l-.9.5M15.4 17.5l-.9.5M21.5 18l-.9-.5M15.4 14.5l-.9-.5" /></>,
     'key': <><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.7 12.3 21 2M16 7l3 3M18 5l3 3" /></>,
+    'repeat': <><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></>,
   };
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -123,6 +125,7 @@ export default function ConsultorPortal() {
               <Route path="planificador" element={<Guard ok={verPlanAgendaSist}><GeneradorOfertas /></Guard>} />
               <Route path="equipo" element={<Guard ok={verEquipo}><Equipo /></Guard>} />
               <Route path="accesos" element={<Guard ok={role === 'superadmin'}><Accesos /></Guard>} />
+              <Route path="procesos-internos" element={<Guard ok={['superadmin','admin','consultor'].includes(role)}><ProcesosInternos /></Guard>} />
               <Route path="sistemas" element={<Guard ok={verEquipo}><Sistemas /></Guard>} />
               <Route path="clientes" element={<Guard ok={verClientes}><Clientes /></Guard>} />
               <Route path="ofertas" element={<Guard ok={verClientes}><Ofertas /></Guard>} />

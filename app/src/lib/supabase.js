@@ -45,6 +45,11 @@ export const demoDB = {
     { id: 'en2', empresa_id: 'e1', norma_id: '14001', alcance: 'Diseño y fabricación de componentes metálicos.' },
     { id: 'en3', empresa_id: 'e3', norma_id: '27001', alcance: 'Servicios de ciberseguridad gestionada.' },
   ],
+  procesos_internos: [
+    { id: 'pi1', nombre: 'Reunión de equipo', codigo: 'PI-REU', descripcion: 'Reuniones internas', color: '#0A2A6C', activo: true, orden: 10 },
+    { id: 'pi2', nombre: 'Formación interna', codigo: 'PI-FORM', descripcion: 'Formación del equipo', color: '#0e7490', activo: true, orden: 20 },
+    { id: 'pi3', nombre: 'Mejora de metodología', codigo: 'PI-MET', descripcion: 'Plantillas y herramientas', color: '#7c3aed', activo: true, orden: 30 },
+  ],
   presupuestos: [
     { id: 'pr1', email: 'maria@industriasnorte.es', normas: ['9001','14001','27001'], modelo: 'Implicación', precio: 1325, tipo: 'mes', creado: '2026-06-01T10:00:00Z' },
   ],

@@ -27,14 +27,16 @@ export const YEAR_AGENDA = 2026; // año de ajuste
 
 // Reparto de la jornada (sobre el objetivo de convenio ya ajustado al tope):
 export const PCT_PRODUCTIVO   = 0.70; // horas facturables a cliente (tareas)
-export const PCT_GESTION      = 0.20; // gestión interna
+export const PCT_GESTION      = 0.10; // gestión interna
 export const PCT_COORDINACION = 0.10; // coordinación
+export const PCT_PROC_INTERNO = 0.10; // procesos internos (sin proyecto de cliente)
 
 // Tipos de tarea: cada una consume su bolsa de jornada
 export const TIPOS_TAREA = [
-  { id: 'produccion',   nombre: 'Producción / Proyecto', pct: PCT_PRODUCTIVO },
-  { id: 'gestion',      nombre: 'Gestión',               pct: PCT_GESTION },
-  { id: 'coordinacion', nombre: 'Coordinación',          pct: PCT_COORDINACION },
+  { id: 'produccion',      nombre: 'Producción / Proyecto', pct: PCT_PRODUCTIVO },
+  { id: 'gestion',         nombre: 'Gestión',               pct: PCT_GESTION },
+  { id: 'coordinacion',    nombre: 'Coordinación',          pct: PCT_COORDINACION },
+  { id: 'proceso_interno', nombre: 'Procesos internos',     pct: PCT_PROC_INTERNO },
 ];
 export const TIPO_BY_ID = Object.fromEntries(TIPOS_TAREA.map(t => [t.id, t]));
 
@@ -92,8 +94,8 @@ export function resumenMes(year, month, festivosSet, vacacionesSet, tareas) {
     if (vacacionesSet.has(toISO(d))) { horasVacaciones += h; diasVacacionesN += 1; }
   }
   let previstas = 0, reales = 0;
-  const prev = { produccion: 0, gestion: 0, coordinacion: 0 };
-  const real = { produccion: 0, gestion: 0, coordinacion: 0 };
+  const prev = { produccion: 0, gestion: 0, coordinacion: 0, proceso_interno: 0 };
+  const real = { produccion: 0, gestion: 0, coordinacion: 0, proceso_interno: 0 };
   // Para la CAPACIDAD del consultor cuentan las horas que la tarea le
   // consume (horas_consultor, ya con eficiencia). Si no está, cae a
   // horas_previstas (compatibilidad con tareas antiguas).
@@ -130,6 +132,7 @@ export function resumenAnual(year, festivosSet, vacacionesSet, tareas, pctJornad
     m.productivas  = m.objetivo * PCT_PRODUCTIVO;    // facturable a cliente
     m.gestion      = m.objetivo * PCT_GESTION;
     m.coordinacion = m.objetivo * PCT_COORDINACION;
+    m.procesoInterno = m.objetivo * PCT_PROC_INTERNO;
     m.disponibles  = Math.max(0, m.productivas - m.prevTipo.produccion); // hueco facturable
   }
   const ajusteTope = Math.max(0, brutoTotal - TOPE_ANUAL); // h recortadas si excede el tope
