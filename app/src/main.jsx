@@ -27,8 +27,8 @@ function App() {
             <Route path="/" element={<Navigate to="/calculadora" replace />} />
             <Route path="/calculadora" element={<GeneradorOfertas publico />} />
             <Route path="/acceso" element={<Acceso />} />
-            <Route path="/clientes/*" element={<Protected allow={['cliente','admin']}><ClientePortal /></Protected>} />
-            <Route path="/consultores/*" element={<Protected allow={['consultor','admin']}><ConsultorPortal /></Protected>} />
+            <Route path="/clientes/*" element={<Protected allow={['cliente','admin','superadmin']}><ClientePortal /></Protected>} />
+            <Route path="/consultores/*" element={<Protected allow={['consultor','admin','superadmin','gestion']}><ConsultorPortal /></Protected>} />
             <Route path="*" element={<Navigate to="/calculadora" replace />} />
           </Routes>
         </Shell>

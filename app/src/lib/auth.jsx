@@ -25,9 +25,17 @@ export function AuthProvider({ children }) {
 
   async function hydrate(u) {
     setUser(u);
-    const { data } = await supabase.from('perfiles').select('rol').eq('id', u.id).single();
+    const { data } = await supabase.from('perfiles').select('rol, activo').eq('id', u.id).single();
+    // Usuario desactivado: cerrar sesión de inmediato.
+    if (data && data.activo === false) {
+      await supabase.auth.signOut();
+      setUser(null); setRealRole(null); setViewAs(null); setLoading(false);
+      return;
+    }
     setRealRole(data?.rol || 'cliente');
     setLoading(false);
+    // Marca de último acceso (no bloqueante).
+    supabase.rpc('marcar_acceso').catch(() => {});
   }
 
   async function login(email, password) {
@@ -45,7 +53,12 @@ export function AuthProvider({ children }) {
     }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    const { data: p } = await supabase.from('perfiles').select('rol').eq('id', data.user.id).single();
+    const { data: p } = await supabase.from('perfiles').select('rol, activo').eq('id', data.user.id).single();
+    if (p && p.activo === false) {
+      await supabase.auth.signOut();
+      throw new Error('Tu cuenta está desactivada. Contacta con el administrador.');
+    }
+    supabase.rpc('marcar_acceso').catch(() => {});
     return { role: p?.rol || 'cliente' };
   }
 
@@ -68,6 +81,30 @@ export function AuthProvider({ children }) {
   function verComo(rol) { if (esSuper) setViewAs(rol === 'superadmin' ? null : rol); }
   function resetVista() { setViewAs(null); }
 
+  // Llama a la Netlify Function de administración de accesos con el token del usuario.
+  // Solo tiene efecto real si el backend confirma que el llamante es superadmin.
+  async function adminUsuarios(payload) {
+    if (DEMO) {
+      // En demo devolvemos datos simulados para poder ver la UI.
+      if (payload.action === 'list') {
+        return { ok: true, usuarios: [
+          { id: 'u1', rol: 'superadmin', nombre: 'Alejandro', email: 'alejandro@tuconsultor.com', nivel: null, activo: true, ultimo_acceso: new Date().toISOString() },
+          { id: 'u2', rol: 'consultor', nombre: 'Carlota', email: 'carlota@tuconsultor.com', nivel: 'J3', activo: true, ultimo_acceso: null },
+          { id: 'u3', rol: 'gestion', nombre: 'Irene', email: 'irene@tuconsultor.com', nivel: null, activo: false, ultimo_acceso: null },
+        ] };
+      }
+      return { ok: true, demo: true };
+    }
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    const r = await fetch('/.netlify/functions/admin-usuarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
+      body: JSON.stringify(payload),
+    });
+    return r.json();
+  }
+
   // Rol EFECTIVO que usa toda la UI
   const role = (esSuper && viewAs) ? viewAs : realRole;
 
@@ -75,6 +112,7 @@ export function AuthProvider({ children }) {
     <AuthCtx.Provider value={{
       user, role, realRole, viewAs, esSuper,
       login, register, logout, verComo, resetVista,
+      adminUsuarios,
       loading, demo: DEMO,
       verEconomico: can.verEconomico(role),
     }}>

@@ -41,5 +41,116 @@
     <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/?lang=ar" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/" />
   </url>
-  
+
+  <!-- Blog · índice y guías por norma -->
+  <url>
+    <loc>https://consultify.pro/blog/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/" />
+  </url>
+  <url>
+    <loc>https://consultify.pro/blog/iso-9001/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/iso-9001/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/iso-9001/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/iso-9001/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/iso-9001/" />
+  </url>
+  <url>
+    <loc>https://consultify.pro/blog/iso-14001/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/iso-14001/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/iso-14001/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/iso-14001/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/iso-14001/" />
+  </url>
+  <url>
+    <loc>https://consultify.pro/blog/iso-27001/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/iso-27001/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/iso-27001/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/iso-27001/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/iso-27001/" />
+  </url>
+  <url>
+    <loc>https://consultify.pro/blog/iso-45001/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/iso-45001/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/iso-45001/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/iso-45001/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/iso-45001/" />
+  </url>
+  <url>
+    <loc>https://consultify.pro/blog/iso-42001/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/iso-42001/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/iso-42001/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/iso-42001/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/iso-42001/" />
+  </url>
+  <url>
+    <loc>https://consultify.pro/blog/iso-56001/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/iso-56001/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/iso-56001/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/iso-56001/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/iso-56001/" />
+  </url>
+  <url>
+    <loc>https://consultify.pro/blog/iso-21001/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/iso-21001/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/iso-21001/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/iso-21001/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/iso-21001/" />
+  </url>
+  <url>
+    <loc>https://consultify.pro/blog/iso-9004/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/iso-9004/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/iso-9004/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/iso-9004/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/iso-9004/" />
+  </url>
+  <url>
+    <loc>https://consultify.pro/blog/une-93200/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/une-93200/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/une-93200/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/une-93200/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/une-93200/" />
+  </url>
+  <url>
+    <loc>https://consultify.pro/blog/une-158101/</loc>
+    <lastmod>2026-07-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="es" href="https://consultify.pro/blog/une-158101/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://consultify.pro/blog/une-158101/?lang=en" />
+    <xhtml:link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/une-158101/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/une-158101/" />
+  </url>
 </urlset>

@@ -51,6 +51,7 @@ export const GRUPOS_PORTAL = [
     label: 'Organización',
     items: [
       { to: 'equipo', label: 'Equipo', icon: 'user-cog', roles: ['superadmin', 'admin'] },
+      { to: 'accesos', label: 'Accesos', icon: 'key', roles: ['superadmin'] },
     ],
   },
 ];

@@ -71,12 +71,14 @@ export default function Acceso() {
   const noCoinciden = registro && k.password2.length > 0 && k.password !== k.password2;
   const registroInvalido = registro && (k.password.length < 8 || k.password !== k.password2);
 
+  const ROLES_EQUIPO = ['consultor', 'admin', 'superadmin', 'gestion'];
+
   async function loginConsultor(e) {
     e.preventDefault(); setCBusy(true); setCMsg(null);
     try {
       const { role } = await login(c.email, c.password);
-      if (role === 'consultor' || role === 'admin') nav('/consultores');
-      else { setCMsg('Esta cuenta no es de consultor. Usa el acceso de clientes.'); }
+      if (ROLES_EQUIPO.includes(role)) nav('/consultores');
+      else { setCMsg('Esta cuenta no es de equipo. Usa el acceso de clientes.'); }
     } catch (err) {
       setCMsg(err.message === 'Invalid login credentials' ? 'Email o contraseña incorrectos.' : (err.message || 'No se pudo entrar.'));
     } finally { setCBusy(false); }
@@ -89,7 +91,7 @@ export default function Acceso() {
     try {
       if (modo === 'login') {
         const { role } = await login(k.email, k.password);
-        nav(role === 'consultor' || role === 'admin' ? '/consultores' : '/clientes');
+        nav(ROLES_EQUIPO.includes(role) ? '/consultores' : '/clientes');
       } else {
         const r = await register(k.email, k.password, k.nombre, k.empresa);
         if (r.needsConfirm) setKMsg({ ok: true, text: 'Cuenta creada. Revisa tu email para confirmar el acceso.' });

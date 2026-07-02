@@ -3,10 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-/** true cuando no hay credenciales: la app funciona con datos de muestra en memoria. */
-export const DEMO = !url || !anon;
+/** Fuerza autenticación real: si es 'true', nunca se entra en modo DEMO aunque falten credenciales. */
+const FORCE_AUTH = String(import.meta.env.VITE_FORCE_AUTH || '').toLowerCase() === 'true';
 
-export const supabase = DEMO ? null : createClient(url, anon);
+/** true cuando no hay credenciales Y no se fuerza auth: la app funciona con datos de muestra en memoria. */
+export const DEMO = (!url || !anon) && !FORCE_AUTH;
+
+/** true si se pidió auth real pero faltan credenciales: la app debe mostrar aviso y no dejar entrar. */
+export const AUTH_MISCONFIG = (!url || !anon) && FORCE_AUTH;
+
+export const supabase = (!url || !anon) ? null : createClient(url, anon);
 
 // ---------------- DATOS DEMO (solo cuando DEMO === true) ----------------
 export const demoDB = {
