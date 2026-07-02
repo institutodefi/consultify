@@ -12,10 +12,13 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (DEMO) { setLoading(false); return; }
+    // Si faltan credenciales en el build, no hay cliente: no intentes usarlo
+    // (evita que la app entera reviente al arrancar). El login mostrará el aviso.
+    if (!supabase) { setLoading(false); return; }
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) hydrate(data.session.user);
       else setLoading(false);
-    });
+    }).catch(() => setLoading(false));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session) hydrate(session.user);
       else { setUser(null); setRealRole(null); setViewAs(null); }
@@ -50,6 +53,12 @@ export function AuthProvider({ children }) {
       else if (/consultify|consultor/i.test(email)) r = 'consultor';
       setUser({ id: 'demo', email }); setRealRole(r); setViewAs(null);
       return { role: r };
+    }
+    // Salvaguarda: si el build salió sin credenciales de Supabase (variables de
+    // entorno ausentes en el hosting), el cliente es null y signInWithPassword
+    // reventaría con un críptico "Failed to fetch". Mensaje claro en su lugar.
+    if (!supabase) {
+      throw new Error('La aplicación no está conectada a la base de datos (faltan las variables VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY en el despliegue). Avisa al administrador.');
     }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;

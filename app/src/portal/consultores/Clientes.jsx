@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { listTable, insertRow, updateRow, deleteRow, siguienteCodigoCliente } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
 
 const VACIO = { codigo: '', empresa: '', contacto: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
 
 export default function Clientes() {
+  const navigate = useNavigate();
   const [clientes, setClientes] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [centros, setCentros] = useState([]);
@@ -383,7 +385,7 @@ export default function Clientes() {
           <div className="card">
             <div className="flex items-center justify-between">
               <h4 className="font-extrabold">Proyectos de este cliente</h4>
-              <a href="../proyectos" className="btn-ghost !px-4 !py-2 text-sm">Ir a Proyectos →</a>
+              <button type="button" onClick={() => navigate('/consultores/proyectos')} className="btn-ghost !px-4 !py-2 text-sm">Ir a Proyectos →</button>
             </div>
             <p className="mt-1 text-sm font-medium text-navy-400">Los proyectos se crean y configuran en la pestaña Proyectos. Aquí solo se consultan.</p>
             {proyectosCliente.length === 0 ? (
@@ -398,7 +400,7 @@ export default function Clientes() {
                         {(p.normas || []).join(', ') || 'sin normas'} · {p.modelo || 'sin modelo'} · <span className={p.estado === 'activo' ? 'text-green-600' : 'text-navy-400'}>{p.estado}</span>
                       </p>
                     </div>
-                    <a href={`../proyectos?proyecto=${p.id}`} className="btn-ghost !px-3 !py-1.5 text-xs">Abrir →</a>
+                    <button type="button" onClick={() => navigate(`/consultores/proyectos?proyecto=${p.id}`)} className="btn-ghost !px-3 !py-1.5 text-xs">Abrir →</button>
                   </div>
                 ))}
               </div>
