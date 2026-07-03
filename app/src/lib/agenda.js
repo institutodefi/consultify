@@ -253,11 +253,29 @@ export async function getTareasAgenda(consultorId, year) {
   return data ?? [];
 }
 
+// Quita del objeto la columna que PostgREST dice no encontrar, para poder
+// reintentar el guardado aunque la BD vaya un paso por detrás de la app.
+function _sinColumnaFaltante(obj, error) {
+  const m = (error?.message || '').match(/could not find the '([^']+)' column/i)
+        || (error?.message || '').match(/'([^']+)' column of '[^']+' in the schema cache/i);
+  if (!m) return null;
+  const col = m[1];
+  if (!(col in obj)) return null;
+  const { [col]: _omit, ...resto } = obj;
+  return resto;
+}
+
 export async function crearTareaAgenda(t) {
   if (DEMO) { const r = { id: uid(), creado: new Date().toISOString(), ...t }; demoState().agenda_tareas.push(r); return r; }
-  const { data, error } = await supabase.from('agenda_tareas').insert(t).select().single();
-  if (error) throw error;
-  return data;
+  let payload = t;
+  for (let intento = 0; intento < 4; intento++) {
+    const { data, error } = await supabase.from('agenda_tareas').insert(payload).select().single();
+    if (!error) return data;
+    const reducido = _sinColumnaFaltante(payload, error);
+    if (!reducido) throw error;   // error distinto a "columna ausente": propágalo
+    payload = reducido;           // reintenta sin la columna que falta
+  }
+  throw new Error('No se pudo guardar tras varios reintentos.');
 }
 
 export async function actualizarTareaAgenda(id, patch) {
@@ -267,9 +285,15 @@ export async function actualizarTareaAgenda(id, patch) {
     if (i >= 0) arr[i] = { ...arr[i], ...patch };
     return arr[i];
   }
-  const { data, error } = await supabase.from('agenda_tareas').update(patch).eq('id', id).select().single();
-  if (error) throw error;
-  return data;
+  let payload = patch;
+  for (let intento = 0; intento < 4; intento++) {
+    const { data, error } = await supabase.from('agenda_tareas').update(payload).eq('id', id).select().single();
+    if (!error) return data;
+    const reducido = _sinColumnaFaltante(payload, error);
+    if (!reducido) throw error;
+    payload = reducido;
+  }
+  throw new Error('No se pudo actualizar tras varios reintentos.');
 }
 
 export async function borrarTareaAgenda(id) {

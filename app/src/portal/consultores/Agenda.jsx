@@ -621,7 +621,7 @@ export default function Agenda() {
       const ids = [...equipoSel];
       if (ids.length) Promise.all(ids.map((cid) => getTareasAgenda(cid, YEAR).catch(() => []))).then((a) => setTareasEquipo(a.flat()));
       setModal(null);
-    } catch { setErr('No se pudo guardar la tarea.'); }
+    } catch (e) { setErr('No se pudo guardar la tarea: ' + (e?.message || e?.error_description || 'error desconocido')); }
   }
 
   async function borrarTarea(id) {

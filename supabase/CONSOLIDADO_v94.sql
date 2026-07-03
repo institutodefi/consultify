@@ -60,6 +60,12 @@ on conflict (codigo) do nothing;
 alter table public.cliente_tareas
   add column if not exists proceso_interno_id uuid references public.procesos_internos(id) on delete set null;
 
+-- Las tareas MANUALES viven en agenda_tareas: necesitan las mismas columnas.
+alter table public.agenda_tareas
+  add column if not exists proceso_interno_id uuid references public.procesos_internos(id) on delete set null;
+alter table public.agenda_tareas
+  add column if not exists colaboradores jsonb not null default '[]'::jsonb;
+
 -- ── 4 · FUNCIONES DE APOYO ──────────────────────────────────────────────────
 create or replace function public.mi_rol()
 returns text language sql stable security definer set search_path = public as $$

@@ -3,6 +3,15 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# ── Secrets scanning ─────────────────────────────────────────────────────────
+# La SUPABASE_SERVICE_ROLE_KEY se usa SOLO en las funciones serverless (backend),
+# que no son públicas. El escáner de Netlify la detecta en el bundle de funciones
+# y da un falso positivo. La omitimos del escaneo (sigue siendo secreta y NUNCA
+# se expone al navegador, porque no lleva prefijo VITE_ ni se usa en app/src).
+# Si alguna vez ves este secreto en dist/ (frontend), NO lo omitas: sería fuga real.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_SERVICE_ROLE_KEY"
+
 # Empaquetado de funciones: esbuild incluye las dependencias (pdf-lib, pptxgenjs)
 [functions]
   node_bundler = "esbuild"
