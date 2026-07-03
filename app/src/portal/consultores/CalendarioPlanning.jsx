@@ -23,8 +23,9 @@ const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, 
  *  - onTarea(tarea): al pulsar una tarea (opcional, p.ej. editar)
  *  - festivosSet: Set de fechas ISO festivas (opcional)
  */
-export default function CalendarioPlanning({ year = new Date().getFullYear(), monthInicial = new Date().getMonth(), tareas = [], onDia, onTarea, festivosSet = new Set() }) {
-  const [month, setMonth] = useState(monthInicial);
+export default function CalendarioPlanning({ year = new Date().getFullYear(), monthInicial = new Date().getMonth(), tareas = [], onDia, onTarea, festivosSet = new Set(), anioMin, anioMax }) {
+  const [mes, setMes] = useState(monthInicial);
+  const [anio, setAnio] = useState(year);
 
   // Agrupar tareas por día
   const porDia = {};
@@ -34,28 +35,54 @@ export default function CalendarioPlanning({ year = new Date().getFullYear(), mo
   }
 
   // Construir la rejilla (lunes a domingo)
-  const primero = new Date(year, month, 1);
+  const primero = new Date(anio, mes, 1);
   const offset = (primero.getDay() + 6) % 7; // 0=lunes
-  const diasEnMes = new Date(year, month + 1, 0).getDate();
+  const diasEnMes = new Date(anio, mes + 1, 0).getDate();
   const celdas = [];
   for (let i = 0; i < offset; i++) celdas.push(null);
-  for (let d = 1; d <= diasEnMes; d++) celdas.push(new Date(year, month, d));
+  for (let d = 1; d <= diasEnMes; d++) celdas.push(new Date(anio, mes, d));
   while (celdas.length % 7 !== 0) celdas.push(null);
 
   const hoy = toISO(new Date());
-  const cambiarMes = (delta) => setMonth((m) => Math.max(0, Math.min(11, m + delta)));
+  // Navegación perpetua: al pasar de dic→ene o ene→dic, cambia también el año.
+  const cambiarMes = (delta) => {
+    let m = mes + delta, y = anio;
+    if (m > 11) { m = 0; y += 1; }
+    if (m < 0) { m = 11; y -= 1; }
+    setMes(m); setAnio(y);
+  };
+
+  // Rango de años para el desplegable (por defecto: 2 años atrás → 6 adelante).
+  const hoyAnio = new Date().getFullYear();
+  const desdeAnio = anioMin ?? (hoyAnio - 2);
+  const hastaAnio = anioMax ?? (hoyAnio + 6);
+  const anios = [];
+  for (let a = desdeAnio; a <= hastaAnio; a++) anios.push(a);
+  // Asegura que el año actualmente seleccionado esté siempre en la lista.
+  if (!anios.includes(anio)) anios.push(anio), anios.sort((a, b) => a - b);
 
   const horasDia = (iso) => (porDia[iso] || []).reduce((s, t) => s + (Number(t.horas_previstas) || 0), 0);
 
   return (
     <div className="card p-0 overflow-hidden">
-      {/* Cabecera navegación */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-navy-100">
-        <button onClick={() => cambiarMes(-1)} disabled={month === 0}
-          className="rounded-lg px-3 py-1.5 text-sm font-bold text-navy-500 hover:bg-navy-50 disabled:opacity-30">← Ant.</button>
-        <h3 className="text-lg font-extrabold text-navy-900">{MESES[month]} {year}</h3>
-        <button onClick={() => cambiarMes(1)} disabled={month === 11}
-          className="rounded-lg px-3 py-1.5 text-sm font-bold text-navy-500 hover:bg-navy-50 disabled:opacity-30">Sig. →</button>
+      {/* Cabecera navegación: flechas + dos desplegables (mes / año) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4 border-b border-navy-100">
+        <button onClick={() => cambiarMes(-1)}
+          className="rounded-lg px-3 py-1.5 text-sm font-bold text-navy-500 hover:bg-navy-50">←</button>
+        <div className="flex items-center gap-2">
+          <select value={mes} onChange={(e) => setMes(Number(e.target.value))}
+            className="rounded-lg border border-navy-200 bg-white px-3 py-1.5 text-sm font-bold text-navy-800">
+            {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+          </select>
+          <select value={anio} onChange={(e) => setAnio(Number(e.target.value))}
+            className="rounded-lg border border-navy-200 bg-white px-3 py-1.5 text-sm font-bold text-navy-800">
+            {anios.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <button onClick={() => { setMes(new Date().getMonth()); setAnio(hoyAnio); }}
+            className="rounded-lg px-2.5 py-1.5 text-xs font-bold text-brand-orangeDark hover:bg-brand-orange/10" title="Ir al mes actual">Hoy</button>
+        </div>
+        <button onClick={() => cambiarMes(1)}
+          className="rounded-lg px-3 py-1.5 text-sm font-bold text-navy-500 hover:bg-navy-50">→</button>
       </div>
 
       {/* Cabecera días de la semana */}

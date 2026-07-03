@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Refe
 import { listTable } from '../../lib/data.js';
 import { descargarTareaICS, descargarAgendaICS } from '../../lib/ics.js';
 import BoxEquipo from './BoxEquipo.jsx';
+import CalendarioPlanning from './CalendarioPlanning.jsx';
 import { EFICIENCIA } from '../../lib/calcEngine.js';
 import {
   YEAR_AGENDA, FESTIVOS_2026, MESES, TOPE_ANUAL, MAX_HORAS_DIA, DIAS_VACACIONES,
@@ -415,7 +416,7 @@ function Calendario({ year, mes, onCambiarMes, festivosMap, vacacionesSet, tarea
                       title={`${TIPO_BY_ID[t.tipo || 'produccion'].nombre} · ${t.titulo} · prev ${t.horas_previstas}h${t.horas_reales ? ` · real ${t.horas_reales}h` : ''}`}
                       className={`block w-full truncate rounded-md px-1 py-0.5 text-left text-[10px] font-bold
                         ${tipo === 'real' ? 'border border-green-300 bg-white text-green-700' : estilo[t.estado] ?? estilo.pendiente}`}>
-                      {(t.tipo === 'gestion' || t.tipo === 'coordinacion') && <span className="mr-0.5 rounded bg-navy-800 px-0.5 text-[8px] text-white">{t.tipo === 'gestion' ? 'G' : 'C'}</span>}
+                      {(t.tipo === 'gestion' || t.tipo === 'coordinacion' || t.tipo === 'proceso_interno') && <span className="mr-0.5 rounded bg-navy-800 px-0.5 text-[8px] text-white">{t.tipo === 'gestion' ? 'G' : t.tipo === 'coordinacion' ? 'C' : 'PI'}</span>}
                       {tipo === 'real' ? <>✓{t.horas_reales}h · {t.titulo}</> : <>{hechaAqui ? `✓${t.horas_reales}` : t.horas_previstas}h · {t.titulo}</>}
                     </button>
                   );
@@ -673,9 +674,9 @@ export default function Agenda() {
         <Kpi label={`Jornada ${MESES[mes]}`} value={`${Math.round(rMes.objetivo)} h`}
           sub={`${rMes.laborables} laborables${mes === 7 ? ' · intensiva 36 h/sem' : ''}`} />
         <Kpi label="Productivas (70 %)" value={`${Math.round(rMes.productivas)} h`}
-          sub={`Gestión ${Math.round(rMes.gestion)} h · Coord. ${Math.round(rMes.coordinacion)} h`} />
+          sub={`Gestión ${Math.round(rMes.gestion)} h · Coord. ${Math.round(rMes.coordinacion)} h · P.internos ${Math.round(rMes.procesoInterno || 0)} h`} />
         <Kpi label="Previstas (mes)" value={`${r1(rMes.previstas)} h`}
-          sub={`P ${r1(rMes.prevTipo.produccion)} · G ${r1(rMes.prevTipo.gestion)} · C ${r1(rMes.prevTipo.coordinacion)}`}
+          sub={`P ${r1(rMes.prevTipo.produccion)} · G ${r1(rMes.prevTipo.gestion)} · C ${r1(rMes.prevTipo.coordinacion)} · PI ${r1(rMes.prevTipo.proceso_interno || 0)}`}
           alerta={rMes.prevTipo.produccion > rMes.productivas} />
         <Kpi label="Reales (mes)" value={`${r1(rMes.reales)} h`}
           sub={rMes.reales > 0 ? `Desviación ${desvMes > 0 ? '+' : ''}${desvMes} h vs plan` : 'Sin horas imputadas'}
@@ -690,9 +691,17 @@ export default function Agenda() {
         <div className="card">
           <div className="mb-3 flex gap-2">
             <button onClick={() => setVista('calendario')} className={`chip text-xs font-bold ${vista === 'calendario' ? 'bg-navy-800 text-white' : 'border border-navy-200 text-navy-500'}`}>📅 Calendario</button>
+            <button onClick={() => setVista('planning')} className={`chip text-xs font-bold ${vista === 'planning' ? 'bg-navy-800 text-white' : 'border border-navy-200 text-navy-500'}`}>🗓️ Planning</button>
             <button onClick={() => setVista('lista')} className={`chip text-xs font-bold ${vista === 'lista' ? 'bg-navy-800 text-white' : 'border border-navy-200 text-navy-500'}`}>☰ Lista</button>
           </div>
-          {vista === 'calendario' ? (
+          {vista === 'planning' ? (
+            <CalendarioPlanning
+              year={YEAR} monthInicial={mes} tareas={tareas}
+              festivosSet={new Set(Object.keys(festivosMap || {}))}
+              onDia={(fecha) => setModal({ fecha })}
+              onTarea={(tarea) => setModal({ tarea })}
+            />
+          ) : vista === 'calendario' ? (
             <Calendario
               year={YEAR} mes={mes} onCambiarMes={(d) => setMes((m) => Math.min(11, Math.max(0, m + d)))}
               festivosMap={festivosMap} vacacionesSet={vacacionesSet} tareas={tareas}

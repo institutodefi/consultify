@@ -74,7 +74,13 @@ export default function MiAgenda() {
       const efectiva = delMes.reduce((s, t) => s + (Number(t.horas_reales) || 0), 0);
       const pendientes = delMes.filter(t => (t.estado || 'pendiente') !== 'completada');
       const hPend = pendientes.reduce((s, t) => s + (Number(t.horas_previstas) || 0), 0);
-      return { mes: m, prevista, efectiva, nPend: pendientes.length, hPend, total: delMes.length };
+      // Horas previstas desglosadas por tipo de jornada
+      const porTipo = { produccion: 0, gestion: 0, coordinacion: 0, proceso_interno: 0 };
+      for (const t of delMes) {
+        const tipo = t.tipo && porTipo.hasOwnProperty(t.tipo) ? t.tipo : 'produccion';
+        porTipo[tipo] += Number(t.horas_previstas) || 0;
+      }
+      return { mes: m, prevista, efectiva, nPend: pendientes.length, hPend, total: delMes.length, porTipo };
     });
   }, [tareas, mesesSel]);
 
@@ -82,7 +88,13 @@ export default function MiAgenda() {
     tareas.filter(t => mesesSel.has(mesDe(t.fecha_prevista)) && (t.estado || 'pendiente') !== 'completada')
       .sort((a, b) => (a.fecha_prevista || '').localeCompare(b.fecha_prevista || '')), [tareas, mesesSel]);
 
-  const tot = filas.reduce((a, f) => ({ prev: a.prev + f.prevista, efe: a.efe + f.efectiva, pend: a.pend + f.hPend }), { prev: 0, efe: 0, pend: 0 });
+  const tot = filas.reduce((a, f) => ({
+    prev: a.prev + f.prevista, efe: a.efe + f.efectiva, pend: a.pend + f.hPend,
+    produccion: a.produccion + f.porTipo.produccion,
+    gestion: a.gestion + f.porTipo.gestion,
+    coordinacion: a.coordinacion + f.porTipo.coordinacion,
+    proceso_interno: a.proceso_interno + f.porTipo.proceso_interno,
+  }), { prev: 0, efe: 0, pend: 0, produccion: 0, gestion: 0, coordinacion: 0, proceso_interno: 0 });
 
   return (
     <div className="space-y-6">
@@ -131,6 +143,27 @@ export default function MiAgenda() {
         <RelojJornada titulo="Jornada prevista" valor={tot.prev} capacidad={topeJornada} color="#F5A623" sub={`de ${fmtH(topeJornada)} disponibles`} />
         <RelojJornada titulo="Jornada efectiva" valor={tot.efe} capacidad={topeJornada} color="#061B45" sub={`imputado de ${fmtH(topeJornada)}`} />
         <RelojJornada titulo="Jornada pendiente" valor={tot.pend} capacidad={topeJornada} color="#d8910e" sub="aún por ejecutar" />
+      </div>
+
+      {/* Desglose de horas previstas por tipo de jornada */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        {[
+          { tipo: 'produccion', label: 'Producción', color: '#F5A623' },
+          { tipo: 'gestion', label: 'Gestión', color: '#061B45' },
+          { tipo: 'coordinacion', label: 'Coordinación', color: '#1E3A8A' },
+          { tipo: 'proceso_interno', label: 'Procesos internos', color: '#0e7490' },
+        ].map(({ tipo, label, color }) => (
+          <div key={tipo} className="card !p-4">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+              <span className="text-xs font-bold uppercase tracking-wide text-navy-400">{label}</span>
+            </div>
+            <p className="mt-1 text-2xl font-extrabold text-navy-900">{fmtH(tot[tipo])}</p>
+            <p className="text-[11px] font-medium text-navy-300">
+              {tot.prev > 0 ? Math.round((tot[tipo] / tot.prev) * 100) : 0}% de lo previsto
+            </p>
+          </div>
+        ))}
       </div>
 
       {/* Tabla por mes */}
