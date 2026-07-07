@@ -177,7 +177,7 @@ export default function Clientes() {
           </div>
           <div className="flex gap-2">
             <button onClick={nuevoCliente} className="btn-orange !px-4 !py-2">+ Nuevo cliente</button>
-            {cliente && <button onClick={() => setForm({ ...VACIO, ...cliente })} className="btn-ghost !px-4 !py-2">Editar datos</button>}
+            {cliente && <button onClick={() => setForm({ ...VACIO, ...cliente })} className="btn-ghost !px-4 !py-2">✎ Editar cliente</button>}
           </div>
         </div>
       </div>
@@ -230,13 +230,23 @@ export default function Clientes() {
       {form && (
         <form onSubmit={guardarCliente} className="card">
           <h3 className="font-extrabold">{form.id ? `Editar · ${form.empresa}` : 'Nuevo cliente'}</h3>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+
+          {/* Fila 1 · Identificación del cliente */}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div><label className="label">CIF (empresa matriz)</label><input className="input font-bold" placeholder="B12345678" value={form.cif_matriz || ''} onChange={e => setForm({ ...form, cif_matriz: e.target.value.toUpperCase() })} /></div>
-            <div><label className="label">Código interno</label><input className="input" placeholder="CL-0001" value={form.codigo || ''} onChange={e => setForm({ ...form, codigo: e.target.value })} /></div>
             <div><label className="label">Nombre comercial</label><input required className="input" value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></div>
+            <div><label className="label">Código interno</label><input className="input" placeholder="CL-0001" value={form.codigo || ''} onChange={e => setForm({ ...form, codigo: e.target.value })} /></div>
+          </div>
+
+          {/* Fila 2 · Datos de contacto */}
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <div><label className="label">Contacto</label><input className="input" value={form.contacto || ''} onChange={e => setForm({ ...form, contacto: e.target.value })} /></div>
             <div><label className="label">Email</label><input type="email" className="input" value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
             <div><label className="label">Teléfono</label><input className="input" value={form.telefono || ''} onChange={e => setForm({ ...form, telefono: e.target.value })} /></div>
+          </div>
+
+          {/* Fila 3 · Responsables */}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div><label className="label">Director de Proyecto</label>
               <select className="input" value={form.director_proyecto_id || ''} onChange={e => setForm({ ...form, director_proyecto_id: e.target.value })}>
                 <option value="">Sin asignar</option>
