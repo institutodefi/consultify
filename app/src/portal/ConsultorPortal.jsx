@@ -45,8 +45,8 @@ export default function ConsultorPortal() {
   const { role } = useAuth();
   const grupos = gruposParaRol(role);
   const verEquipo = can.gestionarEquipo(role);
-  const verPlanAgendaSist = ['superadmin', 'admin', 'consultor'].includes(role);
-  const verClientes = ['superadmin', 'admin', 'gestion'].includes(role);
+  const verPlanAgendaSist = ['superadmin', 'admin', 'director', 'consultor'].includes(role);
+  const verClientes = ['superadmin', 'admin', 'director', 'gestion'].includes(role);
   const [movilAbierto, setMovilAbierto] = useState(false);
 
   const NavItems = ({ onNavigate }) => (
@@ -125,7 +125,7 @@ export default function ConsultorPortal() {
               <Route path="planificador" element={<Guard ok={verPlanAgendaSist}><GeneradorOfertas /></Guard>} />
               <Route path="equipo" element={<Guard ok={verEquipo}><Equipo /></Guard>} />
               <Route path="accesos" element={<Guard ok={role === 'superadmin'}><Accesos /></Guard>} />
-              <Route path="procesos-internos" element={<Guard ok={['superadmin','admin','consultor'].includes(role)}><ProcesosInternos /></Guard>} />
+              <Route path="procesos-internos" element={<Guard ok={['superadmin','admin','director','consultor'].includes(role)}><ProcesosInternos /></Guard>} />
               <Route path="sistemas" element={<Guard ok={verEquipo}><Sistemas /></Guard>} />
               <Route path="clientes" element={<Guard ok={verClientes}><Clientes /></Guard>} />
               <Route path="ofertas" element={<Guard ok={verClientes}><Ofertas /></Guard>} />

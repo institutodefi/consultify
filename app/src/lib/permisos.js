@@ -1,14 +1,15 @@
 // ════════════════════════════════════════════════════════════════
 // PERMISOS POR ROL — fuente única de verdad para la UI
-// Roles: superadmin · admin · consultor · gestion · cliente
+// Roles: superadmin · admin · director · consultor · gestion · cliente
 // ════════════════════════════════════════════════════════════════
 
-export const ROLES = ['superadmin', 'admin', 'consultor', 'gestion', 'cliente'];
+export const ROLES = ['superadmin', 'admin', 'director', 'consultor', 'gestion', 'cliente'];
 
 export const ROL_LABEL = {
   superadmin: 'Superadministrador',
   admin: 'Administrador',
-  consultor: 'Director de Proyecto (consultor)',
+  director: 'Director de Proyecto',
+  consultor: 'Consultor',
   gestion: 'Equipo de gestión',
   cliente: 'Cliente',
 };
@@ -16,42 +17,40 @@ export const ROL_LABEL = {
 // Pestañas del portal interno y quién las ve
 // (el orden define el orden de aparición)
 // Navegación agrupada para la barra lateral.
-// Orden: Mi agenda (suelta arriba) · Operación (Dashboard+Agenda) ·
-//        Comercial (Planificador-oferta + Sistemas) · CRM (Clientes+Ofertas+Proyectos) · Equipo.
 export const GRUPOS_PORTAL = [
   {
     label: null, // sin título: pestaña suelta
     items: [
-      { to: 'mi-agenda', label: 'Mi agenda', icon: 'calendar-check', roles: ['superadmin', 'admin', 'consultor'] },
+      { to: 'mi-agenda', label: 'Mi agenda', icon: 'calendar-check', roles: ['superadmin', 'admin', 'director', 'consultor'] },
     ],
   },
   {
     label: 'Operación',
     items: [
-      { to: '',       label: 'Dashboard', icon: 'layout-dashboard', roles: ['superadmin', 'admin', 'consultor', 'gestion'] },
-      { to: 'agenda', label: 'Agenda',    icon: 'calendar-days',    roles: ['superadmin', 'admin', 'consultor'] },
+      { to: '',       label: 'Dashboard', icon: 'layout-dashboard', roles: ['superadmin', 'admin', 'director', 'consultor', 'gestion'] },
+      { to: 'agenda', label: 'Agenda',    icon: 'calendar-days',    roles: ['superadmin', 'admin', 'director', 'consultor'] },
     ],
   },
   {
     label: 'Comercial',
     items: [
-      { to: 'planificador', label: 'Generador de ofertas', icon: 'file-text', roles: ['superadmin', 'admin', 'consultor'] },
-      { to: 'sistemas',     label: 'Sistemas de gestión',  icon: 'shield-check', roles: ['superadmin', 'admin'] },
+      { to: 'planificador', label: 'Generador de ofertas', icon: 'file-text', roles: ['superadmin', 'admin', 'director', 'consultor'] },
+      { to: 'sistemas',     label: 'Sistemas de gestión',  icon: 'shield-check', roles: ['superadmin', 'admin', 'director'] },
     ],
   },
   {
     label: 'CRM',
     items: [
-      { to: 'clientes',  label: 'Clientes',  icon: 'users',    roles: ['superadmin', 'admin', 'gestion'] },
-      { to: 'ofertas',   label: 'Ofertas',   icon: 'receipt',  roles: ['superadmin', 'admin', 'gestion'] },
-      { to: 'proyectos', label: 'Proyectos', icon: 'folder-kanban', roles: ['superadmin', 'admin', 'gestion', 'consultor'] },
+      { to: 'clientes',  label: 'Clientes',  icon: 'users',    roles: ['superadmin', 'admin', 'director', 'gestion'] },
+      { to: 'ofertas',   label: 'Ofertas',   icon: 'receipt',  roles: ['superadmin', 'admin', 'director', 'gestion'] },
+      { to: 'proyectos', label: 'Proyectos', icon: 'folder-kanban', roles: ['superadmin', 'admin', 'director', 'gestion', 'consultor'] },
     ],
   },
   {
     label: 'Organización',
     items: [
       { to: 'equipo', label: 'Equipo', icon: 'user-cog', roles: ['superadmin', 'admin'] },
-      { to: 'procesos-internos', label: 'Procesos internos', icon: 'repeat', roles: ['superadmin', 'admin', 'consultor'] },
+      { to: 'procesos-internos', label: 'Procesos internos', icon: 'repeat', roles: ['superadmin', 'admin', 'director', 'consultor'] },
       { to: 'accesos', label: 'Accesos', icon: 'key', roles: ['superadmin'] },
     ],
   },
@@ -67,7 +66,7 @@ export const can = {
   // Gestionar el equipo (alta/baja consultores y gestión)
   gestionarEquipo: (rol) => rol === 'superadmin' || rol === 'admin',
   // Entrar a la zona interna
-  esEquipo: (rol) => ['superadmin', 'admin', 'consultor', 'gestion'].includes(rol),
+  esEquipo: (rol) => ['superadmin', 'admin', 'director', 'consultor', 'gestion'].includes(rol),
 };
 
 export const tabsParaRol = (rol) => TABS_PORTAL.filter((t) => t.roles.includes(rol));

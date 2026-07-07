@@ -31,7 +31,7 @@ function App() {
             <Route path="/establecer-password" element={<EstablecerPassword />} />
             <Route path="/nueva-password" element={<EstablecerPassword />} />
             <Route path="/clientes/*" element={<Protected allow={['cliente','admin','superadmin']}><ClientePortal /></Protected>} />
-            <Route path="/consultores/*" element={<Protected allow={['consultor','admin','superadmin','gestion']}><ConsultorPortal /></Protected>} />
+            <Route path="/consultores/*" element={<Protected allow={['director','consultor','admin','superadmin','gestion']}><ConsultorPortal /></Protected>} />
             <Route path="*" element={<Navigate to="/calculadora" replace />} />
           </Routes>
         </Shell>

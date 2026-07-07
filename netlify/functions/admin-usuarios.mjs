@@ -16,8 +16,16 @@
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 //   SITE_URL (para el redirect de la invitación, por defecto https://consultify.pro)
 
-const ROLES_VALIDOS = ['superadmin', 'admin', 'consultor', 'gestion', 'cliente'];
+const ROLES_VALIDOS = ['superadmin', 'admin', 'director', 'consultor', 'gestion', 'cliente'];
 const NIVELES = ['J1', 'J2', 'J3', 'Senior'];
+// Roles de equipo que EXIGEN email con dominio corporativo.
+const ROLES_DOMINIO = ['director', 'consultor'];
+const DOMINIOS_PERMITIDOS = ['tuconsultor.com', 'consultify.pro'];
+function dominioOk(email, rol) {
+  if (!ROLES_DOMINIO.includes(rol)) return true; // otros roles no restringidos aquí
+  const dom = String(email).split('@')[1]?.toLowerCase() || '';
+  return DOMINIOS_PERMITIDOS.includes(dom);
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -91,6 +99,7 @@ export default async (req) => {
       if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ ok: false, error: 'Email no válido' }, 400);
       if (!ROLES_VALIDOS.includes(rol)) return json({ ok: false, error: 'Rol no válido' }, 400);
       if (nivel && !NIVELES.includes(nivel)) return json({ ok: false, error: 'Nivel no válido' }, 400);
+      if (!dominioOk(email, rol)) return json({ ok: false, error: `Para el perfil «${rol === 'director' ? 'Director de Proyecto' : 'Consultor'}» el email debe ser @tuconsultor.com o @consultify.pro.` }, 400);
 
       // Admin API: enviar invitación. El rol viaja en metadata → el trigger lo aplica al crear el perfil.
       const r = await sb('/auth/v1/invite', {

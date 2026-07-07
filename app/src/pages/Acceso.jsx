@@ -73,7 +73,7 @@ export default function Acceso() {
   const noCoinciden = registro && k.password2.length > 0 && k.password !== k.password2;
   const registroInvalido = registro && (!pwVal.ok || k.password !== k.password2);
 
-  const ROLES_EQUIPO = ['consultor', 'admin', 'superadmin', 'gestion'];
+  const ROLES_EQUIPO = ['director', 'consultor', 'admin', 'superadmin', 'gestion'];
 
   async function loginConsultor(e) {
     e.preventDefault(); setCBusy(true); setCMsg(null);

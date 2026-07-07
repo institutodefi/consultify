@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth.jsx';
 import { ROL_LABEL } from '../../lib/permisos.js';
 
-const ROLES_ASIGNABLES = ['superadmin', 'admin', 'consultor', 'gestion'];
+const ROLES_ASIGNABLES = ['superadmin', 'admin', 'director', 'consultor', 'gestion'];
+const ROLES_DOMINIO = ['director', 'consultor'];
+const DOMINIOS_PERMITIDOS = ['tuconsultor.com', 'consultify.pro'];
+const dominioOk = (email, rol) => {
+  if (!ROLES_DOMINIO.includes(rol)) return true;
+  const dom = String(email).split('@')[1]?.toLowerCase() || '';
+  return DOMINIOS_PERMITIDOS.includes(dom);
+};
 const NIVELES = ['J1', 'J2', 'J3', 'Senior'];
 
 function Badge({ children, tone = 'navy' }) {
@@ -43,6 +50,11 @@ export default function Accesos() {
 
   async function invitar(e) {
     e.preventDefault(); setInvBusy(true); setMsg(null); setError(null);
+    // Validación de dominio en cliente (feedback inmediato); el backend la repite.
+    if (!dominioOk(inv.email.trim(), inv.rol)) {
+      setError('Para Director de Proyecto o Consultor, el email debe ser @tuconsultor.com o @consultify.pro.');
+      setInvBusy(false); return;
+    }
     try {
       const r = await adminUsuarios({ action: 'invite', email: inv.email.trim(), nombre: inv.nombre.trim(), rol: inv.rol, nivel: inv.nivel || null });
       if (r.ok) {
