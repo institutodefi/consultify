@@ -100,14 +100,15 @@ export default function Clientes() {
     if (!cif) { setHoldedMsg({ err: true, t: 'Escribe el CIF antes de buscar.' }); return; }
     setHoldedBusy(true); setHoldedMsg(null);
     try {
-      const r = await holdedFn({ action: 'buscar_datos', cif });
+      const r = await holdedFn({ action: 'buscar_datos', cif, diagnostico: true });
       if (!r.ok) {
         const det = r.detalle ? (typeof r.detalle === 'string' ? r.detalle : JSON.stringify(r.detalle)) : '';
         setHoldedMsg({ err: true, t: `${r.error || 'No se pudo buscar en Holded.'}${det ? ` — ${det}` : ''}` });
         return;
       }
       if (!r.encontrado) {
-        setHoldedMsg({ err: false, t: 'Ese CIF no está en Holded. Al sincronizar se creará el contacto.' });
+        const diag = r.diagnostico ? ` [diagnóstico: ${JSON.stringify(r.diagnostico)}]` : '';
+        setHoldedMsg({ err: false, t: `Ese CIF no está en Holded. Al sincronizar se creará el contacto.${diag}` });
         return;
       }
       // Autocompletar solo los campos vacíos (no pisar lo que ya escribiste).
@@ -128,7 +129,7 @@ export default function Clientes() {
   async function sincronizarHolded() {
     const cif = (form.cif_matriz || '').trim();
     if (!cif) { setHoldedMsg({ err: true, t: 'Introduce el CIF de la empresa matriz antes de sincronizar.' }); return; }
-    if (!form.empresa?.trim()) { setHoldedMsg({ err: true, t: 'Pon al menos el nombre comercial antes de sincronizar.' }); return; }
+    if (!form.empresa?.trim()) { setHoldedMsg({ err: true, t: 'Pon al menos el nombre antes de sincronizar.' }); return; }
     setHoldedBusy(true); setHoldedMsg(null); setMsg(null);
     try {
       const r = await holdedFn({ action: 'sincronizar', cliente: { ...form, cif: cif, cif_matriz: cif } });
@@ -282,7 +283,7 @@ export default function Clientes() {
                   className="shrink-0 rounded-xl border border-navy-200 px-3 text-sm font-bold text-navy-500 hover:bg-navy-50 disabled:opacity-40">🔍</button>
               </div>
             </div>
-            <div><label className="label">Nombre comercial</label><input required className="input" value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></div>
+            <div><label className="label">Nombre</label><input required className="input" value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></div>
             <div><label className="label">Código interno</label><input className="input" placeholder="CL-0001" value={form.codigo || ''} onChange={e => setForm({ ...form, codigo: e.target.value })} /></div>
           </div>
 

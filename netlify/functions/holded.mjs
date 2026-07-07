@@ -72,8 +72,13 @@ function listaContactos(data) {
   return [];
 }
 
-// El CIF puede venir en distintos campos según cómo se creó el contacto.
-const cifDe = (x) => norm(x?.code || x?.vatnumber || x?.taxId || x?.nif || x?.cif || '');
+// El CIF puede venir en distintos campos según la versión de la API / cómo se creó.
+// Comprobamos todos los candidatos conocidos de la v1 y v2 de Holded.
+const cifDe = (x) => {
+  const cands = [x?.code, x?.vatnumber, x?.vatNumber, x?.taxId, x?.nif, x?.cif, x?.customId, x?.tradeName];
+  for (const c of cands) { const n = norm(c); if (n) return n; }
+  return '';
+};
 
 // Mapea un contacto de Holded a los campos de cliente de Consultify (para autocompletar).
 function deContactoHolded(x) {
@@ -101,15 +106,15 @@ function aContactoHolded(c) {
 async function buscarContactoPorCif(cif) {
   const objetivo = norm(cif);
   let page = 1;
-  for (let i = 0; i < 20; i++) { // hasta 20 páginas de seguridad
-    const r = await holded(`/contacts?page=${page}`);
+  // v2 permite hasta 100 por página. Con 50 páginas cubrimos 5000 contactos.
+  for (let i = 0; i < 50; i++) {
+    const r = await holded(`/contacts?page=${page}&limit=100`);
     if (!r.ok) return { error: r };
     const lista = listaContactos(r.data);
+    if (lista.length === 0) break; // no hay más resultados
     const match = lista.find((x) => cifDe(x) === objetivo);
     if (match) return { match };
-    if (lista.length === 0) break; // no hay más páginas
-    // si la API no pagina, listaContactos devolverá todo en page=1 y aquí paramos
-    if (!Array.isArray(r.data?.data) && Array.isArray(r.data)) break;
+    if (lista.length < 100) break; // última página (menos de un lote completo)
     page += 1;
   }
   return { match: null };
@@ -148,7 +153,21 @@ export default async (req) => {
       if (!cif) return json({ ok: false, error: 'CIF vacío' }, 400);
       const res = await buscarContactoPorCif(cif);
       if (res.error) return json({ ok: false, error: `Error consultando Holded (HTTP ${res.error.status})`, detalle: res.error.data }, 502);
-      if (!res.match) return json({ ok: true, encontrado: false });
+      if (!res.match) {
+        // Diagnóstico: devolvemos las claves del primer contacto y cuántos hay,
+        // para ver en qué campo está realmente el CIF si no lo encontramos.
+        let diagnostico = null;
+        if (body.diagnostico) {
+          const r0 = await holded('/contacts?page=1');
+          const lista = listaContactos(r0.data);
+          diagnostico = {
+            total_en_pagina: lista.length,
+            campos_primer_contacto: lista[0] ? Object.keys(lista[0]) : [],
+            muestra: lista.slice(0, 2).map(x => ({ id: x.id, name: x.name, code: x.code, vatnumber: x.vatnumber, customId: x.customId })),
+          };
+        }
+        return json({ ok: true, encontrado: false, diagnostico });
+      }
       return json({ ok: true, encontrado: true, holded_id: res.match.id, datos: deContactoHolded(res.match) });
     }
 
