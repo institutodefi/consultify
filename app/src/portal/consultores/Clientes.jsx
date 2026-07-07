@@ -111,17 +111,18 @@ export default function Clientes() {
         setHoldedMsg({ err: false, t: `Ese CIF no está en Holded. Al sincronizar se creará el contacto.${diag}` });
         return;
       }
-      // Autocompletar solo los campos vacíos (no pisar lo que ya escribiste).
+      // Traer los datos de Holded. Como es una acción explícita (pulsaste la lupa),
+      // sobrescribimos los campos con lo que hay en Holded. El Nombre viene de `name`.
       const d = r.datos || {};
       setForm(f => ({
         ...f,
-        empresa: f.empresa || d.empresa || '',
-        email: f.email || d.email || '',
-        telefono: f.telefono || d.telefono || '',
-        contacto: f.contacto || d.contacto || '',
+        empresa: d.empresa || f.empresa || '',
+        email: d.email || f.email || '',
+        telefono: d.telefono || f.telefono || '',
+        contacto: d.contacto || f.contacto || '',
         holded_id: r.holded_id || f.holded_id,
       }));
-      setHoldedMsg({ err: false, t: 'Datos traídos de Holded. Revisa y sincroniza para guardar.' });
+      setHoldedMsg({ err: false, t: `Datos traídos de Holded${d.empresa ? `: ${d.empresa}` : ''}. Revisa y sincroniza para guardar.` });
     } catch { setHoldedMsg({ err: true, t: 'Error de conexión con Holded.' }); }
     finally { setHoldedBusy(false); }
   }
