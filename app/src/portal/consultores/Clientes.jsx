@@ -109,7 +109,8 @@ export default function Clientes() {
         const txt = r.accion === 'creado' ? 'Contacto creado en Holded.' : 'Cliente vinculado y actualizado en Holded.';
         setHoldedMsg({ err: false, t: `${txt}${r.holded_id ? ` (ID: ${r.holded_id})` : ''}` });
       } else {
-        setHoldedMsg({ err: true, t: r.error || 'No se pudo sincronizar con Holded.' });
+        const det = r.detalle ? (typeof r.detalle === 'string' ? r.detalle : JSON.stringify(r.detalle)) : '';
+        setHoldedMsg({ err: true, t: `${r.error || 'No se pudo sincronizar con Holded.'}${det ? ` — ${det}` : ''}` });
       }
     } catch { setHoldedMsg({ err: true, t: 'Error de conexión con Holded.' }); }
     finally { setHoldedBusy(false); }

@@ -42,32 +42,39 @@ async function autorizar(token) {
 
 // Llama a la API de Holded con la cabecera de autenticación correcta.
 async function holded(path, { method = 'GET', body } = {}) {
-  const r = await fetch(`${HOLDED_BASE}${path}`, {
-    method,
-    headers: {
-      key: process.env.HOLDED_API_KEY,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let r;
+  try {
+    r = await fetch(`${HOLDED_BASE}${path}`, {
+      method,
+      headers: {
+        key: process.env.HOLDED_API_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    return { ok: false, status: 0, data: `No se pudo contactar con Holded: ${e.message}` };
+  }
   const txt = await r.text();
   let data; try { data = JSON.parse(txt); } catch { data = txt; }
-  return { ok: r.ok, status: r.status, data };
+  // Holded devuelve a veces {status:0/1, info:"..."} incluso con HTTP 200.
+  const holdedError = data && typeof data === 'object' && (data.status === 0 || data.error);
+  return { ok: r.ok && !holdedError, status: r.status, data };
 }
 
 const norm = (s) => String(s || '').toUpperCase().replace(/[\s\-.]/g, '');
 
-// Mapea un cliente de Consultify al formato de contacto de Holded.
+// Mapea un cliente de Consultify al formato de contacto de Holded (API v1).
+// En la v1 el CIF/NIF va en el campo `code`. `type` acepta 'client'|'supplier'|'lead';
+// lo dejamos en 'client'. Solo enviamos campos con valor para no romper validaciones.
 function aContactoHolded(c) {
-  return {
-    name: c.empresa || c.nombre || '',
-    code: norm(c.cif || c.cif_matriz || ''), // el CIF va en 'code'
-    email: c.email || '',
-    phone: c.telefono || '',
-    type: 'client',
-    // Se pueden añadir dirección, etc. si están disponibles
-  };
+  const out = { name: c.empresa || c.nombre || '', type: 'client' };
+  const code = norm(c.cif || c.cif_matriz || '');
+  if (code) out.code = code;
+  if (c.email) out.email = c.email;
+  if (c.telefono) out.phone = String(c.telefono);
+  return out;
 }
 
 export default async (req) => {
@@ -95,8 +102,8 @@ export default async (req) => {
       if (!cif) return json({ ok: false, error: 'CIF vacío' }, 400);
       // Holded permite listar contactos; filtramos por 'code' (CIF).
       const r = await holded('/contacts');
-      if (!r.ok) return json({ ok: false, error: 'Error consultando Holded', detalle: r.data }, 502);
-      const lista = Array.isArray(r.data) ? r.data : [];
+      if (!r.ok) return json({ ok: false, error: `Error consultando Holded (HTTP ${r.status})`, detalle: r.data }, 502);
+      const lista = Array.isArray(r.data) ? r.data : (Array.isArray(r.data?.data) ? r.data.data : []);
       const match = lista.find((x) => norm(x.code) === cif);
       return json({ ok: true, encontrado: !!match, contacto: match || null });
     }
@@ -130,20 +137,21 @@ export default async (req) => {
 
       // 1) buscar por CIF
       const rl = await holded('/contacts');
-      if (!rl.ok) return json({ ok: false, error: 'Error consultando Holded', detalle: rl.data }, 502);
-      const lista = Array.isArray(rl.data) ? rl.data : [];
+      if (!rl.ok) return json({ ok: false, error: `Error consultando Holded (HTTP ${rl.status})`, detalle: rl.data }, 502);
+      const lista = Array.isArray(rl.data) ? rl.data : (Array.isArray(rl.data?.data) ? rl.data.data : []);
       const match = lista.find((x) => norm(x.code) === cif);
 
       if (match) {
         // 2a) existe → actualizar y vincular
         const payload = aContactoHolded(c);
-        await holded(`/contacts/${match.id}`, { method: 'PUT', body: payload });
+        const ru = await holded(`/contacts/${match.id}`, { method: 'PUT', body: payload });
+        if (!ru.ok) return json({ ok: false, error: `No se pudo actualizar en Holded (HTTP ${ru.status})`, detalle: ru.data }, 502);
         return json({ ok: true, holded_id: match.id, accion: 'vinculado_actualizado' });
       } else {
         // 2b) no existe → crear
         const payload = aContactoHolded(c);
         const rc = await holded('/contacts', { method: 'POST', body: payload });
-        if (!rc.ok) return json({ ok: false, error: 'No se pudo crear en Holded', detalle: rc.data }, 502);
+        if (!rc.ok) return json({ ok: false, error: `No se pudo crear en Holded (HTTP ${rc.status})`, detalle: rc.data }, 502);
         const id = rc.data?.id || rc.data?.contactId || null;
         return json({ ok: true, holded_id: id, accion: 'creado' });
       }
