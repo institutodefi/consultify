@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [realRole, setRealRole] = useState(null); // rol REAL en BD
   const [viewAs, setViewAs] = useState(null);   // rol simulado (solo superadmin)
   const [loading, setLoading] = useState(true);
+  const [politicasOk, setPoliticasOk] = useState(true); // ¿aceptó políticas? (true por defecto para no bloquear demo)
 
   useEffect(() => {
     if (DEMO) { setLoading(false); return; }
@@ -28,7 +29,7 @@ export function AuthProvider({ children }) {
 
   async function hydrate(u) {
     setUser(u);
-    const { data } = await supabase.from('perfiles').select('rol, activo').eq('id', u.id).single();
+    const { data } = await supabase.from('perfiles').select('rol, activo, politicas_aceptadas_en').eq('id', u.id).single();
     // Usuario desactivado: cerrar sesión de inmediato.
     if (data && data.activo === false) {
       await supabase.auth.signOut();
@@ -36,9 +37,19 @@ export function AuthProvider({ children }) {
       return;
     }
     setRealRole(data?.rol || 'cliente');
+    setPoliticasOk(!!data?.politicas_aceptadas_en);
     setLoading(false);
     // Marca de último acceso (no bloqueante).
     Promise.resolve(supabase.rpc('marcar_acceso')).catch(() => {});
+  }
+
+  // El usuario acepta las políticas de seguridad y confidencialidad (primer login).
+  async function aceptarPoliticas() {
+    if (DEMO) { setPoliticasOk(true); return { ok: true }; }
+    if (!supabase) return { ok: false };
+    await Promise.resolve(supabase.rpc('aceptar_politicas')).catch(() => {});
+    setPoliticasOk(true);
+    return { ok: true };
   }
 
   async function login(email, password) {
@@ -133,6 +144,7 @@ export function AuthProvider({ children }) {
       login, register, logout, verComo, resetVista,
       establecerPassword,
       adminUsuarios,
+      politicasOk, aceptarPoliticas,
       loading, demo: DEMO,
       verEconomico: can.verEconomico(role),
     }}>

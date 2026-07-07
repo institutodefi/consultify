@@ -8,6 +8,7 @@ import ProyectosConfig from './consultores/ProyectosConfig.jsx';
 import Agenda from './consultores/Agenda.jsx';
 import MiAgenda from './consultores/MiAgenda.jsx';
 import Sistemas from './consultores/Sistemas.jsx';
+import GatePoliticas from './GatePoliticas.jsx';
 import Accesos from './consultores/Accesos.jsx';
 import ProcesosInternos from './consultores/ProcesosInternos.jsx';
 import GeneradorOfertas from '../pages/GeneradorOfertas.jsx';
@@ -42,7 +43,7 @@ function Guard({ ok, children }) {
 }
 
 export default function ConsultorPortal() {
-  const { role } = useAuth();
+  const { role, politicasOk } = useAuth();
   const grupos = gruposParaRol(role);
   const verEquipo = can.gestionarEquipo(role);
   const verPlanAgendaSist = ['superadmin', 'admin', 'director', 'consultor'].includes(role);
@@ -87,6 +88,7 @@ export default function ConsultorPortal() {
 
   return (
     <>
+      {!politicasOk && <GatePoliticas />}
       <BarraVerComo />
       <div className="mx-auto max-w-[1400px] px-3 sm:px-5 py-4 sm:py-8">
         {/* Barra superior móvil */}

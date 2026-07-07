@@ -95,7 +95,7 @@ export default async (req) => {
 
     // ── INVITAR por email (el usuario define su contraseña) ──
     if (action === 'invite') {
-      const { email, nombre = '', rol = 'consultor', nivel = null } = body;
+      const { email, nombre = '', rol = 'consultor', nivel = null, normas = [], capacidad_clientes = 12 } = body;
       if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ ok: false, error: 'Email no válido' }, 400);
       if (!ROLES_VALIDOS.includes(rol)) return json({ ok: false, error: 'Rol no válido' }, 400);
       if (nivel && !NIVELES.includes(nivel)) return json({ ok: false, error: 'Nivel no válido' }, 400);
@@ -116,7 +116,7 @@ export default async (req) => {
       if (inv?.id) {
         await sb(`/rest/v1/perfiles?id=eq.${inv.id}`, {
           method: 'PATCH', prefer: 'return=minimal',
-          body: { rol, nivel, nombre, email, invitado_en: new Date().toISOString(), activo: true },
+          body: { rol, nivel, nombre, email, normas, capacidad_clientes, invitado_en: new Date().toISOString(), activo: true },
         });
       }
       return json({ ok: true, invited: email });

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth.jsx';
 import { ROL_LABEL } from '../../lib/permisos.js';
+import { NORMAS } from '../../lib/calcEngine.js';
 
 const ROLES_ASIGNABLES = ['superadmin', 'admin', 'director', 'consultor', 'gestion'];
 const ROLES_DOMINIO = ['director', 'consultor'];
@@ -29,8 +30,8 @@ export default function Accesos() {
   const [error, setError] = useState(null);
   const [msg, setMsg] = useState(null);
 
-  // Formulario de invitación
-  const [inv, setInv] = useState({ email: '', nombre: '', rol: 'consultor', nivel: '' });
+  // Formulario de invitación (incluye datos de agenda: nivel, normas, capacidad)
+  const [inv, setInv] = useState({ email: '', nombre: '', rol: 'consultor', nivel: '', normas: [], capacidad_clientes: 12 });
   const [invBusy, setInvBusy] = useState(false);
 
   async function cargar() {
@@ -56,10 +57,10 @@ export default function Accesos() {
       setInvBusy(false); return;
     }
     try {
-      const r = await adminUsuarios({ action: 'invite', email: inv.email.trim(), nombre: inv.nombre.trim(), rol: inv.rol, nivel: inv.nivel || null });
+      const r = await adminUsuarios({ action: 'invite', email: inv.email.trim(), nombre: inv.nombre.trim(), rol: inv.rol, nivel: inv.nivel || null, normas: inv.normas || [], capacidad_clientes: inv.capacidad_clientes ?? 12 });
       if (r.ok) {
         setMsg(`Invitación enviada a ${inv.email}. Recibirá un email para poner su contraseña.`);
-        setInv({ email: '', nombre: '', rol: 'consultor', nivel: '' });
+        setInv({ email: '', nombre: '', rol: 'consultor', nivel: '', normas: [], capacidad_clientes: 12 });
         cargar();
       } else setError(r.error || 'No se pudo invitar.');
     } catch { setError('Error de conexión.'); }
@@ -126,6 +127,32 @@ export default function Accesos() {
               {NIVELES.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
+
+          {/* Datos de agenda: solo para roles que ejecutan proyectos */}
+          {['director', 'consultor'].includes(inv.rol) && (
+            <>
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="label">Normas que maneja</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {NORMAS.map(n => {
+                    const on = (inv.normas || []).includes(n.id);
+                    return (
+                      <button key={n.id} type="button"
+                        onClick={() => setInv({ ...inv, normas: on ? inv.normas.filter(x => x !== n.id) : [...(inv.normas || []), n.id] })}
+                        className={`chip border text-xs transition ${on ? 'border-brand-orange bg-brand-orange/15 text-brand-orangeDark' : 'border-navy-200 text-navy-400 hover:border-navy-400'}`}>
+                        {on ? '✓ ' : ''}{n.id}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <label className="label">Capacidad (clientes)</label>
+                <input type="number" min="1" max="40" className="input" value={inv.capacidad_clientes}
+                  onChange={e => setInv({ ...inv, capacidad_clientes: Number(e.target.value) || 12 })} />
+              </div>
+            </>
+          )}
           <div className="sm:col-span-2 lg:col-span-4">
             <button disabled={invBusy} className="btn-primary">{invBusy ? 'Enviando invitación…' : 'Enviar invitación por email'}</button>
             <p className="mt-2 text-xs text-navy-300">El miembro recibirá un email con un enlace para crear su propia contraseña.</p>

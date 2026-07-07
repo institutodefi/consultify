@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listTable, insertRow, updateRow, deleteRow, siguienteCodigoCliente } from '../../lib/data.js';
+import { listTable, insertRow, updateRow, deleteRow, siguienteCodigoCliente, holdedFn } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
 
-const VACIO = { codigo: '', empresa: '', contacto: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
+const VACIO = { codigo: '', cif_matriz: '', empresa: '', contacto: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
 
 export default function Clientes() {
   const navigate = useNavigate();
@@ -17,6 +17,8 @@ export default function Clientes() {
   const [sel, setSel] = useState('');
   const [form, setForm] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [holdedMsg, setHoldedMsg] = useState(null);
+  const [holdedBusy, setHoldedBusy] = useState(false);
   const [busca, setBusca] = useState('');
   const [porPagina, setPorPagina] = useState('25');
   const [pag, setPag] = useState(0);
@@ -84,11 +86,33 @@ export default function Clientes() {
   async function guardarCliente(e) {
     e.preventDefault(); setMsg(null);
     try {
-      const datos = { codigo: form.codigo, empresa: form.empresa, contacto: form.contacto, email: form.email, telefono: form.telefono, director_proyecto_id: form.director_proyecto_id || null, jefe_cuenta_id: form.jefe_cuenta_id || null };
+      const datos = { codigo: form.codigo, cif_matriz: form.cif_matriz || null, empresa: form.empresa, contacto: form.contacto, email: form.email, telefono: form.telefono, director_proyecto_id: form.director_proyecto_id || null, jefe_cuenta_id: form.jefe_cuenta_id || null };
       if (form.id) await updateRow('clientes', form.id, datos);
       else { const nuevo = await insertRow('clientes', datos); if (nuevo?.id) setSel(nuevo.id); }
       setForm(null); cargar();
     } catch (err) { setMsg(err.message); }
+  }
+
+  // Sincroniza el cliente del formulario con Holded por CIF.
+  async function sincronizarHolded() {
+    const cif = (form.cif_matriz || '').trim();
+    if (!cif) { setHoldedMsg({ err: true, t: 'Introduce el CIF de la empresa matriz antes de sincronizar.' }); return; }
+    setHoldedBusy(true); setHoldedMsg(null);
+    try {
+      const r = await holdedFn({ action: 'sincronizar', cliente: { ...form, cif: cif, cif_matriz: cif } });
+      if (r.ok) {
+        // Guardar el vínculo en el cliente si ya está creado
+        if (form.id && r.holded_id) {
+          await updateRow('clientes', form.id, { holded_id: r.holded_id, holded_sincronizado_en: new Date().toISOString() });
+          cargar();
+        }
+        const txt = r.accion === 'creado' ? 'Contacto creado en Holded.' : 'Cliente vinculado y actualizado en Holded.';
+        setHoldedMsg({ err: false, t: `${txt}${r.holded_id ? ` (ID: ${r.holded_id})` : ''}` });
+      } else {
+        setHoldedMsg({ err: true, t: r.error || 'No se pudo sincronizar con Holded.' });
+      }
+    } catch { setHoldedMsg({ err: true, t: 'Error de conexión con Holded.' }); }
+    finally { setHoldedBusy(false); }
   }
 
   async function addEmpresa() {
@@ -147,7 +171,7 @@ export default function Clientes() {
             <label className="label" htmlFor="sel-cliente">Cliente</label>
             <select id="sel-cliente" className="input" value={sel} onChange={e => { setSel(e.target.value); setForm(null); }}>
               <option value="">— Selecciona un cliente —</option>
-              {clientes.map(c => <option key={c.id} value={c.id}>{c.codigo ? `${c.codigo} · ` : ''}{c.empresa}</option>)}
+              {clientes.map(c => <option key={c.id} value={c.id}>{c.cif_matriz ? `${c.cif_matriz} · ` : (c.codigo ? `${c.codigo} · ` : '')}{c.empresa}</option>)}
             </select>
           </div>
           <div className="flex gap-2">
@@ -175,16 +199,17 @@ export default function Clientes() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
-                <th className="py-2">ID</th><th className="py-2">Cliente</th><th className="py-2">Contacto</th><th className="py-2">Email</th><th className="py-2"></th>
+                <th className="py-2">CIF</th><th className="py-2">Cliente</th><th className="py-2">Contacto</th><th className="py-2">Email</th><th className="py-2">Holded</th><th className="py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-navy-50">
               {clientesPagina.map(c => (
                 <tr key={c.id} className={`cursor-pointer hover:bg-navy-50/50 ${String(c.id) === String(sel) ? 'bg-brand-orange/5' : ''}`} onClick={() => { setSel(String(c.id)); setForm(null); }}>
-                  <td className="py-2 font-bold text-navy-400">{c.codigo || '—'}</td>
+                  <td className="py-2 font-bold text-navy-500">{c.cif_matriz || c.codigo || '—'}</td>
                   <td className="py-2 font-medium">{c.empresa}</td>
                   <td className="py-2 text-navy-500">{c.contacto || '—'}</td>
                   <td className="py-2 text-navy-500">{c.email || '—'}</td>
+                  <td className="py-2">{c.holded_id ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Vinculado</span> : <span className="text-[10px] font-semibold text-navy-300">—</span>}</td>
                   <td className="py-2 text-right"><span className="text-xs font-bold text-brand-orangeDark">Abrir →</span></td>
                 </tr>
               ))}
@@ -205,7 +230,8 @@ export default function Clientes() {
         <form onSubmit={guardarCliente} className="card">
           <h3 className="font-extrabold">{form.id ? `Editar · ${form.empresa}` : 'Nuevo cliente'}</h3>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-            <div><label className="label">ID de cliente</label><input className="input" placeholder="CL-0001" value={form.codigo || ''} onChange={e => setForm({ ...form, codigo: e.target.value })} /></div>
+            <div><label className="label">CIF (empresa matriz)</label><input className="input font-bold" placeholder="B12345678" value={form.cif_matriz || ''} onChange={e => setForm({ ...form, cif_matriz: e.target.value.toUpperCase() })} /></div>
+            <div><label className="label">Código interno</label><input className="input" placeholder="CL-0001" value={form.codigo || ''} onChange={e => setForm({ ...form, codigo: e.target.value })} /></div>
             <div><label className="label">Nombre comercial</label><input required className="input" value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></div>
             <div><label className="label">Contacto</label><input className="input" value={form.contacto || ''} onChange={e => setForm({ ...form, contacto: e.target.value })} /></div>
             <div><label className="label">Email</label><input type="email" className="input" value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
@@ -223,10 +249,15 @@ export default function Clientes() {
               </select>
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <button className="btn-primary">{form.id ? 'Guardar cambios' : 'Crear cliente'}</button>
             <button type="button" onClick={() => setForm(null)} className="btn-ghost">Cancelar</button>
+            <button type="button" onClick={sincronizarHolded} disabled={holdedBusy}
+              className="rounded-xl border border-navy-200 px-4 py-2 text-sm font-bold text-navy-600 hover:bg-navy-50 disabled:opacity-40">
+              {holdedBusy ? 'Sincronizando…' : '⟳ Sincronizar con Holded'}
+            </button>
             {msg && <p className="text-sm font-bold text-red-600">{msg}</p>}
+            {holdedMsg && <p className={`text-sm font-bold ${holdedMsg.err ? 'text-red-600' : 'text-green-600'}`}>{holdedMsg.t}</p>}
           </div>
         </form>
       )}

@@ -193,3 +193,17 @@ export async function misProyectos(user) {
   if (error) throw error;
   return data;
 }
+
+/** Llama a la Netlify Function de Holded con el token del usuario.
+ *  Devuelve el JSON de la función. Solo funciona con backend configurado. */
+export async function holdedFn(payload) {
+  if (DEMO) return { ok: false, error: 'Holded no disponible en modo demo.' };
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  const r = await fetch('/.netlify/functions/holded', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
+    body: JSON.stringify(payload),
+  });
+  return r.json();
+}

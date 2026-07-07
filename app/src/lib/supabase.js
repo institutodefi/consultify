@@ -17,9 +17,9 @@ export const supabase = (!url || !anon) ? null : createClient(url, anon);
 // ---------------- DATOS DEMO (solo cuando DEMO === true) ----------------
 export const demoDB = {
   consultores: [
-    { id: 'c1', nombre: 'Carlota', nivel: 'J3', normas: ['9001','14001','27001','45001'], capacidad_clientes: 12, activo: true },
-    { id: 'c2', nombre: 'Irene',   nivel: 'J2', normas: ['9001','14001'],                 capacidad_clientes: 17, activo: true },
-    { id: 'c3', nombre: 'Daniela', nivel: 'J1', normas: ['9001'],                          capacidad_clientes: 8,  activo: false },
+    { id: 'c1', nombre: 'Carlota', apellidos: '', rol: 'consultor', email: 'carlota@tuconsultor.com', nivel: 'J3', normas: ['9001','14001','27001','45001'], capacidad_clientes: 12, activo: true },
+    { id: 'c2', nombre: 'Irene',   apellidos: '', rol: 'director',   email: 'irene@tuconsultor.com',   nivel: 'J2', normas: ['9001','14001'],                 capacidad_clientes: 17, activo: true },
+    { id: 'c3', nombre: 'Daniela', apellidos: '', rol: 'consultor', email: 'daniela@tuconsultor.com', nivel: 'J1', normas: ['9001'],                          capacidad_clientes: 8,  activo: false },
   ],
   clientes: [
     { id: 'cl1', codigo: 'CL-0001', empresa: 'Industrias Norte S.L.', cif: 'B12345678', contacto: 'María López', email: 'maria@industriasnorte.es', telefono: '+34 600 111 222' },
