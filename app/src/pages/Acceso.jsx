@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
+import { validarPassword, mensajePassword } from '../lib/password.js';
 
 function CampoPassword({ id, label, value, onChange, required, autoComplete, error }) {
   const [visible, setVisible] = useState(false);
@@ -67,9 +68,10 @@ export default function Acceso() {
   const [kBusy, setKBusy] = useState(false);
 
   const registro = modo === 'register';
-  const passCorta = registro && k.password.length > 0 && k.password.length < 8;
+  const pwVal = validarPassword(k.password);
+  const passCorta = registro && k.password.length > 0 && !pwVal.ok;
   const noCoinciden = registro && k.password2.length > 0 && k.password !== k.password2;
-  const registroInvalido = registro && (k.password.length < 8 || k.password !== k.password2);
+  const registroInvalido = registro && (!pwVal.ok || k.password !== k.password2);
 
   const ROLES_EQUIPO = ['consultor', 'admin', 'superadmin', 'gestion'];
 
@@ -149,7 +151,7 @@ export default function Acceso() {
               </>
             )}
             <div><label className="label" htmlFor="k-email">Email</label><input id="k-email" type="email" required className="input" autoComplete="email" value={k.email} onChange={e => setK({ ...k, email: e.target.value })} /></div>
-            <CampoPassword id="k-pass" label="Contraseña" value={k.password} onChange={e => setK({ ...k, password: e.target.value })} required={!demo} autoComplete={registro ? 'new-password' : 'current-password'} error={passCorta ? 'Mínimo 8 caracteres.' : null} />
+            <CampoPassword id="k-pass" label="Contraseña" value={k.password} onChange={e => setK({ ...k, password: e.target.value })} required={!demo} autoComplete={registro ? 'new-password' : 'current-password'} error={passCorta ? mensajePassword(k.password) : null} />
             {registro && <CampoPassword id="k-pass2" label="Confirmar contraseña" value={k.password2} onChange={e => setK({ ...k, password2: e.target.value })} required={!demo} autoComplete="new-password" error={noCoinciden ? 'Las contraseñas no coinciden.' : null} />}
             {kMsg && <p className={`text-sm font-bold ${kMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{kMsg.text}</p>}
             <button disabled={kBusy || (registroInvalido && !demo)} className="btn-orange w-full">{kBusy ? 'Un momento…' : registro ? 'Crear cuenta' : 'Entrar como cliente'}</button>

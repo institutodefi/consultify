@@ -80,6 +80,16 @@ export function AuthProvider({ children }) {
     return { role: 'cliente', needsConfirm: !data.session };
   }
 
+  // Establece la contraseña del usuario autenticado por el enlace de invitación/reset.
+  // Supabase crea una sesión temporal al abrir ese enlace; updateUser fija la nueva clave.
+  async function establecerPassword(password) {
+    if (DEMO) return { ok: true };
+    if (!supabase) throw new Error('La aplicación no está conectada a la base de datos.');
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+    return { ok: true };
+  }
+
   async function logout() {
     if (!DEMO) await supabase.auth.signOut();
     setUser(null); setRealRole(null); setViewAs(null);
@@ -121,6 +131,7 @@ export function AuthProvider({ children }) {
     <AuthCtx.Provider value={{
       user, role, realRole, viewAs, esSuper,
       login, register, logout, verComo, resetVista,
+      establecerPassword,
       adminUsuarios,
       loading, demo: DEMO,
       verEconomico: can.verEconomico(role),

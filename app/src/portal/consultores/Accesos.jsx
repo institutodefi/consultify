@@ -67,6 +67,15 @@ export default function Accesos() {
     else setError(r.error || 'No se pudo cambiar el estado.');
   }
 
+  async function resetPassword(u) {
+    if (!u.email) { setError('Ese usuario no tiene email registrado.'); return; }
+    if (!window.confirm(`¿Enviar a ${u.email} un email para restablecer su contraseña?`)) return;
+    setMsg(null); setError(null);
+    const r = await adminUsuarios({ action: 'reset_password', email: u.email });
+    if (r.ok) setMsg(`Email de restablecimiento enviado a ${u.email}.`);
+    else setError(r.error || 'No se pudo enviar el email.');
+  }
+
   async function eliminar(u) {
     if (!window.confirm(`¿Eliminar definitivamente a ${u.nombre || u.email}? Esta acción no se puede deshacer.`)) return;
     setMsg(null); setError(null);
@@ -155,6 +164,10 @@ export default function Accesos() {
                       <td className="px-3 py-3 text-navy-500">{fecha(u.ultimo_acceso)}</td>
                       <td className="px-5 py-3">
                         <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => resetPassword(u)}
+                            className="rounded-lg px-3 py-1.5 text-xs font-bold text-navy-500 hover:bg-navy-50" title="Enviar email para restablecer contraseña">
+                            Resetear contraseña
+                          </button>
                           <button onClick={() => toggleActivo(u)} disabled={yo}
                             className={`rounded-lg px-3 py-1.5 text-xs font-bold disabled:opacity-40 ${u.activo ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}>
                             {u.activo ? 'Desactivar' : 'Reactivar'}

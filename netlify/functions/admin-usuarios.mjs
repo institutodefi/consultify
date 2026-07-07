@@ -95,7 +95,7 @@ export default async (req) => {
       // Admin API: enviar invitación. El rol viaja en metadata → el trigger lo aplica al crear el perfil.
       const r = await sb('/auth/v1/invite', {
         method: 'POST',
-        body: { email, data: { nombre, rol }, redirect_to: `${SITE}/app/acceso` },
+        body: { email, data: { nombre, rol }, redirect_to: `${SITE}/app/establecer-password` },
       });
       if (!r.ok) {
         const err = await r.text();
@@ -121,6 +121,27 @@ export default async (req) => {
       const r = await sb(`/rest/v1/perfiles?id=eq.${id}`, { method: 'PATCH', prefer: 'return=minimal', body: { rol } });
       if (!r.ok) return json({ ok: false, error: 'No se pudo actualizar el rol' }, 502);
       return json({ ok: true });
+    }
+
+    // ── RESETEAR CONTRASEÑA (envía email de restablecimiento) ──
+    if (action === 'reset_password') {
+      const { email } = body;
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ ok: false, error: 'Email no válido' }, 400);
+      // Endpoint público de recuperación: envía el correo con el enlace de reseteo.
+      // Usa la plantilla "Reset password" configurada en Supabase → Auth → Emails.
+      const r = await fetch(`${process.env.SUPABASE_URL}/auth/v1/recover`, {
+        method: 'POST',
+        headers: {
+          apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+      if (!r.ok) {
+        const e = await r.text();
+        return json({ ok: false, error: 'No se pudo enviar el email de restablecimiento: ' + e }, 502);
+      }
+      return json({ ok: true, sent: email });
     }
 
     // ── ACTIVAR / DESACTIVAR ──
