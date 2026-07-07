@@ -43,8 +43,7 @@ async function autorizar(token) {
   return { id: u.id, ...perfil };
 }
 
-// Llama a la API de Holded. Enviamos AMBOS headers de auth (Bearer para v2,
-// `key` para invoicing v1) para funcionar con cualquiera de los dos endpoints.
+// Llama a la API v2 de Holded (auth Bearer, confirmada para esta cuenta).
 async function holded(path, { method = 'GET', body, base = HOLDED_BASE } = {}) {
   let r;
   try {
@@ -52,7 +51,6 @@ async function holded(path, { method = 'GET', body, base = HOLDED_BASE } = {}) {
       method,
       headers: {
         Authorization: `Bearer ${process.env.HOLDED_API_KEY}`,
-        key: process.env.HOLDED_API_KEY,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
@@ -72,15 +70,16 @@ const norm = (s) => String(s || '').toUpperCase().replace(/[\s\-.]/g, '');
 // Extrae el array de contactos de la respuesta (v2 pagina con {data:[...]}).
 function listaContactos(data) {
   if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;   // formato v2 real: {items, cursor, has_more}
   if (Array.isArray(data?.data)) return data.data;
   if (Array.isArray(data?.contacts)) return data.contacts;
   return [];
 }
 
-// El CIF puede venir en distintos campos según la versión de la API / cómo se creó.
-// Comprobamos todos los candidatos conocidos de la v1 y v2 de Holded.
+// El CIF va en `code` (confirmado en la respuesta real de la v2). Comprobamos
+// también las variantes con guion bajo por robustez.
 const cifDe = (x) => {
-  const cands = [x?.code, x?.vatnumber, x?.vatNumber, x?.taxId, x?.nif, x?.cif, x?.customId, x?.tradeName];
+  const cands = [x?.code, x?.vat_number, x?.vatnumber, x?.vatNumber, x?.custom_id, x?.customId, x?.trade_name, x?.nif, x?.cif];
   for (const c of cands) { const n = norm(c); if (n) return n; }
   return '';
 };
@@ -91,8 +90,8 @@ function deContactoHolded(x) {
     empresa: x?.name || '',
     email: x?.email || '',
     telefono: x?.phone || x?.mobile || '',
-    contacto: x?.contactPersons?.[0]?.name || '',
-    cif_matriz: norm(x?.code || x?.vatnumber || ''),
+    contacto: x?.contactPersons?.[0]?.name || x?.contact_persons?.[0]?.name || '',
+    cif_matriz: norm(x?.code || x?.vat_number || ''),
   };
 }
 
@@ -110,23 +109,22 @@ function aContactoHolded(c) {
 // Recorre todas las páginas de contactos buscando uno cuyo CIF coincida.
 async function buscarContactoPorCif(cif) {
   const objetivo = norm(cif);
-  // Probamos primero v2; si no devuelve contactos, invoicing v1.
-  for (const base of [HOLDED_BASE, HOLDED_BASE_INV]) {
-    let page = 1, vistos = 0;
-    for (let i = 0; i < 50; i++) {
-      const r = await holded(`/contacts?page=${page}&limit=100`, { base });
-      if (!r.ok) break; // este endpoint falla → probamos el siguiente
-      const lista = listaContactos(r.data);
-      if (lista.length === 0) break;
-      vistos += lista.length;
-      const match = lista.find((x) => cifDe(x) === objetivo);
-      if (match) return { match, base };
-      if (lista.length < 100) break;
-      page += 1;
-    }
-    if (vistos > 0) return { match: null, base }; // este endpoint sí trajo datos pero no estaba
+  // La v2 pagina por cursor: respuesta {items, cursor, has_more}.
+  let cursor = null;
+  for (let i = 0; i < 100; i++) { // hasta 100 lotes (cubre miles de contactos)
+    const q = cursor ? `/contacts?limit=100&cursor=${encodeURIComponent(cursor)}` : '/contacts?limit=100';
+    const r = await holded(q);
+    if (!r.ok) return { error: r };
+    const lista = listaContactos(r.data);
+    if (lista.length === 0) break;
+    const match = lista.find((x) => cifDe(x) === objetivo);
+    if (match) return { match, base: HOLDED_BASE };
+    // ¿hay más páginas?
+    const hayMas = r.data?.has_more === true && r.data?.cursor;
+    if (!hayMas) break;
+    cursor = r.data.cursor;
   }
-  return { match: null };
+  return { match: null, base: HOLDED_BASE };
 }
 
 export default async (req) => {
