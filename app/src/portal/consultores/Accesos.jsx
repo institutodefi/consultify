@@ -31,7 +31,7 @@ export default function Accesos() {
   const [msg, setMsg] = useState(null);
 
   // Formulario de invitación (incluye datos de agenda: nivel, normas, capacidad)
-  const [inv, setInv] = useState({ email: '', nombre: '', rol: 'consultor', nivel: '', normas: [], capacidad_clientes: 12 });
+  const [inv, setInv] = useState({ email: '', nombre: '', apellidos: '', rol: 'consultor', nivel: '', normas: [], capacidad_clientes: 12 });
   const [invBusy, setInvBusy] = useState(false);
 
   async function cargar() {
@@ -57,10 +57,10 @@ export default function Accesos() {
       setInvBusy(false); return;
     }
     try {
-      const r = await adminUsuarios({ action: 'invite', email: inv.email.trim(), nombre: inv.nombre.trim(), rol: inv.rol, nivel: inv.nivel || null, normas: inv.normas || [], capacidad_clientes: inv.capacidad_clientes ?? 12 });
+      const r = await adminUsuarios({ action: 'invite', email: inv.email.trim(), nombre: inv.nombre.trim(), apellidos: inv.apellidos.trim(), rol: inv.rol, nivel: inv.nivel || null, normas: inv.normas || [], capacidad_clientes: inv.capacidad_clientes ?? 12 });
       if (r.ok) {
         setMsg(`Invitación enviada a ${inv.email}. Recibirá un email para poner su contraseña.`);
-        setInv({ email: '', nombre: '', rol: 'consultor', nivel: '', normas: [], capacidad_clientes: 12 });
+        setInv({ email: '', nombre: '', apellidos: '', rol: 'consultor', nivel: '', normas: [], capacidad_clientes: 12 });
         cargar();
       } else setError(r.error || 'No se pudo invitar.');
     } catch { setError('Error de conexión.'); }
@@ -124,6 +124,7 @@ export default function Accesos() {
         <h2 className="mb-4 text-lg font-extrabold text-navy-900">Invitar a un nuevo miembro</h2>
         <form onSubmit={invitar} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-1"><label className="label">Nombre</label><input className="input" value={inv.nombre} onChange={e => setInv({ ...inv, nombre: e.target.value })} required /></div>
+          <div className="lg:col-span-1"><label className="label">Apellidos</label><input className="input" value={inv.apellidos} onChange={e => setInv({ ...inv, apellidos: e.target.value })} /></div>
           <div className="lg:col-span-1"><label className="label">Email corporativo</label><input type="email" className="input" value={inv.email} onChange={e => setInv({ ...inv, email: e.target.value })} required /></div>
           <div><label className="label">Rol</label>
             <select className="input" value={inv.rol} onChange={e => setInv({ ...inv, rol: e.target.value })}>
@@ -198,7 +199,7 @@ export default function Accesos() {
                   return (
                     <tr key={u.id} className="border-b border-navy-50 last:border-0">
                       <td className="px-5 py-3">
-                        <div className="font-bold text-navy-900">{u.nombre || '—'} {yo && <span className="text-xs font-semibold text-navy-300">(tú)</span>}</div>
+                        <div className="font-bold text-navy-900">{[u.nombre, u.apellidos].filter(Boolean).join(' ') || '—'} {yo && <span className="text-xs font-semibold text-navy-300">(tú)</span>}</div>
                         <div className="text-xs text-navy-400">{u.email}</div>
                       </td>
                       <td className="px-3 py-3">

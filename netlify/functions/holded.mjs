@@ -75,6 +75,17 @@ function listaContactos(data) {
 // El CIF puede venir en distintos campos según cómo se creó el contacto.
 const cifDe = (x) => norm(x?.code || x?.vatnumber || x?.taxId || x?.nif || x?.cif || '');
 
+// Mapea un contacto de Holded a los campos de cliente de Consultify (para autocompletar).
+function deContactoHolded(x) {
+  return {
+    empresa: x?.name || '',
+    email: x?.email || '',
+    telefono: x?.phone || x?.mobile || '',
+    contacto: x?.contactPersons?.[0]?.name || '',
+    cif_matriz: norm(x?.code || x?.vatnumber || ''),
+  };
+}
+
 // Mapea un cliente de Consultify al formato de contacto de Holded v2.
 // El CIF va en `code`. Solo enviamos campos con valor.
 function aContactoHolded(c) {
@@ -129,6 +140,16 @@ export default async (req) => {
       const res = await buscarContactoPorCif(cif);
       if (res.error) return json({ ok: false, error: `Error consultando Holded (HTTP ${res.error.status})`, detalle: res.error.data }, 502);
       return json({ ok: true, encontrado: !!res.match, contacto: res.match || null });
+    }
+
+    // Busca por CIF y, si existe, devuelve los datos listos para autocompletar el cliente.
+    if (action === 'buscar_datos') {
+      const cif = norm(body.cif);
+      if (!cif) return json({ ok: false, error: 'CIF vacío' }, 400);
+      const res = await buscarContactoPorCif(cif);
+      if (res.error) return json({ ok: false, error: `Error consultando Holded (HTTP ${res.error.status})`, detalle: res.error.data }, 502);
+      if (!res.match) return json({ ok: true, encontrado: false });
+      return json({ ok: true, encontrado: true, holded_id: res.match.id, datos: deContactoHolded(res.match) });
     }
 
     if (action === 'crear') {

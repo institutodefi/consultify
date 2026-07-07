@@ -94,25 +94,66 @@ export default function Clientes() {
   }
 
   // Sincroniza el cliente del formulario con Holded por CIF.
+  // Busca el CIF en Holded y, si existe, autocompleta los campos del formulario.
+  async function buscarEnHolded() {
+    const cif = (form.cif_matriz || '').trim();
+    if (!cif) { setHoldedMsg({ err: true, t: 'Escribe el CIF antes de buscar.' }); return; }
+    setHoldedBusy(true); setHoldedMsg(null);
+    try {
+      const r = await holdedFn({ action: 'buscar_datos', cif });
+      if (!r.ok) {
+        const det = r.detalle ? (typeof r.detalle === 'string' ? r.detalle : JSON.stringify(r.detalle)) : '';
+        setHoldedMsg({ err: true, t: `${r.error || 'No se pudo buscar en Holded.'}${det ? ` — ${det}` : ''}` });
+        return;
+      }
+      if (!r.encontrado) {
+        setHoldedMsg({ err: false, t: 'Ese CIF no está en Holded. Al sincronizar se creará el contacto.' });
+        return;
+      }
+      // Autocompletar solo los campos vacíos (no pisar lo que ya escribiste).
+      const d = r.datos || {};
+      setForm(f => ({
+        ...f,
+        empresa: f.empresa || d.empresa || '',
+        email: f.email || d.email || '',
+        telefono: f.telefono || d.telefono || '',
+        contacto: f.contacto || d.contacto || '',
+        holded_id: r.holded_id || f.holded_id,
+      }));
+      setHoldedMsg({ err: false, t: 'Datos traídos de Holded. Revisa y sincroniza para guardar.' });
+    } catch { setHoldedMsg({ err: true, t: 'Error de conexión con Holded.' }); }
+    finally { setHoldedBusy(false); }
+  }
+
   async function sincronizarHolded() {
     const cif = (form.cif_matriz || '').trim();
     if (!cif) { setHoldedMsg({ err: true, t: 'Introduce el CIF de la empresa matriz antes de sincronizar.' }); return; }
-    setHoldedBusy(true); setHoldedMsg(null);
+    if (!form.empresa?.trim()) { setHoldedMsg({ err: true, t: 'Pon al menos el nombre comercial antes de sincronizar.' }); return; }
+    setHoldedBusy(true); setHoldedMsg(null); setMsg(null);
     try {
       const r = await holdedFn({ action: 'sincronizar', cliente: { ...form, cif: cif, cif_matriz: cif } });
-      if (r.ok) {
-        // Guardar el vínculo en el cliente si ya está creado
-        if (form.id && r.holded_id) {
-          await updateRow('clientes', form.id, { holded_id: r.holded_id, holded_sincronizado_en: new Date().toISOString() });
-          cargar();
-        }
-        const txt = r.accion === 'creado' ? 'Contacto creado en Holded.' : 'Cliente vinculado y actualizado en Holded.';
-        setHoldedMsg({ err: false, t: `${txt}${r.holded_id ? ` (ID: ${r.holded_id})` : ''}` });
-      } else {
+      if (!r.ok) {
         const det = r.detalle ? (typeof r.detalle === 'string' ? r.detalle : JSON.stringify(r.detalle)) : '';
         setHoldedMsg({ err: true, t: `${r.error || 'No se pudo sincronizar con Holded.'}${det ? ` — ${det}` : ''}` });
+        return;
       }
-    } catch { setHoldedMsg({ err: true, t: 'Error de conexión con Holded.' }); }
+      // Guardado AUTOMÁTICO del cliente completo + vínculo, sin pulsar "Guardar cambios".
+      const datos = {
+        codigo: form.codigo, cif_matriz: cif, empresa: form.empresa,
+        contacto: form.contacto, email: form.email, telefono: form.telefono,
+        director_proyecto_id: form.director_proyecto_id || null, jefe_cuenta_id: form.jefe_cuenta_id || null,
+        holded_id: r.holded_id || null, holded_sincronizado_en: new Date().toISOString(),
+      };
+      if (form.id) {
+        await updateRow('clientes', form.id, datos);
+      } else {
+        const nuevo = await insertRow('clientes', datos);
+        if (nuevo?.id) { setSel(String(nuevo.id)); setForm({ ...form, id: nuevo.id, holded_id: r.holded_id }); }
+      }
+      cargar();
+      const txt = r.accion === 'creado' ? 'Contacto creado en Holded y cliente guardado.' : 'Cliente vinculado, actualizado en Holded y guardado.';
+      setHoldedMsg({ err: false, t: txt });
+    } catch (e) { setHoldedMsg({ err: true, t: 'Error de conexión con Holded.' }); }
     finally { setHoldedBusy(false); }
   }
 
@@ -233,7 +274,14 @@ export default function Clientes() {
 
           {/* Fila 1 · Identificación del cliente */}
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div><label className="label">CIF (empresa matriz)</label><input className="input font-bold" placeholder="B12345678" value={form.cif_matriz || ''} onChange={e => setForm({ ...form, cif_matriz: e.target.value.toUpperCase() })} /></div>
+            <div>
+              <label className="label">CIF (empresa matriz)</label>
+              <div className="flex gap-2">
+                <input className="input font-bold" placeholder="B12345678" value={form.cif_matriz || ''} onChange={e => setForm({ ...form, cif_matriz: e.target.value.toUpperCase() })} />
+                <button type="button" onClick={buscarEnHolded} disabled={holdedBusy} title="Buscar este CIF en Holded y autocompletar"
+                  className="shrink-0 rounded-xl border border-navy-200 px-3 text-sm font-bold text-navy-500 hover:bg-navy-50 disabled:opacity-40">🔍</button>
+              </div>
+            </div>
             <div><label className="label">Nombre comercial</label><input required className="input" value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></div>
             <div><label className="label">Código interno</label><input className="input" placeholder="CL-0001" value={form.codigo || ''} onChange={e => setForm({ ...form, codigo: e.target.value })} /></div>
           </div>
