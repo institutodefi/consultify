@@ -18,6 +18,9 @@
 //   HOLDED_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 const HOLDED_BASE = 'https://api.holded.com/api/v2';
+// Endpoint alternativo (API invoicing v1, muy usado). Si el v2 no devuelve
+// contactos, probamos este. Su auth también admite Bearer y la cabecera key.
+const HOLDED_BASE_INV = 'https://api.holded.com/api/invoicing/v1';
 const ROLES_OK = ['superadmin', 'admin', 'director'];
 
 function json(data, status = 200) {
@@ -40,14 +43,16 @@ async function autorizar(token) {
   return { id: u.id, ...perfil };
 }
 
-// Llama a la API v2 de Holded (auth Bearer).
-async function holded(path, { method = 'GET', body } = {}) {
+// Llama a la API de Holded. Enviamos AMBOS headers de auth (Bearer para v2,
+// `key` para invoicing v1) para funcionar con cualquiera de los dos endpoints.
+async function holded(path, { method = 'GET', body, base = HOLDED_BASE } = {}) {
   let r;
   try {
-    r = await fetch(`${HOLDED_BASE}${path}`, {
+    r = await fetch(`${base}${path}`, {
       method,
       headers: {
         Authorization: `Bearer ${process.env.HOLDED_API_KEY}`,
+        key: process.env.HOLDED_API_KEY,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
@@ -105,17 +110,21 @@ function aContactoHolded(c) {
 // Recorre todas las páginas de contactos buscando uno cuyo CIF coincida.
 async function buscarContactoPorCif(cif) {
   const objetivo = norm(cif);
-  let page = 1;
-  // v2 permite hasta 100 por página. Con 50 páginas cubrimos 5000 contactos.
-  for (let i = 0; i < 50; i++) {
-    const r = await holded(`/contacts?page=${page}&limit=100`);
-    if (!r.ok) return { error: r };
-    const lista = listaContactos(r.data);
-    if (lista.length === 0) break; // no hay más resultados
-    const match = lista.find((x) => cifDe(x) === objetivo);
-    if (match) return { match };
-    if (lista.length < 100) break; // última página (menos de un lote completo)
-    page += 1;
+  // Probamos primero v2; si no devuelve contactos, invoicing v1.
+  for (const base of [HOLDED_BASE, HOLDED_BASE_INV]) {
+    let page = 1, vistos = 0;
+    for (let i = 0; i < 50; i++) {
+      const r = await holded(`/contacts?page=${page}&limit=100`, { base });
+      if (!r.ok) break; // este endpoint falla → probamos el siguiente
+      const lista = listaContactos(r.data);
+      if (lista.length === 0) break;
+      vistos += lista.length;
+      const match = lista.find((x) => cifDe(x) === objetivo);
+      if (match) return { match, base };
+      if (lista.length < 100) break;
+      page += 1;
+    }
+    if (vistos > 0) return { match: null, base }; // este endpoint sí trajo datos pero no estaba
   }
   return { match: null };
 }
@@ -154,17 +163,27 @@ export default async (req) => {
       const res = await buscarContactoPorCif(cif);
       if (res.error) return json({ ok: false, error: `Error consultando Holded (HTTP ${res.error.status})`, detalle: res.error.data }, 502);
       if (!res.match) {
-        // Diagnóstico: devolvemos las claves del primer contacto y cuántos hay,
-        // para ver en qué campo está realmente el CIF si no lo encontramos.
+        // Diagnóstico: devolvemos la respuesta CRUDA de Holded para ver su estructura
+        // real y saber de dónde extraer la lista de contactos.
         let diagnostico = null;
         if (body.diagnostico) {
-          const r0 = await holded('/contacts?page=1');
-          const lista = listaContactos(r0.data);
-          diagnostico = {
-            total_en_pagina: lista.length,
-            campos_primer_contacto: lista[0] ? Object.keys(lista[0]) : [],
-            muestra: lista.slice(0, 2).map(x => ({ id: x.id, name: x.name, code: x.code, vatnumber: x.vatnumber, customId: x.customId })),
-          };
+          const pruebas = [];
+          for (const [nombre, base] of [['v2', HOLDED_BASE], ['invoicing_v1', HOLDED_BASE_INV]]) {
+            const r0 = await holded('/contacts?page=1&limit=100', { base });
+            const raw = r0.data;
+            let muestraRaw;
+            try { muestraRaw = JSON.stringify(raw).slice(0, 300); } catch { muestraRaw = String(raw).slice(0, 300); }
+            pruebas.push({
+              endpoint: nombre,
+              http_status: r0.status,
+              ok: r0.ok,
+              es_array: Array.isArray(raw),
+              longitud: Array.isArray(raw) ? raw.length : (Array.isArray(raw?.data) ? raw.data.length : null),
+              claves: (raw && typeof raw === 'object' && !Array.isArray(raw)) ? Object.keys(raw) : [],
+              muestra: muestraRaw,
+            });
+          }
+          diagnostico = pruebas;
         }
         return json({ ok: true, encontrado: false, diagnostico });
       }
@@ -197,13 +216,14 @@ export default async (req) => {
       const res = await buscarContactoPorCif(cif);
       if (res.error) return json({ ok: false, error: `Error consultando Holded (HTTP ${res.error.status})`, detalle: res.error.data }, 502);
 
+      const base = res.base || HOLDED_BASE; // usar el endpoint que respondió con datos
       const payload = aContactoHolded(c);
       if (res.match) {
-        const ru = await holded(`/contacts/${res.match.id}`, { method: 'PUT', body: payload });
+        const ru = await holded(`/contacts/${res.match.id}`, { method: 'PUT', body: payload, base });
         if (!ru.ok) return json({ ok: false, error: `No se pudo actualizar en Holded (HTTP ${ru.status})`, detalle: ru.data }, 502);
         return json({ ok: true, holded_id: res.match.id, accion: 'vinculado_actualizado' });
       } else {
-        const rc = await holded('/contacts', { method: 'POST', body: payload });
+        const rc = await holded('/contacts', { method: 'POST', body: payload, base });
         if (!rc.ok) return json({ ok: false, error: `No se pudo crear en Holded (HTTP ${rc.status})`, detalle: rc.data }, 502);
         const id = rc.data?.id || rc.data?.contactId || null;
         return json({ ok: true, holded_id: id, accion: 'creado' });
