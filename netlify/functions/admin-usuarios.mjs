@@ -88,7 +88,7 @@ export default async (req) => {
   try {
     // ── LISTAR equipo interno ──
     if (action === 'list') {
-      const r = await sb('/rest/v1/perfiles?rol=neq.cliente&select=id,rol,nombre,email,nivel,subtipo,activo,invitado_en,ultimo_acceso,creado&order=creado.desc');
+      const r = await sb('/rest/v1/perfiles?rol=neq.cliente&select=id,rol,nombre,apellidos,email,nivel,normas,capacidad_clientes,subtipo,activo,invitado_en,ultimo_acceso,creado&order=creado.desc');
       const data = await r.json();
       return json({ ok: true, usuarios: data });
     }
@@ -123,6 +123,22 @@ export default async (req) => {
     }
 
     // ── CAMBIAR ROL ──
+    // ── EDITAR PERFIL (nombre, apellidos, nivel, normas, capacidad) ──
+    if (action === 'update_perfil') {
+      const { id, nombre, apellidos, nivel, normas, capacidad_clientes } = body;
+      if (!id) return json({ ok: false, error: 'Falta id' }, 400);
+      if (nivel && !NIVELES.includes(nivel)) return json({ ok: false, error: 'Nivel no válido' }, 400);
+      const campos = {};
+      if (nombre !== undefined) campos.nombre = nombre;
+      if (apellidos !== undefined) campos.apellidos = apellidos;
+      if (nivel !== undefined) campos.nivel = nivel || null;
+      if (normas !== undefined) campos.normas = normas;
+      if (capacidad_clientes !== undefined) campos.capacidad_clientes = capacidad_clientes;
+      const r = await sb(`/rest/v1/perfiles?id=eq.${id}`, { method: 'PATCH', prefer: 'return=minimal', body: campos });
+      if (!r.ok) { const e = await r.text(); return json({ ok: false, error: 'No se pudo actualizar el perfil: ' + e }, 502); }
+      return json({ ok: true });
+    }
+
     if (action === 'set_role') {
       const { id, rol } = body;
       if (!id || !ROLES_VALIDOS.includes(rol)) return json({ ok: false, error: 'Datos no válidos' }, 400);

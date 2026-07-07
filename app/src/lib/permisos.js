@@ -49,6 +49,7 @@ export const GRUPOS_PORTAL = [
   {
     label: 'Organización',
     items: [
+      { to: 'mis-datos', label: 'Mis datos', icon: 'user', roles: ['superadmin', 'admin', 'director', 'consultor', 'gestion'] },
       { to: 'equipo', label: 'Equipo', icon: 'user-cog', roles: ['superadmin', 'admin'] },
       { to: 'procesos-internos', label: 'Procesos internos', icon: 'repeat', roles: ['superadmin', 'admin', 'director', 'consultor'] },
       { to: 'accesos', label: 'Accesos', icon: 'key', roles: ['superadmin'] },

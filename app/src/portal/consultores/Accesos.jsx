@@ -89,6 +89,15 @@ export default function Accesos() {
     else setError(r.error || 'No se pudo enviar el email.');
   }
 
+  // Edición de perfil por el superadmin (nombre, apellidos, nivel, normas, capacidad)
+  const [editando, setEditando] = useState(null); // {id, nombre, apellidos, nivel, normas, capacidad_clientes}
+  async function guardarPerfil() {
+    setMsg(null); setError(null);
+    const r = await adminUsuarios({ action: 'update_perfil', ...editando });
+    if (r.ok) { setMsg('Perfil actualizado.'); setEditando(null); cargar(); }
+    else setError(r.error || 'No se pudo actualizar el perfil.');
+  }
+
   async function eliminar(u) {
     if (!window.confirm(`¿Eliminar definitivamente a ${u.nombre || u.email}? Esta acción no se puede deshacer.`)) return;
     setMsg(null); setError(null);
@@ -203,6 +212,10 @@ export default function Accesos() {
                       <td className="px-3 py-3 text-navy-500">{fecha(u.ultimo_acceso)}</td>
                       <td className="px-5 py-3">
                         <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => setEditando({ id: u.id, nombre: u.nombre || '', apellidos: u.apellidos || '', nivel: u.nivel || '', normas: u.normas || [], capacidad_clientes: u.capacidad_clientes ?? 12 })}
+                            className="rounded-lg px-3 py-1.5 text-xs font-bold text-navy-500 hover:bg-navy-50" title="Editar datos del perfil">
+                            Editar
+                          </button>
                           <button onClick={() => resetPassword(u)}
                             className="rounded-lg px-3 py-1.5 text-xs font-bold text-navy-500 hover:bg-navy-50" title="Enviar email para restablecer contraseña">
                             Resetear contraseña
@@ -225,6 +238,45 @@ export default function Accesos() {
           </div>
         )}
       </div>
+
+      {/* Modal de edición de perfil (superadmin) */}
+      {editando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/70 p-4" onClick={() => setEditando(null)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-extrabold text-navy-900">Editar perfil</h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div><label className="label">Nombre</label><input className="input" value={editando.nombre} onChange={e => setEditando({ ...editando, nombre: e.target.value })} /></div>
+              <div><label className="label">Apellidos</label><input className="input" value={editando.apellidos} onChange={e => setEditando({ ...editando, apellidos: e.target.value })} /></div>
+              <div><label className="label">Nivel</label>
+                <select className="input" value={editando.nivel} onChange={e => setEditando({ ...editando, nivel: e.target.value })}>
+                  <option value="">—</option>
+                  {NIVELES.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div><label className="label">Capacidad (clientes)</label><input type="number" min="1" max="40" className="input" value={editando.capacidad_clientes} onChange={e => setEditando({ ...editando, capacidad_clientes: Number(e.target.value) || 12 })} /></div>
+              <div className="sm:col-span-2">
+                <label className="label">Normas que maneja</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {NORMAS.map(n => {
+                    const on = (editando.normas || []).includes(n.id);
+                    return (
+                      <button key={n.id} type="button"
+                        onClick={() => setEditando({ ...editando, normas: on ? editando.normas.filter(x => x !== n.id) : [...(editando.normas || []), n.id] })}
+                        className={`chip border text-xs transition ${on ? 'border-brand-orange bg-brand-orange/15 text-brand-orangeDark' : 'border-navy-200 text-navy-400 hover:border-navy-400'}`}>
+                        {on ? '✓ ' : ''}{n.id}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="mt-5 flex gap-3">
+              <button onClick={guardarPerfil} className="btn-primary">Guardar</button>
+              <button onClick={() => setEditando(null)} className="btn-ghost">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

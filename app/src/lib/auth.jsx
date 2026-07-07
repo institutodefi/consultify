@@ -10,6 +10,7 @@ export function AuthProvider({ children }) {
   const [viewAs, setViewAs] = useState(null);   // rol simulado (solo superadmin)
   const [loading, setLoading] = useState(true);
   const [politicasOk, setPoliticasOk] = useState(true); // ¿aceptó políticas? (true por defecto para no bloquear demo)
+  const [perfil, setPerfil] = useState({ nombre: '', apellidos: '' });
 
   useEffect(() => {
     if (DEMO) { setLoading(false); return; }
@@ -29,7 +30,7 @@ export function AuthProvider({ children }) {
 
   async function hydrate(u) {
     setUser(u);
-    const { data } = await supabase.from('perfiles').select('rol, activo, politicas_aceptadas_en').eq('id', u.id).single();
+    const { data } = await supabase.from('perfiles').select('rol, activo, politicas_aceptadas_en, nombre, apellidos').eq('id', u.id).single();
     // Usuario desactivado: cerrar sesión de inmediato.
     if (data && data.activo === false) {
       await supabase.auth.signOut();
@@ -38,9 +39,30 @@ export function AuthProvider({ children }) {
     }
     setRealRole(data?.rol || 'cliente');
     setPoliticasOk(!!data?.politicas_aceptadas_en);
+    setPerfil({ nombre: data?.nombre || '', apellidos: data?.apellidos || '' });
     setLoading(false);
     // Marca de último acceso (no bloqueante).
     Promise.resolve(supabase.rpc('marcar_acceso')).catch(() => {});
+  }
+
+  // Actualiza el nombre/apellidos del propio usuario.
+  async function actualizarMiPerfil({ nombre, apellidos }) {
+    if (DEMO) { setPerfil({ nombre, apellidos }); return { ok: true }; }
+    if (!supabase || !user) return { ok: false, error: 'Sin sesión.' };
+    const { error } = await supabase.from('perfiles').update({ nombre, apellidos }).eq('id', user.id);
+    if (error) return { ok: false, error: error.message };
+    setPerfil({ nombre, apellidos });
+    return { ok: true };
+  }
+
+  // Se autoenvía el email de restablecimiento de contraseña.
+  async function enviarResetPropio() {
+    if (DEMO) return { ok: true };
+    if (!supabase || !user?.email) return { ok: false, error: 'Sin sesión.' };
+    const redirectTo = `${window.location.origin}/app/nueva-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, { redirectTo });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
   }
 
   // El usuario acepta las políticas de seguridad y confidencialidad (primer login).
@@ -143,6 +165,7 @@ export function AuthProvider({ children }) {
       user, role, realRole, viewAs, esSuper,
       login, register, logout, verComo, resetVista,
       establecerPassword,
+      perfil, actualizarMiPerfil, enviarResetPropio,
       adminUsuarios,
       politicasOk, aceptarPoliticas,
       loading, demo: DEMO,
