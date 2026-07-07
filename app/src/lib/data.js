@@ -200,10 +200,26 @@ export async function holdedFn(payload) {
   if (DEMO) return { ok: false, error: 'Holded no disponible en modo demo.' };
   const { data } = await supabase.auth.getSession();
   const token = data?.session?.access_token;
-  const r = await fetch('/.netlify/functions/holded', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
-    body: JSON.stringify(payload),
-  });
-  return r.json();
+  if (!token) return { ok: false, error: 'No hay sesión activa. Vuelve a iniciar sesión.' };
+
+  let r;
+  try {
+    r = await fetch('/.netlify/functions/holded', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    return { ok: false, error: 'No se pudo contactar con el servidor: ' + (e.message || 'red') };
+  }
+
+  // Leemos como texto y luego intentamos parsear, para no reventar si la
+  // respuesta no es JSON (p. ej. 404 de función no desplegada, o 500 con HTML).
+  const txt = await r.text();
+  let json;
+  try { json = JSON.parse(txt); } catch {
+    if (r.status === 404) return { ok: false, error: 'La función de Holded no está desplegada en Netlify (404). Revisa el deploy de netlify/functions.' };
+    return { ok: false, error: `El servidor respondió con un error (HTTP ${r.status}). ${txt.slice(0, 160)}` };
+  }
+  return json;
 }
