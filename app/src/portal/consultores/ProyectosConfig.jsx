@@ -89,7 +89,7 @@ export default function Proyectos() {
   const [msg, setMsg] = useState(null);
 
   const cargar = () => {
-    listTable('clientes').then(setClientes);
+    listTable('clientes').then(setClientes).catch(e => { setClientes([]); setMsg('No se pudieron cargar los clientes: ' + (e?.message || e)); });
     listTable('proyectos_cliente').then(setProyectos).catch(() => setProyectos([]));
     listTable('tareas_catalogo').then(setCatalogo).catch(() => setCatalogo([]));
     listTable('festivos').then(setFestivos).catch(() => setFestivos([]));

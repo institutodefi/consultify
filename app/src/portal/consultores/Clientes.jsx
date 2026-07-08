@@ -38,11 +38,11 @@ export default function Clientes() {
   }, [clientesFiltrados, porPagina, pag]);
 
   const cargar = () => {
-    listTable('clientes').then(setClientes);
-    listTable('cliente_empresas').then(setEmpresas);
-    listTable('empresa_centros').then(setCentros);
-    listTable('empresa_normas').then(setNormasEmp);
-    listTable('consultores').then(setEquipo).catch(() => {});
+    listTable('clientes').then(setClientes).catch(e => { setClientes([]); setMsg('No se pudieron cargar los clientes: ' + (e?.message || e)); });
+    listTable('cliente_empresas').then(setEmpresas).catch(() => setEmpresas([]));
+    listTable('empresa_centros').then(setCentros).catch(() => setCentros([]));
+    listTable('empresa_normas').then(setNormasEmp).catch(() => setNormasEmp([]));
+    listTable('consultores').then(setEquipo).catch(() => setEquipo([]));
     listTable('proyectos_cliente').then(setProyectos).catch(() => setProyectos([]));
     listTable('cliente_contactos').then(setContactos).catch(() => setContactos([]));
   };
