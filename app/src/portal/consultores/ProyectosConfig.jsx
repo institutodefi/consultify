@@ -63,6 +63,8 @@ export default function Proyectos() {
   const [catalogo, setCatalogo] = useState(null);
   const [festivos, setFestivos] = useState([]);
   const [equipo, setEquipo] = useState([]);
+  // Consultores activos (derivado de equipo). Debe ir ANTES de los useMemo que lo usan.
+  const consultores = equipo.filter(c => (c.tipo_equipo || 'consultor') === 'consultor' && c.activo !== false);
   const [tareas, setTareas] = useState([]);
   const [sel, setSel] = useState('');         // proyecto seleccionado
   const [anidar, setAnidar] = useState(new Set()); // claves proceso|subproceso a anidar
@@ -159,8 +161,6 @@ export default function Proyectos() {
 
   // Al cambiar el modelo (acuerdo), proponer su duración por defecto.
   function cambiarModelo(m) { setModelo(m); setMeses(mesesPorModelo(m, normasSel.length)); }
-
-  const consultores = equipo.filter(c => (c.tipo_equipo || 'consultor') === 'consultor' && c.activo !== false);
 
   // Tareas candidatas del modelo elegido para las normas elegidas → con anidado.
   const candidatas = useMemo(() => {
