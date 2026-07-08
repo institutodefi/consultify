@@ -132,24 +132,30 @@ async function buscarContactoPorCif(cif) {
 //   rojo = alguna factura vencida sin pagar
 //   amarillo = facturas pendientes de pago pero no vencidas aún
 //   verde = todo pagado / sin facturas
-async function estadoCobrosDeContacto(holdedId) {
-  const ahora = Math.floor(Date.now() / 1000); // Holded usa epoch en segundos
+async function estadoCobrosDeContacto(holdedId, opts = {}) {
+  const ahora = Math.floor(Date.now() / 1000);
   let cursor = null, vencidas = 0, pendientes = 0, importeVencido = 0, huboError = false;
+  let muestraFactura = null; // para diagnóstico
   for (let i = 0; i < 50; i++) {
-    // Facturas de venta del contacto. La v2 permite filtrar por contactId.
     const q = `/invoices?contactId=${encodeURIComponent(holdedId)}&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
     const r = await holded(q);
     if (!r.ok) { huboError = true; break; }
-    const lista = listaContactos(r.data); // reutiliza extractor de items/data
+    const lista = listaContactos(r.data);
     if (lista.length === 0) break;
+    if (!muestraFactura && lista[0]) muestraFactura = lista[0];
     for (const f of lista) {
-      // Importe pendiente: distintos nombres según versión.
-      const pendiente = Number(f.pending ?? f.amountDue ?? f.pending_amount ?? 0);
-      const pagada = f.status === 'paid' || f.paid === true || pendiente <= 0;
+      const pendiente = Number(f.pending ?? f.amountDue ?? f.pending_amount ?? f.pendingAmount ?? 0);
+      // Estado textual que da Holded (varios nombres/idiomas posibles).
+      const st = String(f.status ?? f.statusText ?? f.state ?? '').toLowerCase();
+      const pagada =
+        st.includes('pagad') || st.includes('cobrad') || st === 'paid' ||
+        f.paid === true || (pendiente <= 0 && st !== '' && !st.includes('venc') && !st.includes('pend'));
       if (pagada) continue;
-      // Fecha de vencimiento (epoch seg). Campos posibles: dueDate, due_date, expirationDate.
-      const due = Number(f.dueDate ?? f.due_date ?? f.expirationDate ?? f.date ?? 0);
-      if (due && due < ahora) { vencidas++; importeVencido += pendiente; }
+      // ¿Vencida? Prioridad al estado textual; si no, comparar fecha de vencimiento.
+      const esVencidaPorEstado = st.includes('venc') || st.includes('overdue') || st.includes('expired');
+      const due = Number(f.dueDate ?? f.due_date ?? f.expirationDate ?? f.duedate ?? 0);
+      const esVencidaPorFecha = due && due < ahora;
+      if (esVencidaPorEstado || esVencidaPorFecha) { vencidas++; importeVencido += (pendiente || 0); }
       else pendientes++;
     }
     const hayMas = r.data?.has_more === true && r.data?.cursor;
@@ -159,7 +165,12 @@ async function estadoCobrosDeContacto(holdedId) {
   let estado = 'verde';
   if (vencidas > 0) estado = 'rojo';
   else if (pendientes > 0) estado = 'amarillo';
-  return { estado, vencidas, pendientes, importe_vencido: Math.round(importeVencido * 100) / 100, error: huboError };
+  const out = { estado, vencidas, pendientes, importe_vencido: Math.round(importeVencido * 100) / 100, error: huboError };
+  if (opts.diagnostico && muestraFactura) out.campos_factura = Object.keys(muestraFactura);
+  if (opts.diagnostico && muestraFactura) {
+    try { out.muestra_factura = JSON.stringify(muestraFactura).slice(0, 400); } catch { /* noop */ }
+  }
+  return out;
 }
 
 export default async (req) => {
@@ -188,7 +199,7 @@ export default async (req) => {
       const res = await buscarContactoPorCif(cif);
       if (res.error) return json({ ok: false, error: `Error consultando Holded (HTTP ${res.error.status})`, detalle: res.error.data }, 502);
       if (!res.match) return json({ ok: true, estado: null, sin_contacto: true });
-      const est = await estadoCobrosDeContacto(res.match.id);
+      const est = await estadoCobrosDeContacto(res.match.id, { diagnostico: !!body.diagnostico });
       return json({ ok: true, holded_id: res.match.id, ...est });
     }
 

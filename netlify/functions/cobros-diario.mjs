@@ -69,10 +69,14 @@ async function estadoCobros(holdedId) {
     const lista = listaContactos(r.data);
     if (lista.length === 0) break;
     for (const f of lista) {
-      const pendiente = Number(f.pending ?? f.amountDue ?? f.pending_amount ?? 0);
-      if (f.status === 'paid' || f.paid === true || pendiente <= 0) continue;
-      const due = Number(f.dueDate ?? f.due_date ?? f.expirationDate ?? f.date ?? 0);
-      if (due && due < ahora) { vencidas++; importeVencido += pendiente; }
+      const pendiente = Number(f.pending ?? f.amountDue ?? f.pending_amount ?? f.pendingAmount ?? 0);
+      const st = String(f.status ?? f.statusText ?? f.state ?? '').toLowerCase();
+      const pagada = st.includes('pagad') || st.includes('cobrad') || st === 'paid' || f.paid === true ||
+        (pendiente <= 0 && st !== '' && !st.includes('venc') && !st.includes('pend'));
+      if (pagada) continue;
+      const esVencidaPorEstado = st.includes('venc') || st.includes('overdue') || st.includes('expired');
+      const due = Number(f.dueDate ?? f.due_date ?? f.expirationDate ?? f.duedate ?? 0);
+      if (esVencidaPorEstado || (due && due < ahora)) { vencidas++; importeVencido += (pendiente || 0); }
       else pendientes++;
     }
     if (!(r.data?.has_more && r.data?.cursor)) break;

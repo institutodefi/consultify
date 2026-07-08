@@ -97,6 +97,17 @@ export default function Clientes() {
 
   // Sincroniza el cliente del formulario con Holded por CIF.
   // Busca el CIF en Holded y, si existe, autocompleta los campos del formulario.
+  async function diagnosticarCobros() {
+    const cif = (form.cif_matriz || '').trim();
+    if (!cif) { setHoldedMsg({ err: true, t: 'Pon el CIF para diagnosticar cobros.' }); return; }
+    setCobrosBusy(true); setHoldedMsg(null);
+    try {
+      const r = await holdedFn({ action: 'estado_cobros', cif, diagnostico: true });
+      setHoldedMsg({ err: !r.ok, t: `Cobros: ${JSON.stringify(r)}` });
+    } catch { setHoldedMsg({ err: true, t: 'Error al diagnosticar cobros.' }); }
+    finally { setCobrosBusy(false); }
+  }
+
   async function actualizarCobros() {
     setCobrosBusy(true); setMsg(null);
     try {
@@ -329,6 +340,10 @@ export default function Clientes() {
             <button type="button" onClick={sincronizarHolded} disabled={holdedBusy}
               className="rounded-xl border border-navy-200 px-4 py-2 text-sm font-bold text-navy-600 hover:bg-navy-50 disabled:opacity-40">
               {holdedBusy ? 'Sincronizando…' : '⟳ Sincronizar con Holded'}
+            </button>
+            <button type="button" onClick={diagnosticarCobros} disabled={cobrosBusy}
+              className="rounded-xl border border-dashed border-navy-200 px-3 py-2 text-xs font-bold text-navy-400 hover:bg-navy-50 disabled:opacity-40" title="Ver estado de cobros de este cliente (diagnóstico)">
+              🔍 Cobros
             </button>
             {msg && <p className="text-sm font-bold text-red-600">{msg}</p>}
             {holdedMsg && <p className={`text-sm font-bold ${holdedMsg.err ? 'text-red-600' : 'text-green-600'}`}>{holdedMsg.t}</p>}
