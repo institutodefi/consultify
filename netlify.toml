@@ -17,6 +17,10 @@
   node_bundler = "esbuild"
   external_node_modules = ["pdf-lib", "pptxgenjs"]
 
+# Refresco diario del semáforo de cobros (facturas Holded), a las 06:00 UTC.
+[functions."cobros-diario"]
+  schedule = "0 6 * * *"
+
 # Feed .ics suscribible de la agenda
 [[redirects]]
   from = "/api/agenda-feed"

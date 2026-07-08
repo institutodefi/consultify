@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listTable, insertRow, updateRow, deleteRow, siguienteCodigoCliente, holdedFn } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
+import SemaforoCobros from './SemaforoCobros.jsx';
 
 const VACIO = { codigo: '', cif_matriz: '', empresa: '', contacto: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
 
@@ -19,6 +20,7 @@ export default function Clientes() {
   const [msg, setMsg] = useState(null);
   const [holdedMsg, setHoldedMsg] = useState(null);
   const [holdedBusy, setHoldedBusy] = useState(false);
+  const [cobrosBusy, setCobrosBusy] = useState(false);
   const [busca, setBusca] = useState('');
   const [porPagina, setPorPagina] = useState('25');
   const [pag, setPag] = useState(0);
@@ -95,6 +97,16 @@ export default function Clientes() {
 
   // Sincroniza el cliente del formulario con Holded por CIF.
   // Busca el CIF en Holded y, si existe, autocompleta los campos del formulario.
+  async function actualizarCobros() {
+    setCobrosBusy(true); setMsg(null);
+    try {
+      const r = await holdedFn({ action: 'refrescar_cobros' });
+      if (r.ok) { setMsg(`Cobros actualizados: ${r.actualizados} cliente(s).`); cargar(); }
+      else setMsg(r.error || 'No se pudieron actualizar los cobros.');
+    } catch { setMsg('Error al actualizar cobros.'); }
+    finally { setCobrosBusy(false); }
+  }
+
   async function buscarEnHolded() {
     const cif = (form.cif_matriz || '').trim();
     if (!cif) { setHoldedMsg({ err: true, t: 'Escribe el CIF antes de buscar.' }); return; }
@@ -220,6 +232,7 @@ export default function Clientes() {
           </div>
           <div className="flex gap-2">
             <button onClick={nuevoCliente} className="btn-orange !px-4 !py-2">+ Nuevo cliente</button>
+            <button onClick={actualizarCobros} disabled={cobrosBusy} className="rounded-xl border border-navy-200 !px-4 !py-2 text-sm font-bold text-navy-600 hover:bg-navy-50 disabled:opacity-40" title="Consultar Holded y actualizar el semáforo de facturas de todos los clientes">{cobrosBusy ? 'Actualizando…' : '🔄 Actualizar cobros'}</button>
             {cliente && <button onClick={() => setForm({ ...VACIO, ...cliente })} className="btn-ghost !px-4 !py-2">✎ Editar cliente</button>}
           </div>
         </div>
@@ -250,7 +263,7 @@ export default function Clientes() {
               {clientesPagina.map(c => (
                 <tr key={c.id} className={`cursor-pointer hover:bg-navy-50/50 ${String(c.id) === String(sel) ? 'bg-brand-orange/5' : ''}`} onClick={() => { setSel(String(c.id)); setForm(null); }}>
                   <td className="py-2 font-bold text-navy-500">{c.cif_matriz || c.codigo || '—'}</td>
-                  <td className="py-2 font-medium">{c.empresa}</td>
+                  <td className="py-2 font-medium"><span className="inline-flex items-center gap-2"><SemaforoCobros estado={c.estado_cobros} detalle={c.cobros_detalle} actualizado={c.cobros_actualizado_en} />{c.empresa}</span></td>
                   <td className="py-2 text-navy-500">{c.contacto || '—'}</td>
                   <td className="py-2 text-navy-500">{c.email || '—'}</td>
                   <td className="py-2">{c.holded_id ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Vinculado</span> : <span className="text-[10px] font-semibold text-navy-300">—</span>}</td>

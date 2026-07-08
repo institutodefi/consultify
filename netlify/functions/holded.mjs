@@ -127,6 +127,41 @@ async function buscarContactoPorCif(cif) {
   return { match: null, base: HOLDED_BASE };
 }
 
+// Calcula el semáforo de cobros de un contacto de Holded a partir de sus facturas.
+// Devuelve { estado, vencidas, pendientes, importe_vencido }.
+//   rojo = alguna factura vencida sin pagar
+//   amarillo = facturas pendientes de pago pero no vencidas aún
+//   verde = todo pagado / sin facturas
+async function estadoCobrosDeContacto(holdedId) {
+  const ahora = Math.floor(Date.now() / 1000); // Holded usa epoch en segundos
+  let cursor = null, vencidas = 0, pendientes = 0, importeVencido = 0, huboError = false;
+  for (let i = 0; i < 50; i++) {
+    // Facturas de venta del contacto. La v2 permite filtrar por contactId.
+    const q = `/invoices?contactId=${encodeURIComponent(holdedId)}&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+    const r = await holded(q);
+    if (!r.ok) { huboError = true; break; }
+    const lista = listaContactos(r.data); // reutiliza extractor de items/data
+    if (lista.length === 0) break;
+    for (const f of lista) {
+      // Importe pendiente: distintos nombres según versión.
+      const pendiente = Number(f.pending ?? f.amountDue ?? f.pending_amount ?? 0);
+      const pagada = f.status === 'paid' || f.paid === true || pendiente <= 0;
+      if (pagada) continue;
+      // Fecha de vencimiento (epoch seg). Campos posibles: dueDate, due_date, expirationDate.
+      const due = Number(f.dueDate ?? f.due_date ?? f.expirationDate ?? f.date ?? 0);
+      if (due && due < ahora) { vencidas++; importeVencido += pendiente; }
+      else pendientes++;
+    }
+    const hayMas = r.data?.has_more === true && r.data?.cursor;
+    if (!hayMas) break;
+    cursor = r.data.cursor;
+  }
+  let estado = 'verde';
+  if (vencidas > 0) estado = 'rojo';
+  else if (pendientes > 0) estado = 'amarillo';
+  return { estado, vencidas, pendientes, importe_vencido: Math.round(importeVencido * 100) / 100, error: huboError };
+}
+
 export default async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   if (!process.env.HOLDED_API_KEY) {
@@ -146,6 +181,55 @@ export default async (req) => {
   const { action } = body;
 
   try {
+    // Estado de cobros de UN cliente (por CIF): consulta Holded en vivo.
+    if (action === 'estado_cobros') {
+      const cif = norm(body.cif);
+      if (!cif) return json({ ok: false, error: 'CIF vacío' }, 400);
+      const res = await buscarContactoPorCif(cif);
+      if (res.error) return json({ ok: false, error: `Error consultando Holded (HTTP ${res.error.status})`, detalle: res.error.data }, 502);
+      if (!res.match) return json({ ok: true, estado: null, sin_contacto: true });
+      const est = await estadoCobrosDeContacto(res.match.id);
+      return json({ ok: true, holded_id: res.match.id, ...est });
+    }
+
+    // Refresca el estado de cobros de TODOS los clientes con CIF y lo guarda en la BD.
+    // Pensado para el scheduler diario (o botón manual). Usa service_role para escribir.
+    if (action === 'refrescar_cobros') {
+      const SUPA = process.env.SUPABASE_URL, SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      // Traer clientes con CIF (paginado alto).
+      const rc = await fetch(`${SUPA}/rest/v1/clientes?select=id,cif_matriz,holded_id&or=(cif_matriz.not.is.null,holded_id.not.is.null)&limit=2000`, {
+        headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` },
+      });
+      if (!rc.ok) return json({ ok: false, error: 'No se pudieron leer los clientes.' }, 502);
+      const clientes = await rc.json();
+      let actualizados = 0, errores = 0;
+      const ahoraISO = new Date().toISOString();
+      for (const c of clientes) {
+        try {
+          let holdedId = c.holded_id;
+          if (!holdedId && c.cif_matriz) {
+            const res = await buscarContactoPorCif(norm(c.cif_matriz));
+            holdedId = res.match?.id || null;
+          }
+          if (!holdedId) continue;
+          const est = await estadoCobrosDeContacto(holdedId);
+          if (est.error) { errores++; continue; }
+          await fetch(`${SUPA}/rest/v1/clientes?id=eq.${c.id}`, {
+            method: 'PATCH',
+            headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify({
+              estado_cobros: est.estado,
+              cobros_actualizado_en: ahoraISO,
+              cobros_detalle: { vencidas: est.vencidas, pendientes: est.pendientes, importe_vencido: est.importe_vencido },
+              holded_id: holdedId,
+            }),
+          });
+          actualizados++;
+        } catch { errores++; }
+      }
+      return json({ ok: true, actualizados, errores, total: clientes.length });
+    }
+
     if (action === 'buscar_por_cif') {
       const cif = norm(body.cif);
       if (!cif) return json({ ok: false, error: 'CIF vacío' }, 400);
