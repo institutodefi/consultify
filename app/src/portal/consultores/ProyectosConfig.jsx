@@ -111,7 +111,26 @@ export default function Proyectos() {
   const proyecto = useMemo(() => proyectos.find(p => String(p.id) === String(sel)) || null, [proyectos, sel]);
   const cliente = useMemo(() => clientes.find(c => String(c.id) === String(proyecto?.cliente_id)) || null, [clientes, proyecto]);
   const activos = useMemo(() => proyectos.filter(p => p.estado === 'activo'), [proyectos]);
-  const tareasProyecto = useMemo(() => tareas.filter(t => String(t.proyecto_id) === String(sel)), [tareas, sel]);
+  const [ordenCol, setOrdenCol] = useState('codigo'); // codigo | titulo | consultor | fecha | horas
+  const [ordenDir, setOrdenDir] = useState('asc');
+  const [filtroT, setFiltroT] = useState('');
+  const [filtroConsultor, setFiltroConsultor] = useState('');
+
+  const tareasProyecto = useMemo(() => {
+    let arr = tareas.filter(t => String(t.proyecto_id) === String(sel));
+    // Filtros
+    if (filtroT.trim()) { const q = filtroT.toLowerCase(); arr = arr.filter(t => (t.titulo || '').toLowerCase().includes(q)); }
+    if (filtroConsultor) arr = arr.filter(t => String(t.consultor_id || '') === String(filtroConsultor));
+    // Orden
+    const fechaLim = (t) => { const b = Array.isArray(t.bloques_ejecucion) ? t.bloques_ejecucion : []; return (b.length ? b.map(x => x.fecha).filter(Boolean).sort().slice(-1)[0] : t.fecha_estimada) || ''; };
+    const nombreCons = (t) => { const c = consultores.find(c => String(c.id) === String(t.consultor_id)); return c ? `${c.nombre} ${c.apellidos || ''}` : ''; };
+    const val = (t) => ({ codigo: t.num_tarea || 0, titulo: (t.titulo || '').toLowerCase(), consultor: nombreCons(t).toLowerCase(), fecha: fechaLim(t), horas: Number(t.horas) || 0 }[ordenCol]);
+    arr = [...arr].sort((a, b) => { const va = val(a), vb = val(b); if (va < vb) return ordenDir === 'asc' ? -1 : 1; if (va > vb) return ordenDir === 'asc' ? 1 : -1; return 0; });
+    return arr;
+  }, [tareas, sel, filtroT, filtroConsultor, ordenCol, ordenDir, consultores]);
+
+  const ordenarPor = (col) => { if (ordenCol === col) setOrdenDir(d => d === 'asc' ? 'desc' : 'asc'); else { setOrdenCol(col); setOrdenDir('asc'); } };
+  const flechaOrden = (col) => ordenCol === col ? (ordenDir === 'asc' ? ' ▲' : ' ▼') : '';
 
   const [normasSel, setNormasSel] = useState([]);
   const [nombreProy, setNombreProy] = useState('');
@@ -281,8 +300,12 @@ export default function Proyectos() {
         consultor_id: proyecto.consultor_1_id || null, orden: i, num_tarea: i + 1,
       }));
 
-      // Distribuir fechas (mínimo 3 meses, 6h/día, festivos)
-      const conFechas = repartirFechas(filas, proyecto.fecha_inicio, meses, { festivos, meses });
+      // Distribuir fechas respetando el tope de fecha_inicio + meses.
+      const conFechas = repartirFechas(filas, proyecto.fecha_inicio, meses, { festivos, meses, topeMeses: true });
+      const fueraPlazo = conFechas.filter(f => f.fuera_de_plazo).length;
+      if (fueraPlazo > 0) {
+        setMsg(`⚠️ Aviso: ${fueraPlazo} tarea(s) no caben en ${meses} meses desde el inicio. Se han colocado igualmente, pero revisa el plazo o la carga.`);
+      }
 
       const creadas = [];
       for (const f of conFechas) {
@@ -453,6 +476,16 @@ export default function Proyectos() {
                 </select>
               </div>
               <div>
+                <label className="label">Fecha de inicio</label>
+                <input type="date" className="input !w-44" value={proyecto?.fecha_inicio || ''}
+                  onChange={async e => { const v = e.target.value || null; await updateRow('proyectos_cliente', proyecto.id, { fecha_inicio: v }); setProyectos(ps => ps.map(p => p.id === proyecto.id ? { ...p, fecha_inicio: v } : p)); }} />
+                {proyecto?.fecha_inicio && (
+                  <p className="mt-1 text-xs font-medium text-navy-400">
+                    La agenda se distribuye hasta {(() => { const d = new Date(proyecto.fecha_inicio); d.setMonth(d.getMonth() + (Number(meses) || 1)); return d.toLocaleDateString('es-ES'); })()} (inicio + {meses} meses).
+                  </p>
+                )}
+              </div>
+              <div>
                 <label className="label">Duración (meses)</label>
                 <input type="number" min="1" className="input !w-28" value={meses} onChange={e => setMeses(Number(e.target.value) || 1)} />
                 <p className="mt-1 text-xs font-medium text-navy-400">
@@ -558,16 +591,27 @@ export default function Proyectos() {
                 </select>
               </div>
 
+              {/* Filtros de tareas distribuidas */}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input className="input !w-56 !py-1.5 !text-sm" placeholder="Filtrar por tarea…" value={filtroT} onChange={e => setFiltroT(e.target.value)} />
+                <select className="input !w-auto !py-1.5 !text-sm" value={filtroConsultor} onChange={e => setFiltroConsultor(e.target.value)}>
+                  <option value="">Todos los consultores</option>
+                  {consultores.map(c => <option key={c.id} value={c.id}>{c.nombre} {c.apellidos || ''}</option>)}
+                </select>
+                {(filtroT || filtroConsultor) && <button onClick={() => { setFiltroT(''); setFiltroConsultor(''); }} className="text-xs font-bold text-brand-orangeDark hover:underline">Limpiar filtros</button>}
+                <span className="text-xs font-medium text-navy-400">Clic en una cabecera para ordenar.</span>
+              </div>
+
               <div className="mt-3 max-h-[32rem] overflow-y-auto overflow-x-auto">
                 <table className="w-full min-w-[720px] text-sm">
                   <thead className="sticky top-0 bg-white z-10">
                     <tr className="text-left text-xs font-bold uppercase tracking-wider text-navy-300">
                       <th className="py-2 w-8"><input type="checkbox" checked={selT.size === tareasProyecto.length && tareasProyecto.length > 0} onChange={e => e.target.checked ? setSelT(new Set(tareasProyecto.map(t => t.id))) : setSelT(new Set())} /></th>
-                      <th className="py-2 w-16">Código</th>
-                      <th className="py-2">Tarea</th>
-                      <th className="py-2 w-40">Consultor</th>
-                      <th className="py-2 w-28">Fecha límite</th>
-                      <th className="py-2 text-right w-16">Horas</th>
+                      <th className="py-2 w-16 cursor-pointer select-none hover:text-navy-500" onClick={() => ordenarPor('codigo')}>Código{flechaOrden('codigo')}</th>
+                      <th className="py-2 cursor-pointer select-none hover:text-navy-500" onClick={() => ordenarPor('titulo')}>Tarea{flechaOrden('titulo')}</th>
+                      <th className="py-2 w-40 cursor-pointer select-none hover:text-navy-500" onClick={() => ordenarPor('consultor')}>Consultor{flechaOrden('consultor')}</th>
+                      <th className="py-2 w-28 cursor-pointer select-none hover:text-navy-500" onClick={() => ordenarPor('fecha')}>Fecha límite{flechaOrden('fecha')}</th>
+                      <th className="py-2 text-right w-16 cursor-pointer select-none hover:text-navy-500" onClick={() => ordenarPor('horas')}>Horas{flechaOrden('horas')}</th>
                       <th className="py-2 w-8"></th>
                     </tr>
                   </thead>

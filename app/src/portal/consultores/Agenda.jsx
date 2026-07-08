@@ -654,6 +654,23 @@ export default function Agenda() {
             className={modoVacaciones ? 'btn-primary' : 'btn-ghost'}>
             ✈ {modoVacaciones ? 'Marcando vacaciones — clic en los días' : 'Marcar vacaciones'}
           </button>
+          {/* Reloj de vacaciones disfrutadas por este consultor */}
+          <div className="flex items-center gap-2 rounded-xl border border-navy-100 bg-navy-50/50 px-3 py-1.5" title="Días de vacaciones marcados este año">
+            <span className="text-lg">✈</span>
+            <div className="leading-tight">
+              <div className="text-sm font-extrabold text-navy-900">{vacacionesSet.size} / {DIAS_VACACIONES} días</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-navy-400">
+                {Math.max(0, DIAS_VACACIONES - vacacionesSet.size)} disponibles
+              </div>
+            </div>
+            <div className="ml-1 h-8 w-8 shrink-0">
+              <svg viewBox="0 0 36 36" className="h-8 w-8 -rotate-90">
+                <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e9f0" strokeWidth="5" />
+                <circle cx="18" cy="18" r="15" fill="none" stroke={vacacionesSet.size > DIAS_VACACIONES ? '#dc2626' : '#F5A623'} strokeWidth="5"
+                  strokeDasharray={`${Math.min(100, (vacacionesSet.size / DIAS_VACACIONES) * 100) * 0.942} 999`} strokeLinecap="round" />
+              </svg>
+            </div>
+          </div>
         </div>
       </div>
 

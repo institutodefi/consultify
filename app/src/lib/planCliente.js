@@ -126,6 +126,9 @@ export function repartirFechas(tareas, fechaInicioISO, mesesArg = 3, opts = {}) 
 
   const inicio = primerConHueco(fechaInicioISO ? new Date(fechaInicioISO) : new Date());
   const finVentana = new Date(inicio); finVentana.setDate(finVentana.getDate() + Math.round(meses * 30));
+  const finVentanaISO = toISO(finVentana);
+  // Tope duro: si opts.topeMeses es true, ninguna tarea se coloca más allá de finVentana.
+  const topeDuro = opts.topeMeses === true;
   const labVentana = Math.max(1, laborablesEntre(inicio, finVentana, festivosSet, vacacionesSet));
   const totalHoras = tareas.reduce((s, t) => s + (Number(t.horas) || 0), 0);
   const labCarga = Math.max(1, Math.ceil(totalHoras / MAX_HORAS_PROYECTO_DIA));
@@ -163,7 +166,10 @@ export function repartirFechas(tareas, fechaInicioISO, mesesArg = 3, opts = {}) 
     tramos.push({ fecha: toISO(dia), horas: Math.round(restante * 100) / 100 });
     puestasHoy += restante;
 
-    return { ...t, fecha_estimada: fechaInicioTarea, tramos, orden: i };
+    // Si hay tope duro y esta tarea cae más allá del fin de ventana, se marca.
+    const fueraDePlazo = topeDuro && fechaInicioTarea > finVentanaISO;
+
+    return { ...t, fecha_estimada: fechaInicioTarea, tramos, orden: i, fuera_de_plazo: fueraDePlazo };
   });
 }
 
