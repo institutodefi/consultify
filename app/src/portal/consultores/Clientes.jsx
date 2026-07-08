@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listTable, insertRow, updateRow, deleteRow, siguienteCodigoCliente, holdedFn } from '../../lib/data.js';
+import { listTable, insertRow, updateRow, deleteRow, siguienteCodigoCliente, holdedFn, brevoFn } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
 import SemaforoCobros from './SemaforoCobros.jsx';
 
-const VACIO = { codigo: '', cif_matriz: '', empresa: '', contacto: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
+const VACIO = { codigo: '', cif_matriz: '', empresa: '', contacto: '', contacto_apellidos: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
 
 export default function Clientes() {
   const navigate = useNavigate();
@@ -21,6 +21,7 @@ export default function Clientes() {
   const [holdedMsg, setHoldedMsg] = useState(null);
   const [holdedBusy, setHoldedBusy] = useState(false);
   const [cobrosBusy, setCobrosBusy] = useState(false);
+  const [brevoBusy, setBrevoBusy] = useState(false);
   const [busca, setBusca] = useState('');
   const [porPagina, setPorPagina] = useState('25');
   const [pag, setPag] = useState(0);
@@ -88,9 +89,15 @@ export default function Clientes() {
   async function guardarCliente(e) {
     e.preventDefault(); setMsg(null);
     try {
-      const datos = { codigo: form.codigo, cif_matriz: form.cif_matriz || null, empresa: form.empresa, contacto: form.contacto, email: form.email, telefono: form.telefono, director_proyecto_id: form.director_proyecto_id || null, jefe_cuenta_id: form.jefe_cuenta_id || null };
+      const datos = { codigo: form.codigo, cif_matriz: form.cif_matriz || null, empresa: form.empresa, contacto: form.contacto, contacto_apellidos: form.contacto_apellidos || null, email: form.email, telefono: form.telefono, director_proyecto_id: form.director_proyecto_id || null, jefe_cuenta_id: form.jefe_cuenta_id || null };
       if (form.id) await updateRow('clientes', form.id, datos);
       else { const nuevo = await insertRow('clientes', datos); if (nuevo?.id) setSel(nuevo.id); }
+      // Sincronización automática con Brevo (no bloquea el guardado si falla).
+      if (datos.email) {
+        brevoFn({ action: 'sincronizar_cliente', cliente: datos })
+          .then(r => { if (!r.ok) console.warn('Brevo:', r.error); })
+          .catch(() => {});
+      }
       setForm(null); cargar();
     } catch (err) { setMsg(err.message); }
   }
@@ -116,6 +123,20 @@ export default function Clientes() {
       else setMsg(r.error || 'No se pudieron actualizar los cobros.');
     } catch { setMsg('Error al actualizar cobros.'); }
     finally { setCobrosBusy(false); }
+  }
+
+  async function sincronizarBrevo() {
+    setBrevoBusy(true); setMsg(null);
+    try {
+      const r = await brevoFn({ action: 'sincronizar_todos' });
+      if (r.ok) {
+        let t = `Brevo: ${r.subidos} cliente(s) sincronizados`;
+        if (r.sin_email) t += ` · ${r.sin_email} sin email (no se pueden enviar)`;
+        if (r.errores) t += ` · ${r.errores} con error`;
+        setMsg(t);
+      } else setMsg(r.error || 'No se pudo sincronizar con Brevo.');
+    } catch { setMsg('Error al sincronizar con Brevo.'); }
+    finally { setBrevoBusy(false); }
   }
 
   async function buscarEnHolded() {
@@ -244,6 +265,7 @@ export default function Clientes() {
           <div className="flex gap-2">
             <button onClick={nuevoCliente} className="btn-orange !px-4 !py-2">+ Nuevo cliente</button>
             <button onClick={actualizarCobros} disabled={cobrosBusy} className="rounded-xl border border-navy-200 !px-4 !py-2 text-sm font-bold text-navy-600 hover:bg-navy-50 disabled:opacity-40" title="Consultar Holded y actualizar el semáforo de facturas de todos los clientes">{cobrosBusy ? 'Actualizando…' : '🔄 Actualizar cobros'}</button>
+            <button onClick={sincronizarBrevo} disabled={brevoBusy} className="rounded-xl border border-navy-200 !px-4 !py-2 text-sm font-bold text-navy-600 hover:bg-navy-50 disabled:opacity-40" title="Enviar todos los clientes con email a Brevo">{brevoBusy ? 'Sincronizando…' : '✉ Sincronizar con Brevo'}</button>
             {cliente && <button onClick={() => setForm({ ...VACIO, ...cliente })} className="btn-ghost !px-4 !py-2">✎ Editar cliente</button>}
           </div>
         </div>
@@ -314,7 +336,8 @@ export default function Clientes() {
 
           {/* Fila 2 · Datos de contacto */}
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            <div><label className="label">Contacto</label><input className="input" value={form.contacto || ''} onChange={e => setForm({ ...form, contacto: e.target.value })} /></div>
+            <div><label className="label">Contacto (nombre)</label><input className="input" value={form.contacto || ''} onChange={e => setForm({ ...form, contacto: e.target.value })} /></div>
+            <div><label className="label">Contacto (apellidos)</label><input className="input" value={form.contacto_apellidos || ''} onChange={e => setForm({ ...form, contacto_apellidos: e.target.value })} /></div>
             <div><label className="label">Email</label><input type="email" className="input" value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
             <div><label className="label">Teléfono</label><input className="input" value={form.telefono || ''} onChange={e => setForm({ ...form, telefono: e.target.value })} /></div>
           </div>

@@ -69,14 +69,21 @@ async function estadoCobros(holdedId) {
     const lista = listaContactos(r.data);
     if (lista.length === 0) break;
     for (const f of lista) {
-      const pendiente = Number(f.pending ?? f.amountDue ?? f.pending_amount ?? f.pendingAmount ?? 0);
+      const pendiente = Number(f.pending ?? f.amountDue ?? f.pending_amount ?? f.pendingAmount ?? f.pendingamount ?? 0);
+      const total = Number(f.total ?? f.amount ?? 0);
       const st = String(f.status ?? f.statusText ?? f.state ?? '').toLowerCase();
-      const pagada = st.includes('pagad') || st.includes('cobrad') || st === 'paid' || f.paid === true ||
-        (pendiente <= 0 && st !== '' && !st.includes('venc') && !st.includes('pend'));
-      if (pagada) continue;
-      const esVencidaPorEstado = st.includes('venc') || st.includes('overdue') || st.includes('expired');
-      const due = Number(f.dueDate ?? f.due_date ?? f.expirationDate ?? f.duedate ?? 0);
-      if (esVencidaPorEstado || (due && due < ahora)) { vencidas++; importeVencido += (pendiente || 0); }
+      const pagadaExplicita = st.includes('pagad') || st.includes('cobrad') || st.includes('paid') || f.paid === true || f.isPaid === true || f.pagada === true;
+      const sinPendiente = (pendiente === 0 && total > 0);
+      if (pagadaExplicita || sinPendiente) continue;
+      const vencidaTexto = st.includes('venc') || st.includes('overdue') || st.includes('expired') || st.includes('atrasad');
+      const dueRaw = f.dueDate ?? f.due_date ?? f.expirationDate ?? f.duedate ?? f.dueDateFormatted ?? null;
+      let dueSeg = 0;
+      if (dueRaw != null && dueRaw !== '') {
+        if (typeof dueRaw === 'number') dueSeg = dueRaw > 1e12 ? Math.floor(dueRaw / 1000) : dueRaw;
+        else { const t = Date.parse(dueRaw); if (!isNaN(t)) dueSeg = Math.floor(t / 1000); }
+      }
+      const vencidaFecha = dueSeg > 0 && dueSeg < ahora;
+      if (vencidaTexto || vencidaFecha) { vencidas++; importeVencido += (pendiente || total || 0); }
       else pendientes++;
     }
     if (!(r.data?.has_more && r.data?.cursor)) break;

@@ -144,18 +144,28 @@ async function estadoCobrosDeContacto(holdedId, opts = {}) {
     if (lista.length === 0) break;
     if (!muestraFactura && lista[0]) muestraFactura = lista[0];
     for (const f of lista) {
-      const pendiente = Number(f.pending ?? f.amountDue ?? f.pending_amount ?? f.pendingAmount ?? 0);
-      // Estado textual que da Holded (varios nombres/idiomas posibles).
-      const st = String(f.status ?? f.statusText ?? f.state ?? '').toLowerCase();
-      const pagada =
-        st.includes('pagad') || st.includes('cobrad') || st === 'paid' ||
-        f.paid === true || (pendiente <= 0 && st !== '' && !st.includes('venc') && !st.includes('pend'));
-      if (pagada) continue;
-      // ¿Vencida? Prioridad al estado textual; si no, comparar fecha de vencimiento.
-      const esVencidaPorEstado = st.includes('venc') || st.includes('overdue') || st.includes('expired');
-      const due = Number(f.dueDate ?? f.due_date ?? f.expirationDate ?? f.duedate ?? 0);
-      const esVencidaPorFecha = due && due < ahora;
-      if (esVencidaPorEstado || esVencidaPorFecha) { vencidas++; importeVencido += (pendiente || 0); }
+      const pendiente = Number(f.pending ?? f.amountDue ?? f.pending_amount ?? f.pendingAmount ?? f.pendingamount ?? 0);
+      const total = Number(f.total ?? f.amount ?? 0);
+
+      // --- ¿Está PAGADA? Solo si lo dice explícitamente o no queda nada pendiente. ---
+      const stRaw = f.status ?? f.statusText ?? f.state ?? '';
+      const st = String(stRaw).toLowerCase();
+      const pagadaExplicita = st.includes('pagad') || st.includes('cobrad') || st.includes('paid')
+        || f.paid === true || f.isPaid === true || f.pagada === true;
+      const sinPendiente = (pendiente === 0 && total > 0);
+      if (pagadaExplicita || sinPendiente) continue;
+
+      // --- ¿Está VENCIDA? Se comprueba PRIMERO (prioridad rojo). ---
+      const vencidaTexto = st.includes('venc') || st.includes('overdue') || st.includes('expired') || st.includes('atrasad');
+      const dueRaw = f.dueDate ?? f.due_date ?? f.expirationDate ?? f.duedate ?? f.dueDateFormatted ?? null;
+      let dueSeg = 0;
+      if (dueRaw != null && dueRaw !== '') {
+        if (typeof dueRaw === 'number') dueSeg = dueRaw > 1e12 ? Math.floor(dueRaw / 1000) : dueRaw;
+        else { const t = Date.parse(dueRaw); if (!isNaN(t)) dueSeg = Math.floor(t / 1000); }
+      }
+      const vencidaFecha = dueSeg > 0 && dueSeg < ahora;
+
+      if (vencidaTexto || vencidaFecha) { vencidas++; importeVencido += (pendiente || total || 0); }
       else pendientes++;
     }
     const hayMas = r.data?.has_more === true && r.data?.cursor;
@@ -166,9 +176,9 @@ async function estadoCobrosDeContacto(holdedId, opts = {}) {
   if (vencidas > 0) estado = 'rojo';
   else if (pendientes > 0) estado = 'amarillo';
   const out = { estado, vencidas, pendientes, importe_vencido: Math.round(importeVencido * 100) / 100, error: huboError };
-  if (opts.diagnostico && muestraFactura) out.campos_factura = Object.keys(muestraFactura);
   if (opts.diagnostico && muestraFactura) {
-    try { out.muestra_factura = JSON.stringify(muestraFactura).slice(0, 400); } catch { /* noop */ }
+    out.campos_factura = Object.keys(muestraFactura);
+    try { out.muestra_factura = JSON.stringify(muestraFactura).slice(0, 1200); } catch { /* noop */ }
   }
   return out;
 }

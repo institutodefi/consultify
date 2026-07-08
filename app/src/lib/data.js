@@ -223,3 +223,22 @@ export async function holdedFn(payload) {
   }
   return json;
 }
+
+/** Llama a la Netlify Function de Brevo (sincronización de clientes). */
+export async function brevoFn(payload) {
+  if (DEMO) return { ok: false, error: 'Brevo no disponible en modo demo.' };
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) return { ok: false, error: 'No hay sesión activa.' };
+  let r;
+  try {
+    r = await fetch('/.netlify/functions/brevo-clientes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) { return { ok: false, error: 'No se pudo contactar con el servidor: ' + (e.message || 'red') }; }
+  const txt = await r.text();
+  try { return JSON.parse(txt); }
+  catch { return r.status === 404 ? { ok: false, error: 'Función de Brevo no desplegada (404).' } : { ok: false, error: `Error HTTP ${r.status}` }; }
+}
