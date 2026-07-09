@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cargando… | Blog Consultify</title>
+<meta name="description" id="meta-desc" content="Artículo del blog de Consultify." />
+<meta name="robots" content="index, follow, max-image-preview:large" />
+<link rel="canonical" id="meta-canon" href="https://consultify.pro/blog/" />
+<meta property="og:type" content="article" />
+<meta property="og:title" id="og-title" content="Blog Consultify" />
+<meta property="og:description" id="og-desc" content="" />
+<meta property="og:image" content="https://consultify.pro/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="/favicon.ico" />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet" />
+<style>
+:root{--navy-900:#061B45;--navy-800:#0A2A6C;--orange:#F5A623;--orange-d:#d8910e;--ink:#0f172a;--muted:#64748b;--line:#e6e9f0}
+*{box-sizing:border-box}
+body{margin:0;font-family:Manrope,system-ui,sans-serif;color:var(--ink);background:#fff;line-height:1.7}
+a{color:var(--orange-d)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+.topnav{background:var(--navy-900);color:#fff;position:sticky;top:0;z-index:100}
+.topnav .wrap{max-width:1100px;display:flex;align-items:center;justify-content:space-between;height:62px}
+.topnav a{color:#fff}
+.topnav .logo img{height:30px}
+.topnav .links{display:flex;align-items:center;gap:20px;font-size:14px;font-weight:600}
+.btn{display:inline-block;background:var(--orange);color:var(--navy-900)!important;font-weight:700;padding:10px 20px;border-radius:24px;font-size:14px}
+.volver{display:inline-block;margin:24px 0 0;font-size:13px;font-weight:700;color:var(--muted)}
+article{padding:16px 0 40px}
+.pilar{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;border-radius:20px;margin-bottom:14px}
+.fecha{font-size:13px;color:var(--muted);font-weight:600;margin-bottom:6px}
+article h1{font-size:34px;line-height:1.2;font-weight:800;color:var(--navy-900);margin:6px 0 18px}
+.contenido{font-size:17px;color:#1f2937}
+.contenido h2{font-size:24px;font-weight:800;color:var(--navy-900);margin:30px 0 10px}
+.contenido h3{font-size:20px;font-weight:800;color:var(--navy-800);margin:24px 0 8px}
+.contenido p{margin:0 0 16px}
+.contenido ul,.contenido ol{margin:0 0 16px;padding-left:22px}
+.contenido li{margin:6px 0}
+.contenido a{font-weight:600}
+.cta{margin:34px 0 0;background:linear-gradient(160deg,var(--navy-900),var(--navy-800));color:#fff;border-radius:18px;padding:28px}
+.cta p{margin:0 0 16px;font-size:17px;font-weight:600}
+.cta .btn{font-size:15px}
+.loading{color:var(--muted);padding:60px 0;text-align:center}
+.foot{background:var(--navy-900);color:#9db4e0;font-size:13px;text-align:center;padding:26px 0;margin-top:20px}
+@media(max-width:560px){article h1{font-size:26px}}
+</style>
+</head>
+<body>
+<nav class="topnav"><div class="wrap">
+  <a class="logo" href="/"><img src="/logo_white.png" alt="Consultify" /></a>
+  <div class="links"><a href="/blog/">Blog</a><a href="/app/calculadora" class="btn">Calcula tu precio</a></div>
+</div></nav>
+
+<div class="wrap">
+  <a class="volver" href="/blog/">← Volver al blog</a>
+  <article id="art"><div class="loading">Cargando artículo…</div></article>
+</div>
+
+<div class="foot"><div class="wrap">© 2026 Consultify · Una línea de TuConsultor · Hecho con amor en Madrid.</div></div>
+
+<script>
+const SB_URL = '__SUPABASE_URL__';
+const SB_KEY = '__SUPABASE_ANON_KEY__';
+const PILAR_COLOR = {
+  'P1 EDUCATIVO': ['#e0edff','#0A2A6C'],
+  'P2 CASOS':     ['#dcfce7','#166534'],
+  'P3 OPINION':   ['#fef3c7','#92400e'],
+  'P3 OPINIÓN':   ['#fef3c7','#92400e'],
+  'P4 MARCA':     ['#f3e8ff','#6b21a8'],
+  'P5 CONSEJOS':  ['#ffe9cc','#9a5a00'],
+};
+function pilarStyle(p){ const c = PILAR_COLOR[p] || ['#e6e9f0','#334155']; return 'background:'+c[0]+';color:'+c[1]; }
+function pilarLabel(p){ return (p||'').replace(/^P\d+\s+/,''); }
+function fechaES(iso){ try{ return new Date(iso+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'}); }catch(e){ return iso; } }
+function esc(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function ctaHtml(cta){
+  if(!cta) return '';
+  // Detectar destino: email o web.
+  const mail = (cta.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||[])[0];
+  let btn='';
+  if(mail) btn = '<a class="btn" href="mailto:'+mail+'">Escríbenos</a>';
+  else btn = '<a class="btn" href="https://consultify.pro">Ir a Consultify</a>';
+  return '<div class="cta"><p>'+esc(cta)+'</p>'+btn+'</div>';
+}
+async function cargar(){
+  const slug = new URLSearchParams(location.search).get('slug');
+  const art = document.getElementById('art');
+  if(!slug){ art.innerHTML='<div class="loading">Artículo no encontrado.</div>'; return; }
+  const url = SB_URL+'/rest/v1/blog_posts?slug=eq.'+encodeURIComponent(slug)+'&select=titulo,extracto,contenido_html,cta,pilar,fecha_publicacion,autor&limit=1';
+  let post=null;
+  try{
+    const r = await fetch(url,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});
+    if(r.ok){ const d=await r.json(); post=d[0]||null; }
+  }catch(e){}
+  if(!post){ art.innerHTML='<div class="loading">Este artículo no está disponible.</div>'; return; }
+  // SEO dinámico
+  document.title = post.titulo + ' | Blog Consultify';
+  document.getElementById('meta-desc').setAttribute('content', post.extracto||'');
+  document.getElementById('og-title').setAttribute('content', post.titulo||'');
+  document.getElementById('og-desc').setAttribute('content', post.extracto||'');
+  document.getElementById('meta-canon').setAttribute('href', 'https://consultify.pro/blog/post.html?slug='+encodeURIComponent(slug));
+  art.innerHTML =
+    '<span class="pilar" style="'+pilarStyle(post.pilar)+'">'+esc(pilarLabel(post.pilar))+'</span>'+
+    '<div class="fecha">'+fechaES(post.fecha_publicacion)+' · '+esc(post.autor||'TuConsultor')+'</div>'+
+    '<h1>'+esc(post.titulo)+'</h1>'+
+    '<div class="contenido">'+(post.contenido_html||'')+'</div>'+
+    ctaHtml(post.cta);
+}
+cargar();
+</script>
+</body>
+</html>

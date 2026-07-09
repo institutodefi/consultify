@@ -3,31 +3,24 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Blog · Guías de certificación ISO 9001, 14001, 27001, 45001 y más | Consultify</title>
-<meta name="description" content="Guías claras de cada norma ISO y UNE: qué es, por qué certificarse y para quién. Descarga el brochure de cada certificación. Consultoría ISO impulsada por IA." />
+<title>Blog · Consultoría ISO, calidad y gestión con IA | Consultify</title>
+<meta name="description" content="Artículos, casos y consejos sobre certificación ISO, calidad, medio ambiente y gestión. Actualidad de Consultify y guías de cada norma ISO y UNE." />
 <meta name="robots" content="index, follow, max-image-preview:large" />
 <link rel="canonical" href="https://consultify.pro/blog/" />
-<link rel="alternate" hreflang="es" href="https://consultify.pro/blog/" />
-<link rel="alternate" hreflang="en" href="https://consultify.pro/blog/?lang=en" />
-<link rel="alternate" hreflang="ar" href="https://consultify.pro/blog/?lang=ar" />
-<link rel="alternate" hreflang="x-default" href="https://consultify.pro/blog/" />
+<meta property="og:title" content="Blog · Consultify" />
+<meta property="og:description" content="Artículos, casos y consejos sobre certificación ISO, calidad y gestión con IA." />
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Blog · Guías de certificación ISO 9001, 14001, 27001, 45001 y más | Consultify" />
-<meta property="og:description" content="Guías claras de cada norma ISO y UNE: qué es, por qué certificarse y para quién. Descarga el brochure de cada certificación. Consultoría ISO impulsada por IA." />
 <meta property="og:url" content="https://consultify.pro/blog/" />
 <meta property="og:image" content="https://consultify.pro/og-image.png" />
-<meta property="og:site_name" content="Consultify" />
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" href="/favicon.ico" />
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Noto+Sans+Arabic:wght@400;500;700;800&display=swap" rel="stylesheet" />
-
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet" />
 <style>
-:root{--navy-900:#061B45;--navy-800:#0A2A6C;--navy-700:#1E3A8A;--orange:#F5A623;--orange-deep:#E89313;--white:#fff;--ink:#0b1220;--muted:#5a6473;--soft:#f4f6fa;--line:#e5e9f0}
+:root{--navy-900:#061B45;--navy-800:#0A2A6C;--navy-700:#1E3A8A;--orange:#F5A623;--orange-d:#d8910e;--ink:#0f172a;--muted:#64748b;--line:#e6e9f0}
 *{box-sizing:border-box}
-body{margin:0;font-family:Manrope,system-ui,sans-serif;color:var(--navy-900);background:#fff;line-height:1.6}
-html[dir=rtl] body{font-family:'Noto Sans Arabic',Manrope,sans-serif}
-a{color:var(--navy-800);text-decoration:none}
-.wrap{max-width:920px;margin:0 auto;padding:0 22px}
+body{margin:0;font-family:Manrope,system-ui,sans-serif;color:var(--ink);background:#fff;line-height:1.6}
+a{text-decoration:none;color:inherit}
+.wrap{max-width:1100px;margin:0 auto;padding:0 20px}
 .topnav{background:var(--navy-900);color:#fff;position:sticky;top:0;z-index:100}
 .topnav .wrap{display:flex;align-items:center;justify-content:space-between;height:62px}
 .topnav a{color:#fff}
@@ -35,283 +28,112 @@ a{color:var(--navy-800);text-decoration:none}
 .topnav .logo img{height:30px}
 .topnav .links{display:flex;align-items:center;gap:20px;font-size:14px;font-weight:600}
 .topnav .links a:hover{color:var(--orange)}
-.lang{display:flex;gap:4px;margin-left:14px}
-html[dir=rtl] .lang{margin-left:0;margin-right:14px}
-.lang a{font-size:12px;padding:4px 8px;border-radius:6px;opacity:.6}
-.lang a.active{background:var(--orange);color:var(--navy-900);opacity:1;font-weight:700}
 .btn{display:inline-block;background:var(--orange);color:var(--navy-900)!important;font-weight:700;padding:10px 20px;border-radius:24px;font-size:14px;border:none;cursor:pointer}
-.btn:hover{background:var(--orange-deep)}
-.hero{background:linear-gradient(160deg,var(--navy-900),var(--navy-800));color:#fff;padding:54px 0 40px}
-.hero .code{display:inline-block;background:var(--orange);color:var(--navy-900);font-weight:800;font-size:13px;padding:6px 14px;border-radius:20px;margin-bottom:18px}
-.hero h1{font-size:38px;line-height:1.15;margin:0 0 10px;font-weight:800}
-.hero .tagline{font-size:18px;color:#9db4e0;margin:0 0 22px}
-.hero .meta{display:flex;gap:26px;flex-wrap:wrap;margin-top:8px}
-html[dir=rtl] .hero .meta{flex-direction:row-reverse;justify-content:flex-end}
-.hero .meta .m strong{display:block;font-size:26px;color:var(--orange);font-weight:800}
-.hero .meta .m span{font-size:12px;color:#9db4e0}
-.back{display:inline-block;color:#9db4e0!important;font-size:13px;margin-bottom:20px}
-article{padding:44px 0}
-article h2{font-size:15px;color:var(--orange);text-transform:uppercase;letter-spacing:.04em;margin:34px 0 10px;font-weight:800}
-article h2:first-child{margin-top:0}
-article p{font-size:17px;color:#26324a;margin:0 0 14px}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:8px}
-.cols h3{font-size:15px;color:var(--navy-900);margin:0 0 12px;font-weight:800}
-.cols ul{list-style:none;padding:0;margin:0}
-.cols li{position:relative;padding-left:22px;margin-bottom:9px;font-size:15px;color:#26324a}
-html[dir=rtl] .cols li{padding-left:0;padding-right:22px}
-.cols li::before{content:"";position:absolute;left:0;top:9px;width:9px;height:9px;border-radius:50%;background:var(--orange)}
-html[dir=rtl] .cols li::before{left:auto;right:0}
-.cols .benefits li::before{background:transparent;border:2px solid var(--orange);border-radius:3px;width:10px;height:10px;top:7px}
-/* Formulario */
-.formbox{background:var(--soft);border:1px solid var(--line);border-radius:18px;padding:32px;margin:40px 0}
-.formbox h2{color:var(--navy-900);text-transform:none;font-size:23px;letter-spacing:0;margin:0 0 6px}
-.formbox p.sub{font-size:15px;color:var(--muted);margin:0 0 20px}
-.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.formgrid .full{grid-column:1/-1}
-.formbox label{display:block;font-size:13px;font-weight:700;margin-bottom:5px;color:var(--navy-900)}
-.formbox input[type=text],.formbox input[type=email],.formbox input[type=tel]{width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:10px;font-size:15px;font-family:inherit;outline:none}
-.formbox input:focus{border-color:var(--navy-800)}
-.consent{display:flex;gap:10px;align-items:flex-start;margin:16px 0;font-size:13px;color:var(--muted)}
-.consent input{margin-top:3px}
-.consent a{color:var(--navy-800);text-decoration:underline}
-.form-msg{margin-top:14px;padding:12px 16px;border-radius:10px;font-size:14px;display:none}
-.form-msg.ok{background:#e7f7ec;color:#186a3b;display:block}
-.form-msg.err{background:#fdeaea;color:#a11;display:block}
-.form-msg.err a{color:#a11;font-weight:700}
-.ctacalc{background:var(--navy-900);color:#fff;border-radius:16px;padding:26px 30px;margin:36px 0;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
-.ctacalc h3{margin:0;font-size:19px}
-.related{padding:36px 0 60px;border-top:1px solid var(--line)}
-.related h2{font-size:16px;color:var(--navy-900);margin:0 0 16px}
-.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
-.rcard{border:1px solid var(--line);border-radius:12px;padding:14px 16px;transition:.15s}
-.rcard:hover{border-color:var(--orange);transform:translateY(-2px)}
-.rcard .c{font-weight:800;color:var(--navy-900);font-size:15px}
-.rcard .n{font-size:12px;color:var(--muted)}
-.foot{background:var(--navy-900);color:#9db4e0;padding:30px 0;font-size:13px;text-align:center}
-@media(max-width:640px){.hero h1{font-size:30px}.cols{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr}.topnav .links a:not(.btn){display:none}}
-
-.ihero{background:linear-gradient(160deg,var(--navy-900),var(--navy-800));color:#fff;padding:60px 0 46px}
-.ihero h1{font-size:34px;margin:0 0 12px;font-weight:800}
-.ihero p{font-size:17px;color:#9db4e0;max-width:640px;margin:0}
-.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;padding:44px 0 60px}
-.icard{border:1px solid var(--line);border-radius:16px;padding:22px;transition:.15s;display:block}
-.icard:hover{border-color:var(--orange);transform:translateY(-3px);box-shadow:0 10px 30px rgba(6,27,69,.08)}
-.icard .ic{display:inline-block;background:var(--navy-900);color:#fff;font-weight:800;font-size:13px;padding:4px 12px;border-radius:16px;margin-bottom:12px}
-.icard .iname{font-size:18px;font-weight:800;color:var(--navy-900);margin-bottom:6px}
-.icard .itag{font-size:14px;color:var(--muted);margin-bottom:14px}
-.icard .iread{font-size:13px;font-weight:700;color:var(--orange-deep)}
+.bhero{background:linear-gradient(160deg,var(--navy-900),var(--navy-800));color:#fff;padding:54px 0 48px}
+.bhero h1{font-size:38px;line-height:1.15;margin:0 0 10px;font-weight:800}
+.bhero p{font-size:18px;color:#9db4e0;margin:0;max-width:640px}
+section{padding:40px 0}
+.sec-title{font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--orange-d);margin:0 0 18px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.card{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(6,27,69,.10)}
+.card .body{padding:20px;display:flex;flex-direction:column;gap:10px;flex:1}
+.pilar{align-self:flex-start;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;border-radius:20px}
+.card h3{font-size:18px;font-weight:800;margin:2px 0 0;color:var(--navy-900);line-height:1.3}
+.card .fecha{font-size:12px;color:var(--muted);font-weight:600}
+.card .extracto{font-size:14px;color:#475569;margin:0}
+.card .leer{margin-top:auto;font-size:13px;font-weight:800;color:var(--orange-d)}
+.mas{display:block;margin:30px auto 0;background:var(--navy-900);color:#fff;font-weight:700;padding:12px 26px;border-radius:24px;border:none;cursor:pointer;font-size:14px}
+.mas:hover{background:var(--navy-800)}
+.iso-sec{background:#f8fafc;border-top:1px solid var(--line)}
+.iso-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.iso-card{display:block;border:1px solid var(--line);border-radius:12px;padding:16px;background:#fff;font-weight:700;color:var(--navy-900);font-size:14px;transition:border-color .15s}
+.iso-card:hover{border-color:var(--orange)}
+.loading,.empty{color:var(--muted);font-size:15px;padding:20px 0}
+.foot{background:var(--navy-900);color:#9db4e0;font-size:13px;text-align:center;padding:26px 0}
+@media(max-width:860px){.grid{grid-template-columns:repeat(2,1fr)}.iso-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.grid{grid-template-columns:1fr}.bhero h1{font-size:30px}.topnav .links a:not(.btn){display:none}}
 </style>
-</head><body>
+</head>
+<body>
 <nav class="topnav"><div class="wrap">
   <a class="logo" href="/"><img src="/logo_white.png" alt="Consultify · consultoría ISO impulsada por IA" /></a>
   <div class="links">
     <a href="/blog/">Blog</a>
     <a href="/app/calculadora" class="btn">Calcula tu precio</a>
-    <span class="lang">
-      <a href="?lang=es" class="active" data-setlang="es">ES</a>
-      <a href="?lang=en" class="" data-setlang="en">EN</a>
-      <a href="?lang=ar" class="" data-setlang="ar">عربي</a>
-    </span>
   </div>
-</div></nav><div data-lang="es" style="">
-      <section class="ihero"><div class="wrap">
-        <h1>Blog · Guías de certificación ISO</h1>
-        <p>Explicaciones claras de cada norma ISO y UNE: qué es, por qué certificarse y para quién. Descarga el brochure de cada una.</p>
-      </div></section>
-      <div class="wrap"><div class="igrid"><a class="icard" href="/blog/iso-9001/">
-          <div class="ic">ISO 9001</div>
-          <div class="iname">Sistema de Gestión de la Calidad</div>
-          <div class="itag">La norma más implantada del mundo</div>
-          <span class="iread">Leer guía →</span>
-        </a><a class="icard" href="/blog/iso-14001/">
-          <div class="ic">ISO 14001</div>
-          <div class="iname">Sistema de Gestión Ambiental</div>
-          <div class="itag">Gestiona tu impacto ambiental con rigor</div>
-          <span class="iread">Leer guía →</span>
-        </a><a class="icard" href="/blog/iso-27001/">
-          <div class="ic">ISO 27001</div>
-          <div class="iname">Seguridad de la Información</div>
-          <div class="itag">Protege tu activo más crítico: la información</div>
-          <span class="iread">Leer guía →</span>
-        </a><a class="icard" href="/blog/iso-45001/">
-          <div class="ic">ISO 45001</div>
-          <div class="iname">Seguridad y Salud en el Trabajo</div>
-          <div class="itag">Cuida a las personas, reduce la siniestralidad</div>
-          <span class="iread">Leer guía →</span>
-        </a><a class="icard" href="/blog/iso-42001/">
-          <div class="ic">ISO 42001</div>
-          <div class="iname">Gestión de la Inteligencia Artificial</div>
-          <div class="itag">La primera norma certificable de IA</div>
-          <span class="iread">Leer guía →</span>
-        </a><a class="icard" href="/blog/iso-56001/">
-          <div class="ic">ISO 56001</div>
-          <div class="iname">Gestión de la Innovación</div>
-          <div class="itag">De la idea a la cartera de proyectos</div>
-          <span class="iread">Leer guía →</span>
-        </a><a class="icard" href="/blog/iso-21001/">
-          <div class="ic">ISO 21001</div>
-          <div class="iname">Organizaciones Educativas</div>
-          <div class="itag">Excelencia en la gestión educativa</div>
-          <span class="iread">Leer guía →</span>
-        </a><a class="icard" href="/blog/iso-9004/">
-          <div class="ic">ISO 9004</div>
-          <div class="iname">Calidad Sostenible y Éxito Sostenido</div>
-          <div class="itag">El siguiente nivel tras la ISO 9001</div>
-          <span class="iread">Leer guía →</span>
-        </a><a class="icard" href="/blog/une-93200/">
-          <div class="ic">UNE 93200</div>
-          <div class="iname">Cartas de Servicios</div>
-          <div class="itag">Compromisos de servicio públicos y medibles</div>
-          <span class="iread">Leer guía →</span>
-        </a><a class="icard" href="/blog/une-158101/">
-          <div class="ic">UNE 158101</div>
-          <div class="iname">Centros Residenciales y de Día</div>
-          <div class="itag">Calidad asistencial certificable</div>
-          <span class="iread">Leer guía →</span>
-        </a></div></div>
-    </div><div data-lang="en" style="display:none">
-      <section class="ihero"><div class="wrap">
-        <h1>Blog · ISO certification guides</h1>
-        <p>Clear explanations of each ISO and UNE standard: what it is, why get certified and who it is for. Download the brochure for each one.</p>
-      </div></section>
-      <div class="wrap"><div class="igrid"><a class="icard" href="/blog/iso-9001/?lang=en">
-          <div class="ic">ISO 9001</div>
-          <div class="iname">Quality Management System</div>
-          <div class="itag">The world's most implemented standard</div>
-          <span class="iread">Read guide →</span>
-        </a><a class="icard" href="/blog/iso-14001/?lang=en">
-          <div class="ic">ISO 14001</div>
-          <div class="iname">Environmental Management System</div>
-          <div class="itag">Manage your environmental impact rigorously</div>
-          <span class="iread">Read guide →</span>
-        </a><a class="icard" href="/blog/iso-27001/?lang=en">
-          <div class="ic">ISO 27001</div>
-          <div class="iname">Information Security</div>
-          <div class="itag">Protect your most critical asset: information</div>
-          <span class="iread">Read guide →</span>
-        </a><a class="icard" href="/blog/iso-45001/?lang=en">
-          <div class="ic">ISO 45001</div>
-          <div class="iname">Occupational Health &amp; Safety</div>
-          <div class="itag">Care for people, reduce accident rates</div>
-          <span class="iread">Read guide →</span>
-        </a><a class="icard" href="/blog/iso-42001/?lang=en">
-          <div class="ic">ISO 42001</div>
-          <div class="iname">Artificial Intelligence Management</div>
-          <div class="itag">The first certifiable AI standard</div>
-          <span class="iread">Read guide →</span>
-        </a><a class="icard" href="/blog/iso-56001/?lang=en">
-          <div class="ic">ISO 56001</div>
-          <div class="iname">Innovation Management</div>
-          <div class="itag">From idea to project portfolio</div>
-          <span class="iread">Read guide →</span>
-        </a><a class="icard" href="/blog/iso-21001/?lang=en">
-          <div class="ic">ISO 21001</div>
-          <div class="iname">Educational Organizations</div>
-          <div class="itag">Excellence in educational management</div>
-          <span class="iread">Read guide →</span>
-        </a><a class="icard" href="/blog/iso-9004/?lang=en">
-          <div class="ic">ISO 9004</div>
-          <div class="iname">Sustained Quality</div>
-          <div class="itag">The next level after ISO 9001</div>
-          <span class="iread">Read guide →</span>
-        </a><a class="icard" href="/blog/une-93200/?lang=en">
-          <div class="ic">UNE 93200</div>
-          <div class="iname">Service Charters</div>
-          <div class="itag">Public, measurable service commitments</div>
-          <span class="iread">Read guide →</span>
-        </a><a class="icard" href="/blog/une-158101/?lang=en">
-          <div class="ic">UNE 158101</div>
-          <div class="iname">Residential &amp; Day Care Centers</div>
-          <div class="itag">Certifiable care quality</div>
-          <span class="iread">Read guide →</span>
-        </a></div></div>
-    </div><div data-lang="ar" style="display:none">
-      <section class="ihero"><div class="wrap">
-        <h1>المدونة · أدلة اعتماد الأيزو</h1>
-        <p>شروحات واضحة لكل معيار أيزو وUNE: ما هو، ولماذا الاعتماد، ولمن. حمّل كتيّب كل معيار.</p>
-      </div></section>
-      <div class="wrap"><div class="igrid"><a class="icard" href="/blog/iso-9001/?lang=ar">
-          <div class="ic">ISO 9001</div>
-          <div class="iname">نظام إدارة الجودة</div>
-          <div class="itag">المعيار الأكثر تطبيقاً في العالم</div>
-          <span class="iread">اقرأ الدليل →</span>
-        </a><a class="icard" href="/blog/iso-14001/?lang=ar">
-          <div class="ic">ISO 14001</div>
-          <div class="iname">نظام الإدارة البيئية</div>
-          <div class="itag">أدر أثرك البيئي بدقة</div>
-          <span class="iread">اقرأ الدليل →</span>
-        </a><a class="icard" href="/blog/iso-27001/?lang=ar">
-          <div class="ic">ISO 27001</div>
-          <div class="iname">أمن المعلومات</div>
-          <div class="itag">احمِ أثمن أصولك: المعلومات</div>
-          <span class="iread">اقرأ الدليل →</span>
-        </a><a class="icard" href="/blog/iso-45001/?lang=ar">
-          <div class="ic">ISO 45001</div>
-          <div class="iname">الصحة والسلامة المهنية</div>
-          <div class="itag">اعتنِ بالأشخاص، وقلّل الحوادث</div>
-          <span class="iread">اقرأ الدليل →</span>
-        </a><a class="icard" href="/blog/iso-42001/?lang=ar">
-          <div class="ic">ISO 42001</div>
-          <div class="iname">إدارة الذكاء الاصطناعي</div>
-          <div class="itag">أول معيار قابل للاعتماد للذكاء الاصطناعي</div>
-          <span class="iread">اقرأ الدليل →</span>
-        </a><a class="icard" href="/blog/iso-56001/?lang=ar">
-          <div class="ic">ISO 56001</div>
-          <div class="iname">إدارة الابتكار</div>
-          <div class="itag">من الفكرة إلى محفظة المشاريع</div>
-          <span class="iread">اقرأ الدليل →</span>
-        </a><a class="icard" href="/blog/iso-21001/?lang=ar">
-          <div class="ic">ISO 21001</div>
-          <div class="iname">المؤسسات التعليمية</div>
-          <div class="itag">التميّز في الإدارة التعليمية</div>
-          <span class="iread">اقرأ الدليل →</span>
-        </a><a class="icard" href="/blog/iso-9004/?lang=ar">
-          <div class="ic">ISO 9004</div>
-          <div class="iname">الجودة المستدامة</div>
-          <div class="itag">المستوى التالي بعد الأيزو 9001</div>
-          <span class="iread">اقرأ الدليل →</span>
-        </a><a class="icard" href="/blog/une-93200/?lang=ar">
-          <div class="ic">UNE 93200</div>
-          <div class="iname">مواثيق الخدمة</div>
-          <div class="itag">التزامات خدمة علنية وقابلة للقياس</div>
-          <span class="iread">اقرأ الدليل →</span>
-        </a><a class="icard" href="/blog/une-158101/?lang=ar">
-          <div class="ic">UNE 158101</div>
-          <div class="iname">مراكز الإقامة والرعاية النهارية</div>
-          <div class="itag">جودة رعاية قابلة للاعتماد</div>
-          <span class="iread">اقرأ الدليل →</span>
-        </a></div></div>
-    </div>
-<script>
-(function(){
-  var LANGS=['es','en','ar'];
-  function apply(lang){
-    if(LANGS.indexOf(lang)<0) lang='es';
-    document.documentElement.lang=lang;
-    document.documentElement.dir = (lang==='ar')?'rtl':'ltr';
-    LANGS.forEach(function(L){
-      document.querySelectorAll('[data-lang="'+L+'"]').forEach(function(el){
-        el.style.display = (L===lang)?'':'none';
-      });
-    });
-    document.querySelectorAll('[data-setlang]').forEach(function(a){
-      a.classList.toggle('active', a.getAttribute('data-setlang')===lang);
-    });
-    try{ localStorage.setItem('lang',lang); }catch(e){}
-  }
-  // idioma inicial: ?lang= > localStorage > navegador > es
-  var lang=null;
-  try{ var p=new URLSearchParams(location.search).get('lang'); if(p) lang=p; }catch(e){}
-  if(!lang){ try{ lang=localStorage.getItem('lang'); }catch(e){} }
-  if(!lang){ lang=(navigator.language||'es').slice(0,2); }
-  apply(lang);
-  document.querySelectorAll('[data-setlang]').forEach(function(a){
-    a.addEventListener('click',function(e){
-      e.preventDefault(); var L=a.getAttribute('data-setlang'); apply(L);
-      try{ var u=new URL(location.href); if(L==='es')u.searchParams.delete('lang'); else u.searchParams.set('lang',L); history.replaceState(null,'',u); }catch(e){}
-    });
-  });
-})();
-</script><script src="/whatsapp-widget.js" defer></script>
+</div></nav>
+
+<header class="bhero"><div class="wrap">
+  <h1>Blog de Consultify</h1>
+  <p>Artículos, casos reales y consejos sobre certificación ISO, calidad, medio ambiente y gestión — con la mirada de quien lo implanta cada día.</p>
+</div></header>
+
+<section><div class="wrap">
+  <p class="sec-title">Últimos artículos</p>
+  <div id="posts" class="grid"><div class="loading">Cargando artículos…</div></div>
+  <button id="mas" class="mas" style="display:none">Cargar más</button>
+</div></section>
+
+<section class="iso-sec"><div class="wrap">
+  <p class="sec-title">Guías por norma</p>
+  <div class="iso-grid">
+    <a class="iso-card" href="/blog/iso-9001/">ISO 9001 · Calidad</a>
+    <a class="iso-card" href="/blog/iso-14001/">ISO 14001 · Medio ambiente</a>
+    <a class="iso-card" href="/blog/iso-45001/">ISO 45001 · Seguridad laboral</a>
+    <a class="iso-card" href="/blog/iso-27001/">ISO 27001 · Seguridad información</a>
+    <a class="iso-card" href="/blog/iso-42001/">ISO 42001 · Inteligencia artificial</a>
+    <a class="iso-card" href="/blog/iso-56001/">ISO 56001 · Innovación</a>
+    <a class="iso-card" href="/blog/iso-21001/">ISO 21001 · Organizaciones educativas</a>
+    <a class="iso-card" href="/blog/iso-9004/">ISO 9004 · Éxito sostenido</a>
+    <a class="iso-card" href="/blog/une-158101/">UNE 158101 · Centros de día</a>
+    <a class="iso-card" href="/blog/une-93200/">UNE 93200 · Cartas de servicio</a>
+  </div>
+</div></section>
+
 <div class="foot"><div class="wrap">© 2026 Consultify · Una línea de TuConsultor · Hecho con amor en Madrid.</div></div>
-</body></html>
+
+<script>
+const SB_URL = '__SUPABASE_URL__';
+const SB_KEY = '__SUPABASE_ANON_KEY__';
+const PAGE = 12;
+let desde = 0, agotado = false, cargando = false;
+const PILAR_COLOR = {
+  'P1 EDUCATIVO': ['#e0edff','#0A2A6C'],
+  'P2 CASOS':     ['#dcfce7','#166534'],
+  'P3 OPINION':   ['#fef3c7','#92400e'],
+  'P3 OPINIÓN':   ['#fef3c7','#92400e'],
+  'P4 MARCA':     ['#f3e8ff','#6b21a8'],
+  'P5 CONSEJOS':  ['#ffe9cc','#9a5a00'],
+};
+function pilarStyle(p){ const c = PILAR_COLOR[p] || ['#e6e9f0','#334155']; return 'background:'+c[0]+';color:'+c[1]; }
+function pilarLabel(p){ return (p||'').replace(/^P\d+\s+/,''); }
+function fechaES(iso){ try{ return new Date(iso+'T00:00:00').toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'}); }catch(e){ return iso; } }
+function esc(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+async function cargar(){
+  if(cargando||agotado) return; cargando=true;
+  const url = SB_URL+'/rest/v1/blog_posts?select=slug,titulo,extracto,pilar,fecha_publicacion&order=fecha_publicacion.desc&offset='+desde+'&limit='+PAGE;
+  let data=[];
+  try{
+    const r = await fetch(url,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});
+    if(r.ok) data = await r.json();
+  }catch(e){}
+  const cont = document.getElementById('posts');
+  if(desde===0) cont.innerHTML='';
+  if(desde===0 && data.length===0){ cont.innerHTML='<div class="empty">Aún no hay artículos publicados. Vuelve pronto.</div>'; document.getElementById('mas').style.display='none'; cargando=false; return; }
+  for(const p of data){
+    const a = document.createElement('a');
+    a.className='card'; a.href='/blog/post.html?slug='+encodeURIComponent(p.slug);
+    a.innerHTML = '<div class="body"><span class="pilar" style="'+pilarStyle(p.pilar)+'">'+esc(pilarLabel(p.pilar))+'</span><span class="fecha">'+fechaES(p.fecha_publicacion)+'</span><h3>'+esc(p.titulo)+'</h3><p class="extracto">'+esc(p.extracto)+'</p><span class="leer">Leer artículo →</span></div>';
+    cont.appendChild(a);
+  }
+  desde += data.length;
+  if(data.length < PAGE){ agotado=true; document.getElementById('mas').style.display='none'; }
+  else document.getElementById('mas').style.display='block';
+  cargando=false;
+}
+document.getElementById('mas').addEventListener('click', cargar);
+cargar();
+</script>
+</body>
+</html>
