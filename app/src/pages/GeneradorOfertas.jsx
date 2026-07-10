@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { NORMAS, MODELOS, MODELO_IDS, calcular, fmtEUR } from '../lib/calcEngine.js';
 import { insertRow, siguienteNumeroOferta, upsertClienteDesdeFormulario } from '../lib/data.js';
 import { linkWhatsApp } from '../lib/telefono.js';
@@ -13,6 +14,22 @@ export default function GeneradorOfertas({ publico = false }) {
   const [meses, setMeses] = useState('');            // vacío = usa el mínimo del modelo
   const [tiene9001, setTiene9001] = useState(false); // "ya tengo la 9001" → −50% horas 9001
   const [cli, setCli] = useState({ nombre: '', apellidos: '', empresa: '', cif: '', cargo: '', email: '', telefono: '', direccion: '' });
+  const location = useLocation();
+  // Si llegamos desde la ficha de un cliente ("Lanzar oferta"), prerrellenar sus datos.
+  useEffect(() => {
+    const c = location.state?.clientePrefill;
+    if (c) {
+      setCli(prev => ({
+        ...prev,
+        nombre: c.contacto || prev.nombre,
+        apellidos: c.contacto_apellidos || prev.apellidos,
+        empresa: c.empresa || prev.empresa,
+        cif: c.cif_matriz || c.cif || prev.cif,
+        email: c.email || prev.email,
+        telefono: c.telefono || prev.telefono,
+      }));
+    }
+  }, [location.state]);
   const [consent, setConsent] = useState(false);
   const [estado, setEstado] = useState(null);        // null | 'gen' | {ok,url_pdf,url_pptx,numero}
   const [error, setError] = useState(null);

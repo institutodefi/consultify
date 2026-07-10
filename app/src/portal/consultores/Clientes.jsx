@@ -267,6 +267,7 @@ export default function Clientes() {
             <button onClick={actualizarCobros} disabled={cobrosBusy} className="rounded-xl border border-navy-200 !px-4 !py-2 text-sm font-bold text-navy-600 hover:bg-navy-50 disabled:opacity-40" title="Consultar Holded y actualizar el semáforo de facturas de todos los clientes">{cobrosBusy ? 'Actualizando…' : '🔄 Actualizar cobros'}</button>
             <button onClick={sincronizarBrevo} disabled={brevoBusy} className="rounded-xl border border-navy-200 !px-4 !py-2 text-sm font-bold text-navy-600 hover:bg-navy-50 disabled:opacity-40" title="Enviar todos los clientes con email a Brevo">{brevoBusy ? 'Sincronizando…' : '✉ Sincronizar con Brevo'}</button>
             {cliente && <button onClick={() => setForm({ ...VACIO, ...cliente })} className="btn-ghost !px-4 !py-2">✎ Editar cliente</button>}
+            {cliente && <button onClick={() => navigate('/consultores/planificador', { state: { clientePrefill: cliente } })} className="btn-orange !px-4 !py-2" title="Crear una oferta con los datos de este cliente">📄 Lanzar oferta</button>}
           </div>
         </div>
       </div>
