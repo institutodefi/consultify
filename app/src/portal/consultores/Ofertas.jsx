@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { listAll } from '../../lib/data.js';
-import { NORMA_BY_ID, fmtEUR } from '../../lib/calcEngine.js';
+import { listAll, updateRow } from '../../lib/data.js';
+import { NORMA_BY_ID, NORMAS, fmtEUR } from '../../lib/calcEngine.js';
 
 // Histórico interno de ofertas (todas las del equipo).
 export default function Ofertas() {
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState('');
   const [genId, setGenId] = useState(null);
+  const [editNormas, setEditNormas] = useState(null); // { oferta, normas:[] } cuando se editan normas
 
   useEffect(() => { listAll('presupuestos', 'creado').then(setRows).catch(() => setRows([])); }, []);
 
@@ -59,6 +60,32 @@ export default function Ofertas() {
     setGenId(null);
   }
 
+  // Guarda las normas editadas en la oferta y la regenera con ellas.
+  async function guardarNormasYRegenerar() {
+    const { oferta, normas } = editNormas;
+    if (!normas.includes('9001')) { setMsg('La ISO 9001 es la base obligatoria.'); return; }
+    setEditNormas(null); setGenId(oferta.id); setMsg(null);
+    try {
+      await updateRow('presupuestos', oferta.id, { normas });
+      setRows(rs => rs.map(x => x.id === oferta.id ? { ...x, normas } : x));
+      const resp = await fetch('/.netlify/functions/generar-oferta', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          normas, modelo: oferta.modelo, meses: oferta.meses,
+          empresa: oferta.empresa || '', contacto: oferta.nombre || '', cif: oferta.cif || '', cargo: oferta.cargo || '',
+          ref: oferta.numero_oferta || '', comercial: oferta.comercial || 'Alejandro',
+          email: oferta.email || '', presupuesto_id: oferta.id,
+        }),
+      });
+      let j = null; try { j = await resp.json(); } catch { j = null; }
+      if (j && j.ok) {
+        setRows(rs => rs.map(x => x.id === oferta.id ? { ...x, url_pdf: j.url_pdf, url_pptx: j.url_pptx } : x));
+        setMsg(`✓ Oferta ${oferta.numero_oferta} regenerada con ${normas.length} norma(s).`);
+      } else setMsg(`No se pudo regenerar (${j?.error || `código ${resp.status}`}).`);
+    } catch (e) { setMsg('Error al regenerar con las nuevas normas.'); }
+    setGenId(null);
+  }
+
   if (!rows) return <p className="font-semibold text-navy-400">Cargando ofertas…</p>;
 
   const filtro = q.trim().toLowerCase();
@@ -95,7 +122,12 @@ export default function Ofertas() {
                   <td className="py-2.5 font-medium text-navy-400">{(r.creado || '').slice(0, 10)}</td>
                   <td className="py-2.5 font-bold">{r.empresa || '—'}<br /><span className="text-xs font-medium text-navy-400">{r.nombre || ''}</span></td>
                   <td className="py-2.5 font-semibold">{r.comercial || 'Alejandro'}</td>
-                  <td className="py-2.5 font-semibold">{(r.normas || []).map(id => NORMA_BY_ID[id]?.nombre || id).join(' + ')}</td>
+                  <td className="py-2.5 font-semibold">
+                    <span className="inline-flex items-center gap-1.5">
+                      {(r.normas || []).map(id => NORMA_BY_ID[id]?.nombre || id).join(' + ')}
+                      <button onClick={() => setEditNormas({ oferta: r, normas: [...(r.normas || ['9001'])] })} className="text-xs font-bold text-navy-300 hover:text-brand-orangeDark" title="Editar normas y regenerar">✎</button>
+                    </span>
+                  </td>
                   <td className="py-2.5 font-semibold">{r.modelo}</td>
                   <td className="py-2.5 text-right font-extrabold">{fmtEUR(r.precio)}{r.tipo === 'mes' ? '/mes' : ''}</td>
                   <td className="py-2.5 text-right whitespace-nowrap">
@@ -116,6 +148,33 @@ export default function Ofertas() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal: editar normas de una oferta y regenerar */}
+      {editNormas && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditNormas(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-extrabold text-navy-900">Normas de la oferta</h3>
+            <p className="mt-1 text-sm font-medium text-navy-400">{editNormas.oferta.numero_oferta} · {editNormas.oferta.empresa}</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {NORMAS.map(n => {
+                const on = editNormas.normas.includes(n.id);
+                const base = n.id === '9001';
+                return (
+                  <button key={n.id} disabled={base}
+                    onClick={() => setEditNormas(s => ({ ...s, normas: on ? s.normas.filter(x => x !== n.id) : [...s.normas, n.id] }))}
+                    className={`rounded-xl border px-3 py-2 text-left text-sm font-bold transition ${on ? 'border-brand-orange bg-brand-orange/10 text-navy-900' : 'border-navy-200 text-navy-400 hover:border-navy-300'} ${base ? 'opacity-70 cursor-default' : ''}`}>
+                    {n.nombre}{base && <span className="block text-[10px] font-medium">base obligatoria</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setEditNormas(null)} className="rounded-xl px-4 py-2 text-sm font-bold text-navy-400 hover:bg-navy-50">Cancelar</button>
+              <button onClick={guardarNormasYRegenerar} className="btn-orange !px-4 !py-2 !text-sm">Guardar y regenerar</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
