@@ -133,6 +133,8 @@ export default function Clientes() {
         let t = `Brevo: ${r.subidos} cliente(s) sincronizados`;
         if (r.sin_email) t += ` · ${r.sin_email} sin email (no se pueden enviar)`;
         if (r.errores) t += ` · ${r.errores} con error`;
+        if (r.lista_encontrada) t += ` · en lista "${r.lista_nombre}"`;
+        else t += ` · ⚠️ lista "${r.lista_nombre}" no encontrada en Brevo (contactos creados sin lista)`;
         setMsg(t);
       } else setMsg(r.error || 'No se pudo sincronizar con Brevo.');
     } catch { setMsg('Error al sincronizar con Brevo.'); }

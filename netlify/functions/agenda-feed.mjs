@@ -39,7 +39,7 @@ export default async (req) => {
   if (!consultorId) return new Response('Falta el parámetro c', { status: 400 });
 
   const base = process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
   if (!base || !key) return new Response('Backend sin configurar', { status: 500 });
 
   const headers = { apikey: key, Authorization: `Bearer ${key}` };

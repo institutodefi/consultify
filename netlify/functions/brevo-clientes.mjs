@@ -34,19 +34,24 @@ async function autorizar(token) {
 }
 
 // Sube un cliente a Brevo. Devuelve {ok, error?}.
+// Para el flujo RGPD (doble opt-in), el cliente entra en la lista TEMPORAL de
+// pendientes de confirmar (BREVO_LIST_DOI_ID / BREVO_LIST_CLIENTES_ID) y se marca
+// con DOI_PENDIENTE=true, hasta que confirme su consentimiento.
 async function subirContacto(c, apiKey, listaId) {
   const email = (c.email || '').trim();
   if (!email) return { ok: false, sin_email: true };
 
   const nombre = (c.contacto || '').trim();
   const apellidos = (c.contacto_apellidos || '').trim();
+  const usaDOI = !!listaId;
   const attributes = {
     NOMBRE: nombre, APELLIDOS: apellidos,
-    FIRSTNAME: nombre, LASTNAME: apellidos, // por si la cuenta usa atributos en inglés
+    FIRSTNAME: nombre, LASTNAME: apellidos,
     EMPRESA: c.empresa || '',
     CIF: c.cif_matriz || c.cif || '',
     TELEFONO: c.telefono || '',
     TIPO: 'Cliente',
+    DOI_PENDIENTE: usaDOI, // marca de pendiente de confirmar (RGPD)
   };
   const payload = {
     email, attributes, updateEnabled: true,
@@ -61,6 +66,26 @@ async function subirContacto(c, apiKey, listaId) {
   const err = await r.text();
   if (err.includes('duplicate')) return { ok: true, updated: true };
   return { ok: false, error: err };
+}
+
+// Resuelve el ID de una lista de Brevo por su NOMBRE (p. ej. TEMP_PENDIENTE_CONFIRMAR).
+// Brevo pagina las listas; recorremos hasta encontrarla. Devuelve id numérico o null.
+async function idListaPorNombre(nombre, apiKey) {
+  if (!nombre) return null;
+  let offset = 0;
+  for (let i = 0; i < 20; i++) {
+    const r = await fetch(`https://api.brevo.com/v3/contacts/lists?limit=50&offset=${offset}`, {
+      headers: { 'api-key': apiKey, Accept: 'application/json' },
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const listas = d.lists || [];
+    const match = listas.find(l => (l.name || '').trim().toLowerCase() === nombre.trim().toLowerCase());
+    if (match) return match.id;
+    if (listas.length < 50) break;
+    offset += 50;
+  }
+  return null;
 }
 
 export default async (req) => {
@@ -79,7 +104,13 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return json({ ok: false, error: 'JSON inválido' }, 400); }
   const { action } = body;
-  const listaId = process.env.BREVO_LIST_CLIENTES_ID || null;
+  // Lista destino para el flujo RGPD (doble opt-in): pendientes de confirmar.
+  // Prioridad: nombre configurable → por defecto "TEMP_PENDIENTE_CONFIRMAR" → ID directo.
+  const nombreLista = process.env.BREVO_LIST_CLIENTES_NOMBRE || 'TEMP_PENDIENTE_CONFIRMAR';
+  let listaId = process.env.BREVO_LIST_CLIENTES_ID || process.env.BREVO_LIST_DOI_ID || null;
+  if (!listaId) {
+    listaId = await idListaPorNombre(nombreLista, apiKey);
+  }
 
   try {
     if (action === 'sincronizar_cliente') {
@@ -103,7 +134,7 @@ export default async (req) => {
         if (res.sin_email) { sinEmail++; continue; }
         if (res.ok) subidos++; else errores++;
       }
-      return json({ ok: true, subidos, sin_email: sinEmail, errores, total: clientes.length });
+      return json({ ok: true, subidos, sin_email: sinEmail, errores, total: clientes.length, lista_id: listaId, lista_nombre: nombreLista, lista_encontrada: !!listaId });
     }
 
     return json({ ok: false, error: 'Acción desconocida' }, 400);

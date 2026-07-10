@@ -240,8 +240,8 @@ async function enviarCopiaInterna({ numeroOferta, cli, r, pdfBuf, url_pdf, url_p
 export default async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
-  const base = process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE;
+  const base = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
   if (!base || !key) return Response.json({ ok: false, error: 'Backend sin configurar' }, { status: 500 });
 
   let body;
