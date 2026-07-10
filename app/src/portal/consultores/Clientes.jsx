@@ -91,7 +91,14 @@ export default function Clientes() {
     try {
       const datos = { codigo: form.codigo, cif_matriz: form.cif_matriz || null, empresa: form.empresa, contacto: form.contacto, contacto_apellidos: form.contacto_apellidos || null, email: form.email, telefono: form.telefono, director_proyecto_id: form.director_proyecto_id || null, jefe_cuenta_id: form.jefe_cuenta_id || null };
       if (form.id) await updateRow('clientes', form.id, datos);
-      else { const nuevo = await insertRow('clientes', datos); if (nuevo?.id) setSel(nuevo.id); }
+      else {
+        // Evitar duplicar un cliente que ya exista con el mismo CIF.
+        const cifNorm = (s) => String(s || '').toUpperCase().replace(/[\s\-.]/g, '');
+        const cifForm = cifNorm(form.cif_matriz || form.cif);
+        const yaExiste = cifForm && clientes.find(c => cifNorm(c.cif_matriz) === cifForm || cifNorm(c.cif) === cifForm);
+        if (yaExiste) { await updateRow('clientes', yaExiste.id, datos); setSel(yaExiste.id); }
+        else { const nuevo = await insertRow('clientes', datos); if (nuevo?.id) setSel(nuevo.id); }
+      }
       // Sincronización automática con Brevo (no bloquea el guardado si falla).
       if (datos.email) {
         brevoFn({ action: 'sincronizar_cliente', cliente: datos })
@@ -206,8 +213,20 @@ export default function Clientes() {
       if (form.id) {
         await updateRow('clientes', form.id, datos);
       } else {
-        const nuevo = await insertRow('clientes', datos);
-        if (nuevo?.id) { setSel(String(nuevo.id)); setForm({ ...form, id: nuevo.id, holded_id: r.holded_id }); }
+        // Anti-duplicados: ¿ya existe un cliente con este CIF o este holded_id?
+        const cifNorm = (s) => String(s || '').toUpperCase().replace(/[\s\-.]/g, '');
+        const yaExiste = clientes.find(c =>
+          (r.holded_id && c.holded_id === r.holded_id) ||
+          (cif && cifNorm(c.cif_matriz) === cifNorm(cif)) ||
+          (cif && cifNorm(c.cif) === cifNorm(cif))
+        );
+        if (yaExiste) {
+          await updateRow('clientes', yaExiste.id, datos);
+          setSel(String(yaExiste.id)); setForm({ ...form, id: yaExiste.id, holded_id: r.holded_id });
+        } else {
+          const nuevo = await insertRow('clientes', datos);
+          if (nuevo?.id) { setSel(String(nuevo.id)); setForm({ ...form, id: nuevo.id, holded_id: r.holded_id }); }
+        }
       }
       cargar();
       const txt = r.accion === 'creado' ? 'Contacto creado en Holded y cliente guardado.' : 'Cliente vinculado, actualizado en Holded y guardado.';

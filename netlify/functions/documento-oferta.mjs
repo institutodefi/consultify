@@ -72,6 +72,18 @@ export async function generarPDFOferta(r, cli, anexo) {
   page.drawText(sub, { x: M, y, size: 11, font: bold, color: ORANGE_D }); y -= 30;
 
   // Tabla de datos (2 columnas de pares etiqueta/valor)
+  // Dibuja texto en una celda ajustando el tamaño de fuente para que quepa en anchoMax
+  // (en vez de cortarlo). Baja hasta 6pt; si aún no cabe, hace elipsis como último recurso.
+  const textoAjustado = (txt, x, yy, anchoMax, fnt, sizeIni, color) => {
+    let s = String(txt || '—'), size = sizeIni;
+    while (size > 6 && fnt.widthOfTextAtSize(s, size) > anchoMax) size -= 0.5;
+    if (fnt.widthOfTextAtSize(s, size) > anchoMax) {
+      while (s.length > 1 && fnt.widthOfTextAtSize(s + '…', size) > anchoMax) s = s.slice(0, -1);
+      s += '…';
+    }
+    page.drawText(s, { x, y: yy, size, font: fnt, color });
+  };
+
   const filasDatos = [
     ['Cliente', cli.empresa || '—', 'Nº oferta', cli.ref || '—'],
     ['CIF', cli.cif || '—', 'Fecha', HOY()],
@@ -86,9 +98,9 @@ export async function generarPDFOferta(r, cli, anexo) {
     if (i % 2 === 0) page.drawRectangle({ x: tableX, y: ry - rowH + 8, width: tableW, height: rowH, color: SOFT });
     const [l1, v1, l2, v2] = filasDatos[i];
     page.drawText(l1, { x: c1 + 6, y: ry - 9, size: 9, font: bold, color: NAVY });
-    page.drawText(String(v1).slice(0, 38), { x: c2, y: ry - 9, size: 9, font: reg, color: INK });
+    textoAjustado(v1, c2, ry - 9, c3 - c2 - 10, reg, 9, INK);
     page.drawText(l2, { x: c3 + 6, y: ry - 9, size: 9, font: bold, color: NAVY });
-    page.drawText(String(v2).slice(0, 26), { x: c4, y: ry - 9, size: 9, font: reg, color: INK });
+    textoAjustado(v2, c4, ry - 9, tableX + tableW - c4 - 6, reg, 9, INK);
   }
   y -= filasDatos.length * rowH + 20;
 
@@ -205,8 +217,15 @@ function tablaPlan(page, rows, M, y, W, bold, reg) {
     const [mes, bloques, per] = rows[i];
     if (i % 2 === 1) page.drawRectangle({ x: M, y: ry - 6, width: tableW, height: 24, color: rgb(0.953, 0.965, 0.984) });
     page.drawText(mes, { x: cMes + 6, y: ry + 2, size: 9, font: bold, color: NAVY });
-    const bl = bloques.length > 70 ? bloques.slice(0, 68) + '…' : bloques;
-    page.drawText(bl, { x: cBloq, y: ry + 2, size: 8.5, font: reg, color: rgb(0.047, 0.078, 0.141) });
+    // Ajustar el tamaño de fuente para que los bloques quepan sin cortarse.
+    const anchoBloq = cPer - cBloq - 8;
+    let sBloq = String(bloques), szBloq = 8.5;
+    while (szBloq > 6 && reg.widthOfTextAtSize(sBloq, szBloq) > anchoBloq) szBloq -= 0.5;
+    if (reg.widthOfTextAtSize(sBloq, szBloq) > anchoBloq) {
+      while (sBloq.length > 1 && reg.widthOfTextAtSize(sBloq + '…', szBloq) > anchoBloq) sBloq = sBloq.slice(0, -1);
+      sBloq += '…';
+    }
+    page.drawText(sBloq, { x: cBloq, y: ry + 2, size: szBloq, font: reg, color: rgb(0.047, 0.078, 0.141) });
     page.drawText(per, { x: cPer, y: ry + 2, size: 8.5, font: reg, color: rgb(0.357, 0.42, 0.525) });
     ry -= 26;
   }
