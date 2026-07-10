@@ -195,6 +195,39 @@ async function subir(base, key, ruta, buffer, contentType) {
 const COPIA_INTERNA = process.env.OFERTA_COPIA_EMAIL || 'hola@tuconsultor.com';
 const REMITENTE = process.env.BREVO_SENDER_EMAIL || 'hola@consultify.pro';
 
+// Envía la oferta AL CLIENTE (a su email), con el PDF adjunto y un mensaje de presentación.
+async function enviarAlCliente({ numeroOferta, cli, r, pdfBuf, url_pdf, email }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey || !email) return { ok: false, motivo: !apiKey ? 'sin BREVO_API_KEY' : 'sin email' };
+
+  const normNames = r.normas.map((id) => NORMA_BY_ID[id].nombre).join(' + ');
+  const saludo = cli.contacto ? `Hola ${cli.contacto.split(' ')[0]},` : 'Hola,';
+  const html = `
+    <div style="font-family:Arial,sans-serif;color:#0C1424;font-size:15px;line-height:1.7">
+      <p>${saludo}</p>
+      <p>Te enviamos la oferta que has solicitado para <strong>${normNames}</strong>. Encontrarás todos los detalles en el PDF adjunto.</p>
+      <p>Si tienes cualquier duda o quieres que la comentemos, respóndenos a este correo o escríbenos a <a href="mailto:hola@tuconsultor.com" style="color:#F5A623;font-weight:bold">hola@tuconsultor.com</a>. Estaremos encantados de ayudarte.</p>
+      <p style="margin-top:20px">Un saludo,<br><strong>${cli.comercial || 'El equipo de TuConsultor'}</strong><br>Consultify · TuConsultor</p>
+      <p style="color:#8896AD;font-size:12px;margin-top:20px">Instituto de Excelencia Europea S.L. · CIF B87093076 · Madrid<br>Desde 2006 gestionando con el corazón.</p>
+    </div>`;
+
+  const payload = {
+    sender: { name: 'TuConsultor · Consultify', email: REMITENTE },
+    to: [{ email, name: cli.contacto || cli.empresa || 'Cliente' }],
+    replyTo: { email: 'hola@tuconsultor.com', name: 'TuConsultor' },
+    subject: `Tu oferta ${numeroOferta} · ${normNames}`,
+    htmlContent: html,
+    attachment: [{ name: `Oferta_${numeroOferta}.pdf`, content: Buffer.from(pdfBuf).toString('base64') }],
+  };
+  const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (resp.ok) return { ok: true };
+  return { ok: false, motivo: `Brevo HTTP ${resp.status}` };
+}
+
 async function enviarCopiaInterna({ numeroOferta, cli, r, pdfBuf, url_pdf, url_pptx, email }) {
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) return; // sin clave, no se envía (no es bloqueante)
@@ -247,7 +280,7 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
 
-  const { normas = [], modelo = '', empresa = '', cif = '', contacto = '', cargo = '', ref = '', comercial = 'Alejandro', presupuesto_id, email = '', meses, tiene9001 = false, direccion = '' } = body;
+  const { normas = [], modelo = '', empresa = '', cif = '', contacto = '', cargo = '', ref = '', comercial = 'Alejandro', presupuesto_id, email = '', meses, tiene9001 = false, direccion = '', enviar_cliente = false } = body;
   const r = calcular(normas, modelo, { meses, tiene9001 });
   if (!r) return Response.json({ ok: false, error: 'Normas o modelo no válidos' }, { status: 400 });
   // Enriquecer el resultado con nombres de norma y meses para el documento.
@@ -296,7 +329,13 @@ export default async (req) => {
     // con el PDF adjunto. No bloquea la respuesta si falla.
     await enviarCopiaInterna({ numeroOferta, cli, r, pdfBuf, url_pdf, url_pptx, email }).catch(() => {});
 
-    return Response.json({ ok: true, url_pdf, url_pptx, numero_oferta: numeroOferta, precio: r.precioCatalogo, tipo: r.tipo });
+    // Envío AL CLIENTE (solo si se solicita explícitamente y hay email).
+    let envio_cliente = null;
+    if (enviar_cliente) {
+      envio_cliente = await enviarAlCliente({ numeroOferta, cli, r, pdfBuf, url_pdf, email }).catch((e) => ({ ok: false, motivo: String(e) }));
+    }
+
+    return Response.json({ ok: true, url_pdf, url_pptx, numero_oferta: numeroOferta, precio: r.precioCatalogo, tipo: r.tipo, envio_cliente });
   } catch (e) {
     return Response.json({ ok: false, error: String(e.message || e) }, { status: 502 });
   }

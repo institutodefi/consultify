@@ -10,23 +10,42 @@ export default function Ofertas() {
 
   useEffect(() => { listAll('presupuestos', 'creado').then(setRows).catch(() => setRows([])); }, []);
 
-  async function generar(r) {
-    setGenId(r.id);
+  const [msg, setMsg] = useState(null);
+
+  async function generar(r, enviarCliente = false) {
+    setGenId(r.id); setMsg(null);
     try {
       const resp = await fetch('/.netlify/functions/generar-oferta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          normas: r.normas, modelo: r.modelo,
+          normas: r.normas, modelo: r.modelo, meses: r.meses,
           empresa: r.empresa || '', contacto: r.nombre || '', cif: r.cif || '', cargo: r.cargo || '',
           ref: r.numero_oferta || '', comercial: r.comercial || 'Alejandro',
           email: r.email || '', presupuesto_id: r.id,
+          enviar_cliente: enviarCliente,
         }),
       });
-      const j = await resp.json();
-      if (j.ok) setRows(rs => rs.map(x => x.id === r.id ? { ...x, url_pdf: j.url_pdf, url_pptx: j.url_pptx, numero_oferta: j.numero_oferta || x.numero_oferta } : x));
-    } catch { /* sin bloquear */ }
+      let j = null; try { j = await resp.json(); } catch { j = null; }
+      if (j && j.ok) {
+        setRows(rs => rs.map(x => x.id === r.id ? { ...x, url_pdf: j.url_pdf, url_pptx: j.url_pptx, numero_oferta: j.numero_oferta || x.numero_oferta } : x));
+        if (enviarCliente) {
+          if (j.envio_cliente?.ok) setMsg(`✓ Oferta ${j.numero_oferta || r.numero_oferta} enviada a ${r.email}.`);
+          else setMsg(`Oferta regenerada, pero no se pudo enviar al cliente (${j.envio_cliente?.motivo || 'sin email'}).`);
+        } else {
+          setMsg(`✓ Oferta ${j.numero_oferta || r.numero_oferta} regenerada.`);
+        }
+      } else {
+        setMsg(`No se pudo ${enviarCliente ? 'enviar' : 'regenerar'} la oferta (${j?.error || `código ${resp.status}`}).`);
+      }
+    } catch (e) { setMsg('Error de conexión al generar la oferta.'); }
     setGenId(null);
+  }
+
+  async function enviar(r) {
+    if (!r.email) { setMsg('Esta oferta no tiene email de cliente; edítala o regénérala con email.'); return; }
+    if (!window.confirm(`¿Enviar la oferta ${r.numero_oferta || ''} a ${r.email}?`)) return;
+    await generar(r, true);
   }
 
   if (!rows) return <p className="font-semibold text-navy-400">Cargando ofertas…</p>;
@@ -45,6 +64,8 @@ export default function Ofertas() {
         </div>
         <input className="input max-w-xs" placeholder="Buscar nº, cliente, comercial…" value={q} onChange={e => setQ(e.target.value)} />
       </div>
+
+      {msg && <div className="mb-4 rounded-xl bg-navy-50 px-4 py-2.5 text-sm font-bold text-navy-700">{msg}</div>}
 
       {!lista.length ? (
         <div className="card text-center"><p className="font-extrabold">Sin ofertas{filtro ? ' para esa búsqueda' : ' todavía'}</p></div>
@@ -68,15 +89,19 @@ export default function Ofertas() {
                   <td className="py-2.5 text-right font-extrabold">{fmtEUR(r.precio)}{r.tipo === 'mes' ? '/mes' : ''}</td>
                   <td className="py-2.5 text-right whitespace-nowrap">
                     {(r.url_pdf || r.url_pptx) ? (
-                      <span className="inline-flex gap-2">
+                      <span className="inline-flex gap-2 items-center">
                         {r.url_pdf && <a href={r.url_pdf} target="_blank" rel="noreferrer" className="font-bold text-brand-orangeDark hover:underline">PDF</a>}
                         {r.url_pptx && <a href={r.url_pptx} target="_blank" rel="noreferrer" className="font-bold text-brand-orangeDark hover:underline">PPT</a>}
-                        <button onClick={() => generar(r)} disabled={genId === r.id} className="text-xs font-semibold text-navy-400 hover:underline disabled:opacity-50">{genId === r.id ? '…' : '↻'}</button>
+                        <button onClick={() => generar(r)} disabled={genId === r.id} className="text-xs font-semibold text-navy-400 hover:underline disabled:opacity-50" title="Regenerar documento">{genId === r.id ? '…' : '↻'}</button>
+                        <button onClick={() => enviar(r)} disabled={genId === r.id || !r.email} className="text-xs font-bold text-brand-orangeDark hover:underline disabled:opacity-40" title={r.email ? `Enviar a ${r.email}` : 'Sin email de cliente'}>✉ Enviar</button>
                       </span>
                     ) : (
-                      <button onClick={() => generar(r)} disabled={genId === r.id} className="text-xs font-bold text-navy-700 hover:underline disabled:opacity-50">
-                        {genId === r.id ? 'Generando…' : 'Generar'}
-                      </button>
+                      <span className="inline-flex gap-2 items-center">
+                        <button onClick={() => generar(r)} disabled={genId === r.id} className="text-xs font-bold text-navy-700 hover:underline disabled:opacity-50">
+                          {genId === r.id ? 'Generando…' : 'Generar'}
+                        </button>
+                        {r.email && <button onClick={() => enviar(r)} disabled={genId === r.id} className="text-xs font-bold text-brand-orangeDark hover:underline disabled:opacity-40" title={`Generar y enviar a ${r.email}`}>✉ Generar y enviar</button>}
+                      </span>
                     )}
                   </td>
                 </tr>
