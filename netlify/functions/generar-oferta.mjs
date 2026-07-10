@@ -280,6 +280,26 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
 
+  // ── ETAPA 2 · ENVIAR una oferta YA generada (sin regenerar) ──────────────
+  // Descarga el PDF guardado (url_pdf) y lo envía al cliente por email.
+  if (body.action === 'enviar_existente') {
+    const { url_pdf, email, empresa = '', contacto = '', comercial = 'Alejandro', numero_oferta = '', normas = [] } = body;
+    if (!email) return Response.json({ ok: false, error: 'La oferta no tiene email de cliente.' }, { status: 400 });
+    if (!url_pdf) return Response.json({ ok: false, error: 'La oferta no tiene PDF generado. Genérala primero.' }, { status: 400 });
+    try {
+      const pr = await fetch(url_pdf);
+      if (!pr.ok) return Response.json({ ok: false, error: 'No se pudo descargar el PDF guardado.' }, { status: 502 });
+      const pdfBuf = new Uint8Array(await pr.arrayBuffer());
+      const cli = { empresa, contacto, comercial, email };
+      const rInfo = { normas };
+      const env = await enviarAlCliente({ numeroOferta: numero_oferta, cli, r: rInfo, pdfBuf, url_pdf, email });
+      if (env.ok) return Response.json({ ok: true, enviado: true, email });
+      return Response.json({ ok: false, error: `No se pudo enviar: ${env.motivo || 'error'}` }, { status: 502 });
+    } catch (e) {
+      return Response.json({ ok: false, error: String(e?.message || e) }, { status: 500 });
+    }
+  }
+
   const { normas = [], modelo = '', empresa = '', cif = '', contacto = '', cargo = '', ref = '', comercial = 'Alejandro', presupuesto_id, email = '', meses, tiene9001 = false, direccion = '', enviar_cliente = false } = body;
   const r = calcular(normas, modelo, { meses, tiene9001 });
   if (!r) return Response.json({ ok: false, error: 'Normas o modelo no válidos' }, { status: 400 });
