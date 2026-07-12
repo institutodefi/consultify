@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
-import { listAll, updateRow } from '../../lib/data.js';
+import { listAll, updateRow, deleteRow } from '../../lib/data.js';
+import { useAuth } from '../../lib/auth.jsx';
 import { NORMA_BY_ID, NORMAS, fmtEUR } from '../../lib/calcEngine.js';
 
 // Histórico interno de ofertas (todas las del equipo).
 export default function Ofertas() {
+  const { role } = useAuth();
+  const puedeBorrar = role === 'superadmin' || role === 'admin'; // solo administradores
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState('');
   const [genId, setGenId] = useState(null);
@@ -57,6 +60,22 @@ export default function Ofertas() {
       if (j && j.ok) setMsg(`✓ Oferta ${r.numero_oferta || ''} enviada a ${r.email}.`);
       else setMsg(`No se pudo enviar (${j?.error || `código ${resp.status}`}).`);
     } catch (e) { setMsg('Error de conexión al enviar.'); }
+    setGenId(null);
+  }
+
+  // Borrar una oferta (solo administradores). Acción irreversible → doble confirmación.
+  async function borrar(r) {
+    if (!puedeBorrar) return;
+    const etiqueta = `${r.numero_oferta || 'sin nº'} · ${r.empresa || 'sin empresa'}`;
+    if (!window.confirm(`¿Eliminar definitivamente la oferta ${etiqueta}?\n\nEsta acción no se puede deshacer.`)) return;
+    setGenId(r.id); setMsg(null);
+    try {
+      await deleteRow('presupuestos', r.id);
+      setRows(rs => rs.filter(x => x.id !== r.id));
+      setMsg(`Oferta ${etiqueta} eliminada.`);
+    } catch (e) {
+      setMsg(`No se pudo eliminar la oferta: ${e?.message || e}`);
+    }
     setGenId(null);
   }
 
@@ -142,6 +161,11 @@ export default function Ofertas() {
                       <button onClick={() => generar(r)} disabled={genId === r.id} className="text-xs font-bold text-navy-700 hover:underline disabled:opacity-50">
                         {genId === r.id ? 'Generando…' : 'Generar'}
                       </button>
+                    )}
+                    {puedeBorrar && (
+                      <button onClick={() => borrar(r)} disabled={genId === r.id}
+                        className="ml-2 text-xs font-bold text-red-500 hover:text-red-700 hover:underline disabled:opacity-40"
+                        title="Eliminar oferta (solo administradores)">🗑</button>
                     )}
                   </td>
                 </tr>
