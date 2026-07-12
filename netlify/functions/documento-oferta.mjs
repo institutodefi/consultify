@@ -46,7 +46,17 @@ export async function generarPDFOferta(r, cli, anexo) {
   };
   const cabecera = () => {
     page.drawText('Consultify', { x: M, y: H - 48, size: 18, font: bold, color: NAVY });
-    page.drawText(cli.empresa || '—', { x: W - M - bold.widthOfTextAtSize(cli.empresa || '—', 11), y: H - 46, size: 11, font: bold, color: NAVY });
+    // Nombre de empresa alineado a la derecha, SIN invadir el logo: se reduce el
+    // tamaño y, si aún no cabe, se trunca con elipsis. Antes se salía de la página.
+    const xLogoFin = M + bold.widthOfTextAtSize('Consultify', 18) + 16;
+    const anchoMax = (W - M) - xLogoFin;
+    let txt = String(cli.empresa || '—'), size = 11;
+    while (size > 6.5 && bold.widthOfTextAtSize(txt, size) > anchoMax) size -= 0.5;
+    if (bold.widthOfTextAtSize(txt, size) > anchoMax) {
+      while (txt.length > 1 && bold.widthOfTextAtSize(txt + '…', size) > anchoMax) txt = txt.slice(0, -1);
+      txt += '…';
+    }
+    page.drawText(txt, { x: W - M - bold.widthOfTextAtSize(txt, size), y: H - 46, size, font: bold, color: NAVY });
     page.drawRectangle({ x: M, y: H - 62, width: W - 2 * M, height: 2.5, color: ORANGE });
   };
   const pie = (num) => {
@@ -84,23 +94,33 @@ export async function generarPDFOferta(r, cli, anexo) {
     page.drawText(s, { x, y: yy, size, font: fnt, color });
   };
 
+  // La fila 'Cliente' ocupa TODO el ancho (los nombres de empresa suelen ser largos);
+  // el resto van en dos columnas. Marcamos con `ancha: true` la que se extiende.
   const filasDatos = [
-    ['Cliente', cli.empresa || '—', 'Nº oferta', cli.ref || '—'],
-    ['CIF', cli.cif || '—', 'Fecha', HOY()],
-    ['Dirección', cli.direccion || '—', 'Validez', '30 días naturales'],
-    ['Normas', normNames, 'Contacto', cli.contacto || cli.email || '—'],
-    ['Modelo', r.modelo + (esImpl ? ' · Programa completo' : ''), 'Comercial', cli.comercial || 'Alejandro'],
+    { l1: 'Cliente', v1: cli.empresa || '—', ancha: true },
+    { l1: 'CIF', v1: cli.cif || '—', l2: 'Nº oferta', v2: cli.ref || '—' },
+    { l1: 'Dirección', v1: cli.direccion || '—', l2: 'Fecha', v2: HOY() },
+    { l1: 'Normas', v1: normNames, l2: 'Validez', v2: '30 días naturales' },
+    { l1: 'Modelo', v1: r.modelo + (esImpl ? ' · Programa completo' : ''), l2: 'Contacto', v2: cli.contacto || cli.email || '—' },
+    { l1: 'Comercial', v1: cli.comercial || 'Alejandro', l2: '', v2: '' },
   ];
   const rowH = 26, tableX = M, tableW = W - 2 * M;
   const c1 = tableX, c2 = tableX + 80, c3 = tableX + tableW / 2, c4 = c3 + 80;
   for (let i = 0; i < filasDatos.length; i++) {
     const ry = y - i * rowH;
     if (i % 2 === 0) page.drawRectangle({ x: tableX, y: ry - rowH + 8, width: tableW, height: rowH, color: SOFT });
-    const [l1, v1, l2, v2] = filasDatos[i];
-    page.drawText(l1, { x: c1 + 6, y: ry - 9, size: 9, font: bold, color: NAVY });
-    textoAjustado(v1, c2, ry - 9, c3 - c2 - 10, reg, 9, INK);
-    page.drawText(l2, { x: c3 + 6, y: ry - 9, size: 9, font: bold, color: NAVY });
-    textoAjustado(v2, c4, ry - 9, tableX + tableW - c4 - 6, reg, 9, INK);
+    const f = filasDatos[i];
+    page.drawText(f.l1, { x: c1 + 6, y: ry - 9, size: 9, font: bold, color: NAVY });
+    if (f.ancha) {
+      // Fila a todo el ancho: el valor dispone de toda la tabla (nombres largos).
+      textoAjustado(f.v1, c2, ry - 9, tableX + tableW - c2 - 6, reg, 9, INK);
+    } else {
+      textoAjustado(f.v1, c2, ry - 9, c3 - c2 - 10, reg, 9, INK);
+      if (f.l2) {
+        page.drawText(f.l2, { x: c3 + 6, y: ry - 9, size: 9, font: bold, color: NAVY });
+        textoAjustado(f.v2, c4, ry - 9, tableX + tableW - c4 - 6, reg, 9, INK);
+      }
+    }
   }
   y -= filasDatos.length * rowH + 20;
 
@@ -174,7 +194,18 @@ export async function generarPDFOferta(r, cli, anexo) {
   // Firma
   espacio(70);
   page.drawText('Por Consultify (una empresa de TuConsultor)', { x: M, y, size: 9, font: bold, color: NAVY });
-  page.drawText(`Por ${cli.empresa || '—'}`, { x: c3, y, size: 9, font: bold, color: NAVY }); y -= 40;
+  // "Por [empresa]" ajustado al ancho de su columna (antes se desbordaba).
+  {
+    const anchoCol = (W - M) - c3;
+    let t = `Por ${cli.empresa || '—'}`, sz = 9;
+    while (sz > 6 && bold.widthOfTextAtSize(t, sz) > anchoCol) sz -= 0.5;
+    if (bold.widthOfTextAtSize(t, sz) > anchoCol) {
+      while (t.length > 1 && bold.widthOfTextAtSize(t + '…', sz) > anchoCol) t = t.slice(0, -1);
+      t += '…';
+    }
+    page.drawText(t, { x: c3, y, size: sz, font: bold, color: NAVY });
+  }
+  y -= 40;
   page.drawLine({ start: { x: M, y }, end: { x: M + 180, y }, thickness: 0.7, color: MUTED });
   page.drawLine({ start: { x: c3, y }, end: { x: c3 + 180, y }, thickness: 0.7, color: MUTED }); y -= 12;
   page.drawText('Firma y fecha', { x: M, y, size: 8, font: reg, color: MUTED });
