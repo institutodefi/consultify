@@ -260,11 +260,11 @@ export async function generarPDFOferta(r, cli, anexo) {
   }
   y -= 14;
 
-  // 4. Presupuesto
-  espacio(160);
-  h2('4. Presupuesto');
-  presupuesto(page, r, esImpl, esMes, M, y, W, bold, reg);
-  y -= (esImpl ? 7 : 4) * 24 + 24;
+  // 4. Inversión — en su propia página, con protagonismo.
+  nuevaPagina();
+  page.drawText('4. Inversión', { x: M, y, size: 18, font: bold, color: NAVY }); y -= 20;
+  page.drawText(`${normNames} · Modelo ${r.modelo}`, { x: M, y, size: 9.5, font: bold, color: ORANGE_D }); y -= 26;
+  y = presupuesto(page, r, esImpl, esMes, M, y, W, bold, reg, wrap);
 
   // 5. Condiciones
   espacio(160);
@@ -490,33 +490,147 @@ function tablaPlan(page, rows, M, y, W, bold, reg) {
 }
 
 // ---- tabla de presupuesto ----
-function presupuesto(page, r, esImpl, esMes, M, y, W, bold, reg) {
-  const tableW = W - 2 * M, cCon = M, cImp = W - M - 110;
+// Página de inversión (precios) con diseño destacado: cifra protagonista,
+// desglose limpio y plan de pago visual.
+function presupuesto(page, r, esImpl, esMes, M, y, W, bold, reg, wrap) {
+  const tableW = W - 2 * M;
   const eur = (v) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + ' €';
-  const rows = [];
+  const BLANCO = rgb(1, 1, 1);
+  const AZUL_CLARO = rgb(0.62, 0.71, 0.88);
+
+  // ---------- PANEL PROTAGONISTA: la cifra grande ----------
+  const panelH = 108;
+  const panelY = y - panelH + 14;
+  page.drawRectangle({ x: M, y: panelY, width: tableW, height: panelH, color: NAVY });
+  page.drawRectangle({ x: M, y: panelY + panelH - 4, width: tableW, height: 4, color: ORANGE });
+
+  // Cifra principal según el modelo
+  const cifra = esImpl && r.fraccionado ? eur(r.fraccionado.totalConIva) : eur(r.totalConIva);
+  const etiquetaCifra = esImpl ? 'INVERSIÓN TOTAL DEL PROGRAMA'
+    : (esMes ? 'CUOTA MENSUAL' : 'INVERSIÓN TOTAL');
+  const sufijo = esMes && !esImpl ? '/mes' : '';
+
+  page.drawText(etiquetaCifra, { x: M + 22, y: panelY + panelH - 32, size: 8, font: bold, color: ORANGE });
+
+  const tamCifra = 34;
+  page.drawText(cifra, { x: M + 22, y: panelY + panelH - 72, size: tamCifra, font: bold, color: BLANCO });
+  if (sufijo) {
+    const wc = bold.widthOfTextAtSize(cifra, tamCifra);
+    page.drawText(sufijo, { x: M + 22 + wc + 6, y: panelY + panelH - 66, size: 13, font: reg, color: AZUL_CLARO });
+  }
+  page.drawText('IVA incluido', { x: M + 22, y: panelY + panelH - 88, size: 8.5, font: reg, color: AZUL_CLARO });
+
+  // Dato secundario a la derecha del panel
+  const derX = M + tableW - 165;
   if (esImpl && r.fraccionado) {
-    rows.push(['Programa completo de implantación', eur(r.fraccionado.totalSinIva), false]);
-    rows.push(['IVA (21%)', eur(r.fraccionado.totalConIva - r.fraccionado.totalSinIva), false]);
-    rows.push(['TOTAL DEL PROGRAMA (IVA incl.)', eur(r.fraccionado.totalConIva), true]);
-    rows.push(['1.ª cuota — 50% al inicio', eur(r.fraccionado.cuota1), false]);
-    rows.push(['2.ª cuota — 25% a mitad', eur(r.fraccionado.cuota2), false]);
-    rows.push(['3.ª cuota — 25% final', eur(r.fraccionado.cuota3), false]);
+    page.drawText('DURACIÓN', { x: derX, y: panelY + panelH - 32, size: 7.5, font: bold, color: ORANGE });
+    page.drawText(`${r.fraccionado.meses} meses`, { x: derX, y: panelY + panelH - 52, size: 15, font: bold, color: BLANCO });
+    page.drawText('EQUIVALE A', { x: derX, y: panelY + panelH - 72, size: 7.5, font: bold, color: ORANGE });
+    const mensual = r.fraccionado.totalConIva / r.fraccionado.meses;
+    page.drawText(`${eur(mensual)}/mes`, { x: derX, y: panelY + panelH - 88, size: 10.5, font: bold, color: AZUL_CLARO });
+  } else if (esMes) {
+    page.drawText('COMPROMISO', { x: derX, y: panelY + panelH - 32, size: 7.5, font: bold, color: ORANGE });
+    page.drawText('12 meses', { x: derX, y: panelY + panelH - 52, size: 15, font: bold, color: BLANCO });
+    page.drawText('ANUAL EQUIVALENTE', { x: derX, y: panelY + panelH - 72, size: 7.5, font: bold, color: ORANGE });
+    page.drawText(eur(r.totalConIva * 12), { x: derX, y: panelY + panelH - 88, size: 10.5, font: bold, color: AZUL_CLARO });
   } else {
-    rows.push([esMes ? 'Cuota mensual (base)' : 'Bolsa de horas (base)', eur(r.precioCatalogo) + (esMes ? '/mes' : ''), false]);
-    rows.push(['IVA (21%)', eur(r.iva), false]);
-    rows.push([esMes ? 'TOTAL MENSUAL (IVA incl.)' : 'TOTAL (IVA incl.)', eur(r.totalConIva) + (esMes ? '/mes' : ''), true]);
+    page.drawText('MODALIDAD', { x: derX, y: panelY + panelH - 32, size: 7.5, font: bold, color: ORANGE });
+    page.drawText('Pago único', { x: derX, y: panelY + panelH - 52, size: 15, font: bold, color: BLANCO });
+    page.drawText('BOLSA DE HORAS', { x: derX, y: panelY + panelH - 72, size: 7.5, font: bold, color: ORANGE });
+    page.drawText(`${r.hTotal} horas`, { x: derX, y: panelY + panelH - 88, size: 10.5, font: bold, color: AZUL_CLARO });
   }
-  // cabecera
-  page.drawRectangle({ x: M, y: y - 4, width: tableW, height: 22, color: NAVY });
-  page.drawText('Concepto', { x: cCon + 6, y: y + 3, size: 9, font: bold, color: rgb(1, 1, 1) });
-  page.drawText('Importe', { x: cImp, y: y + 3, size: 9, font: bold, color: rgb(1, 1, 1) });
-  let ry = y - 24;
-  for (const [con, imp, destacado] of rows) {
-    if (destacado) page.drawRectangle({ x: M, y: ry - 6, width: tableW, height: 24, color: rgb(0.961, 0.651, 0.137) });
-    else page.drawRectangle({ x: M, y: ry - 6, width: tableW, height: 24, color: rgb(0.953, 0.965, 0.984) });
-    page.drawText(con, { x: cCon + 6, y: ry + 2, size: 9, font: destacado ? bold : reg, color: destacado ? rgb(1, 1, 1) : rgb(0.047, 0.078, 0.141) });
-    const impFont = bold, impColor = destacado ? rgb(1, 1, 1) : NAVY;
-    page.drawText(imp, { x: W - M - 6 - impFont.widthOfTextAtSize(imp, 9), y: ry + 2, size: 9, font: impFont, color: impColor });
-    ry -= 26;
+
+  // ---------- DESGLOSE ----------
+  let ry = panelY - 26;
+  page.drawText('DESGLOSE', { x: M, y: ry, size: 8, font: bold, color: MUTED });
+  page.drawRectangle({ x: M + 62, y: ry + 3, width: tableW - 62, height: 0.6, color: rgb(0.88, 0.90, 0.94) });
+  ry -= 20;
+
+  const base = esImpl && r.fraccionado ? r.fraccionado.totalSinIva : r.precioCatalogo;
+  const ivaImp = esImpl && r.fraccionado ? (r.fraccionado.totalConIva - r.fraccionado.totalSinIva) : r.iva;
+  const totalImp = esImpl && r.fraccionado ? r.fraccionado.totalConIva : r.totalConIva;
+  const sufBase = esMes && !esImpl ? '/mes' : '';
+
+  const filas = [
+    [esImpl ? 'Programa completo de implantación' : (esMes ? 'Cuota mensual (base imponible)' : 'Bolsa de horas (base imponible)'), eur(base) + sufBase, false],
+    ['IVA (21%)', eur(ivaImp), false],
+    [esImpl ? 'TOTAL DEL PROGRAMA' : (esMes ? 'TOTAL MENSUAL' : 'TOTAL'), eur(totalImp) + sufBase, true],
+  ];
+  for (const [con, imp, destacado] of filas) {
+    if (destacado) {
+      page.drawRectangle({ x: M, y: ry - 7, width: tableW, height: 26, color: SOFT });
+      page.drawRectangle({ x: M, y: ry - 7, width: 3, height: 26, color: ORANGE });
+    }
+    page.drawText(con, { x: M + (destacado ? 12 : 2), y: ry, size: destacado ? 10 : 9.5, font: destacado ? bold : reg, color: destacado ? NAVY : INK });
+    const f = bold, sz = destacado ? 11 : 9.5;
+    page.drawText(imp, { x: W - M - 4 - f.widthOfTextAtSize(imp, sz), y: ry, size: sz, font: f, color: destacado ? NAVY : INK });
+    if (!destacado) page.drawRectangle({ x: M, y: ry - 8, width: tableW, height: 0.5, color: rgb(0.91, 0.93, 0.96) });
+    ry -= destacado ? 34 : 24;
   }
+
+  // ---------- PLAN DE PAGO (visual) ----------
+  ry -= 8;
+  page.drawText('PLAN DE PAGO', { x: M, y: ry, size: 8, font: bold, color: MUTED });
+  page.drawRectangle({ x: M + 76, y: ry + 3, width: tableW - 76, height: 0.6, color: rgb(0.88, 0.90, 0.94) });
+  ry -= 24;
+
+  if (esImpl && r.fraccionado) {
+    // Tres hitos en columnas
+    const hitos = [
+      ['50%', 'Al inicio', eur(r.fraccionado.cuota1)],
+      ['25%', 'A mitad del proyecto', eur(r.fraccionado.cuota2)],
+      ['25%', 'Al finalizar', eur(r.fraccionado.cuota3)],
+    ];
+    const colW = tableW / 3;
+    hitos.forEach(([pct, cuando, imp], i) => {
+      const cx = M + i * colW;
+      page.drawRectangle({ x: cx + 2, y: ry - 44, width: colW - 8, height: 56, color: SOFT });
+      page.drawRectangle({ x: cx + 2, y: ry + 10, width: colW - 8, height: 2.5, color: ORANGE });
+      page.drawText(pct, { x: cx + 12, y: ry - 8, size: 17, font: bold, color: NAVY });
+      page.drawText(cuando, { x: cx + 12, y: ry - 24, size: 7.5, font: reg, color: MUTED });
+      page.drawText(imp, { x: cx + 12, y: ry - 39, size: 10, font: bold, color: ORANGE_D });
+    });
+    ry -= 56;
+  } else {
+    const texto = esMes
+      ? 'Cuota mensual recurrente, domiciliada o por transferencia. Permanencia mínima de 12 meses.'
+      : 'Pago único del 100% al inicio del proyecto (bolsa de horas prepagada).';
+    page.drawRectangle({ x: M, y: ry - 22, width: tableW, height: 34, color: SOFT });
+    page.drawRectangle({ x: M, y: ry - 22, width: 3, height: 34, color: ORANGE });
+    for (const ln of wrap(texto, reg, 9, tableW - 24)) {
+      page.drawText(ln, { x: M + 14, y: ry - 2, size: 9, font: reg, color: INK });
+      ry -= 12;
+    }
+    ry -= 20;
+  }
+
+  // ---------- QUÉ INCLUYE ----------
+  ry -= 14;
+  page.drawText('INCLUIDO EN EL PRECIO', { x: M, y: ry, size: 8, font: bold, color: MUTED });
+  page.drawRectangle({ x: M + 118, y: ry + 3, width: tableW - 118, height: 0.6, color: rgb(0.88, 0.90, 0.94) });
+  ry -= 20;
+
+  const incluye = [
+    'Documentación completa del sistema',
+    'Formación al equipo',
+    'Auditoría interna',
+    'Acompañamiento a la certificación',
+  ];
+  const colW2 = tableW / 2;
+  incluye.forEach((it, i) => {
+    const cx = M + (i % 2) * colW2;
+    const cy = ry - Math.floor(i / 2) * 18;
+    // Marca de verificación dibujada (la fuente estándar no admite el carácter ✓).
+    page.drawCircle({ x: cx + 4, y: cy + 3, size: 4.5, color: ORANGE });
+    page.drawLine({ start: { x: cx + 2, y: cy + 3 }, end: { x: cx + 3.5, y: cy + 1.4 }, thickness: 1.1, color: rgb(1, 1, 1) });
+    page.drawLine({ start: { x: cx + 3.5, y: cy + 1.4 }, end: { x: cx + 6.3, y: cy + 5.4 }, thickness: 1.1, color: rgb(1, 1, 1) });
+    page.drawText(it, { x: cx + 15, y: cy, size: 9, font: reg, color: INK });
+  });
+  ry -= 40;
+
+  // Nota final
+  page.drawText('No incluye tasas de la entidad certificadora ni acompañamiento presencial a la auditoría externa (600 €/jornada).',
+    { x: M, y: ry, size: 7.5, font: reg, color: MUTED });
+
+  return ry - 10; // devuelve la Y final para que el llamador continúe
 }

@@ -45,6 +45,17 @@ function tareasPorBloque(normaIds, modeloId) {
 }
 
 // ======================= MOTOR (réplica de calcEngine.js) =======================
+// ⚠️ IMPORTANTE · MOTOR DE CÁLCULO DUPLICADO
+// Este archivo replica el motor de app/src/lib/calcEngine.js (NORMAS, MODELOS,
+// TARIFA, MARGEN, IVA y la función calcular). Está duplicado porque las funciones
+// de Netlify se empaquetan aparte del front y no comparten el bundle.
+//
+// >>> SI CAMBIAS UN PRECIO, TARIFA, MARGEN O FÓRMULA EN calcEngine.js,
+// >>> TIENES QUE REPLICARLO AQUÍ, O EL PDF MOSTRARÁ UN PRECIO DISTINTO
+// >>> AL QUE EL CLIENTE VIO EN EL SIMULADOR.
+//
+// Verificado (v135): 3.770 combinaciones de normas × modelos comparadas entre
+// ambos motores → 0 diferencias en precio, IVA, total y fraccionamiento.
 const NORMAS = [
   { id: '9001', nombre: 'ISO 9001', desc: 'Gestión de la calidad', nivel: 'J3', hApoyo: 34 },
   { id: '14001', nombre: 'ISO 14001', desc: 'Gestión ambiental', nivel: 'J3', hApoyo: 46 },
@@ -146,28 +157,69 @@ async function generarPPTX(r, cli, anexo) {
     : `Consultoría para el sistema de gestión ${normNames}, en modelo ${r.modelo}.`;
   s.addText(objeto, { x: 0.6, y: 1.0, w: 9, h: 0.9, fontFace: 'Arial', fontSize: 12, color: INK, valign: 'top' });
 
-  const precioTxt = esImpl ? eur(r.fraccionado.totalConIva) : (esMes ? `${eur(r.totalConIva)}/mes` : eur(r.totalConIva));
-  s.addShape(p.ShapeType.roundRect, { x: 0.6, y: 2.0, w: 4.0, h: 1.4, fill: { color: SOFT }, line: { color: 'E3E9F2', width: 1 }, rectRadius: 0.08 });
-  s.addText([{ text: precioTxt, options: { fontSize: 26, bold: true, color: NAVY, breakLine: true } },
-    { text: esImpl ? 'Total programa (IVA incl.)' : (esMes ? 'Cuota mensual IVA incl.' : 'Total IVA incl.'), options: { fontSize: 12, color: MUTED } }], { x: 0.8, y: 2.25, w: 3.6, h: 1, fontFace: 'Arial' });
-
-  const rows = [[{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: { color: NAVY } } }, { text: 'Importe', options: { bold: true, color: 'FFFFFF', fill: { color: NAVY }, align: 'right' } }]];
-  const rr = (a, b, hl) => rows.push([{ text: a, options: { color: hl ? 'FFFFFF' : INK, bold: !!hl, fill: hl ? { color: ORANGE } : undefined } }, { text: b, options: { color: hl ? 'FFFFFF' : INK, bold: true, align: 'right', fill: hl ? { color: ORANGE } : undefined } }]);
-  if (esImpl) {
-    rr('Programa completo (sin IVA)', eur(r.fraccionado.totalSinIva));
-    rr('IVA (21%)', eur(r.fraccionado.totalConIva - r.fraccionado.totalSinIva));
-    rr('TOTAL (IVA incl.)', eur(r.fraccionado.totalConIva), true);
-    rr('1.ª cuota — 50% inicio', eur(r.fraccionado.cuota1));
-    rr('2.ª cuota — 25% mitad', eur(r.fraccionado.cuota2));
-    rr('3.ª cuota — 25% final', eur(r.fraccionado.cuota3));
-  } else {
-    rr(esMes ? 'Cuota mensual (base)' : 'Bolsa de horas (base)', eur(r.precioCatalogo) + (esMes ? '/mes' : ''));
-    rr('IVA (21%)', eur(r.iva));
-    rr(esMes ? 'TOTAL MENSUAL' : 'TOTAL', eur(r.totalConIva) + (esMes ? '/mes' : ''), true);
-  }
-  s.addTable(rows, { x: 4.9, y: 2.0, w: 4.5, colW: [2.7, 1.8], fontFace: 'Arial', fontSize: 11, border: { type: 'solid', color: 'EEF2F8', pt: 1 }, rowH: 0.3, valign: 'middle' });
-  s.addText('Pago: ' + (esImpl ? '50% inicio · 25% mitad · 25% antes de auditoría' : (esMes ? 'mensual · permanencia 12 meses' : '100% prepago')), { x: 0.6, y: 3.6, w: 4.0, h: 0.5, fontFace: 'Arial', fontSize: 11, color: MUTED });
   s.addText('Consultify, una empresa de TuConsultor · CIF B84867670 · hola@tuconsultor.com', { x: 0.6, y: 5.2, w: 9, h: 0.3, fontFace: 'Arial', fontSize: 9, color: '8896AD' });
+
+  // --- Slide: INVERSIÓN (protagonista, mismo lenguaje visual que el PDF) ---
+  s = p.addSlide(); s.background = { color: 'FFFFFF' };
+  s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.12, fill: { color: ORANGE } });
+  s.addText('Inversión', { x: 0.6, y: 0.32, w: 9, h: 0.5, fontFace: 'Arial', fontSize: 24, bold: true, color: NAVY });
+  s.addText(`${normNames}  ·  Modelo ${r.modelo}`, { x: 0.6, y: 0.82, w: 9, h: 0.3, fontFace: 'Arial', fontSize: 11, bold: true, color: 'D8910E' });
+
+  // Panel navy con la cifra grande
+  const cifra = esImpl ? eur(r.fraccionado.totalConIva) : eur(r.totalConIva);
+  const etiqCifra = esImpl ? 'INVERSIÓN TOTAL DEL PROGRAMA' : (esMes ? 'CUOTA MENSUAL' : 'INVERSIÓN TOTAL');
+  s.addShape(p.ShapeType.rect, { x: 0.6, y: 1.25, w: 8.8, h: 1.35, fill: { color: NAVY } });
+  s.addShape(p.ShapeType.rect, { x: 0.6, y: 1.25, w: 8.8, h: 0.06, fill: { color: ORANGE } });
+  s.addText(etiqCifra, { x: 0.85, y: 1.42, w: 5, h: 0.25, fontFace: 'Arial', fontSize: 9, bold: true, color: 'F5A623' });
+  s.addText(cifra + (esMes && !esImpl ? '/mes' : ''), { x: 0.85, y: 1.68, w: 5, h: 0.6, fontFace: 'Arial', fontSize: 32, bold: true, color: 'FFFFFF' });
+  s.addText('IVA incluido', { x: 0.85, y: 2.26, w: 3, h: 0.25, fontFace: 'Arial', fontSize: 10, color: '9DB4E0' });
+
+  // Dato secundario a la derecha
+  const secTit = esImpl ? 'DURACIÓN' : (esMes ? 'COMPROMISO' : 'MODALIDAD');
+  const secVal = esImpl ? `${r.fraccionado.meses} meses` : (esMes ? '12 meses' : 'Pago único');
+  const secTit2 = esImpl ? 'EQUIVALE A' : (esMes ? 'ANUAL EQUIVALENTE' : 'BOLSA DE HORAS');
+  const secVal2 = esImpl ? `${eur(r.fraccionado.totalConIva / r.fraccionado.meses)}/mes`
+    : (esMes ? eur(r.totalConIva * 12) : `${r.hTotal} horas`);
+  s.addText(secTit, { x: 6.6, y: 1.42, w: 2.6, h: 0.22, fontFace: 'Arial', fontSize: 8, bold: true, color: 'F5A623' });
+  s.addText(secVal, { x: 6.6, y: 1.62, w: 2.6, h: 0.3, fontFace: 'Arial', fontSize: 15, bold: true, color: 'FFFFFF' });
+  s.addText(secTit2, { x: 6.6, y: 1.95, w: 2.6, h: 0.22, fontFace: 'Arial', fontSize: 8, bold: true, color: 'F5A623' });
+  s.addText(secVal2, { x: 6.6, y: 2.15, w: 2.6, h: 0.28, fontFace: 'Arial', fontSize: 11, bold: true, color: '9DB4E0' });
+
+  // Desglose (tabla limpia)
+  const base = esImpl ? r.fraccionado.totalSinIva : r.precioCatalogo;
+  const ivaImp = esImpl ? (r.fraccionado.totalConIva - r.fraccionado.totalSinIva) : r.iva;
+  const totImp = esImpl ? r.fraccionado.totalConIva : r.totalConIva;
+  const suf = esMes && !esImpl ? '/mes' : '';
+  const filas = [
+    [{ text: esImpl ? 'Programa completo (base imponible)' : (esMes ? 'Cuota mensual (base imponible)' : 'Bolsa de horas (base imponible)'), options: { color: INK } },
+     { text: eur(base) + suf, options: { color: INK, bold: true, align: 'right' } }],
+    [{ text: 'IVA (21%)', options: { color: INK } }, { text: eur(ivaImp), options: { color: INK, bold: true, align: 'right' } }],
+    [{ text: esImpl ? 'TOTAL DEL PROGRAMA' : (esMes ? 'TOTAL MENSUAL' : 'TOTAL'), options: { color: NAVY, bold: true, fill: { color: SOFT } } },
+     { text: eur(totImp) + suf, options: { color: NAVY, bold: true, align: 'right', fill: { color: SOFT } } }],
+  ];
+  s.addText('DESGLOSE', { x: 0.6, y: 2.78, w: 3, h: 0.2, fontFace: 'Arial', fontSize: 9, bold: true, color: MUTED });
+  s.addTable(filas, { x: 0.6, y: 3.02, w: 8.8, colW: [6.0, 2.8], fontFace: 'Arial', fontSize: 11, border: { type: 'solid', color: 'EEF2F8', pt: 1 }, rowH: 0.32, valign: 'middle' });
+
+  // Plan de pago
+  s.addText('PLAN DE PAGO', { x: 0.6, y: 4.25, w: 3, h: 0.2, fontFace: 'Arial', fontSize: 9, bold: true, color: MUTED });
+  if (esImpl) {
+    const hitos = [['50%', 'Al inicio', eur(r.fraccionado.cuota1)], ['25%', 'A mitad del proyecto', eur(r.fraccionado.cuota2)], ['25%', 'Al finalizar', eur(r.fraccionado.cuota3)]];
+    hitos.forEach(([pct, cuando, imp], i) => {
+      const x = 0.6 + i * 2.95;
+      s.addShape(p.ShapeType.rect, { x, y: 4.5, w: 2.75, h: 0.62, fill: { color: SOFT } });
+      s.addShape(p.ShapeType.rect, { x, y: 4.5, w: 2.75, h: 0.05, fill: { color: ORANGE } });
+      s.addText(pct, { x: x + 0.12, y: 4.6, w: 0.8, h: 0.3, fontFace: 'Arial', fontSize: 15, bold: true, color: NAVY });
+      s.addText(cuando, { x: x + 0.85, y: 4.62, w: 1.8, h: 0.2, fontFace: 'Arial', fontSize: 8, color: MUTED });
+      s.addText(imp, { x: x + 0.85, y: 4.82, w: 1.8, h: 0.22, fontFace: 'Arial', fontSize: 10, bold: true, color: 'D8910E' });
+    });
+  } else {
+    const txtPago = esMes ? 'Cuota mensual recurrente · permanencia mínima de 12 meses.' : 'Pago único del 100% al inicio del proyecto.';
+    s.addShape(p.ShapeType.rect, { x: 0.6, y: 4.5, w: 8.8, h: 0.5, fill: { color: SOFT } });
+    s.addShape(p.ShapeType.rect, { x: 0.6, y: 4.5, w: 0.05, h: 0.5, fill: { color: ORANGE } });
+    s.addText(txtPago, { x: 0.85, y: 4.6, w: 8.3, h: 0.3, fontFace: 'Arial', fontSize: 11, color: INK });
+  }
+  s.addImage({ data: 'image/png;base64,' + LOGO_TUCONSULTOR, x: 0.6, y: 5.15, w: 1.0, h: 1.0 * 49 / 300 });
+  s.addText('IVA incluido · No incluye tasas de certificación', { x: 1.75, y: 5.2, w: 7.5, h: 0.25, fontFace: 'Arial', fontSize: 8.5, color: '8896AD' });
 
   // --- Slide 3: bloques de proceso (Anexo resumido) ---
   if (anexo && anexo.length) {
