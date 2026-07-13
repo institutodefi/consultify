@@ -13,6 +13,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import PptxGenJS from 'pptxgenjs';
 import { CATALOGO_ANEXO } from './catalogo-anexo.mjs';
 import { generarPDFOferta } from './documento-oferta.mjs';
+import { LOGO_CONSULTIFY, LOGO_TUCONSULTOR } from './logos-oferta.mjs';
 
 // Mapa de prefijo de proceso → nombre de bloque legible (para agrupar el Anexo I).
 const BLOQUES = {
@@ -127,8 +128,9 @@ async function generarPPTX(r, cli, anexo) {
 
   // --- Slide 1: portada ---
   let s = p.addSlide(); s.background = { color: 'FFFFFF' };
+  // Logo Consultify (imagen real) en lugar del texto.
+  s.addImage({ data: 'image/png;base64,' + LOGO_CONSULTIFY, x: 0.6, y: 0.45, w: 1.9, h: 1.9 * 135 / 400 });
   s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.12, fill: { color: ORANGE } });
-  s.addText('Consultify', { x: 0.6, y: 0.55, w: 9, h: 0.6, fontFace: 'Arial', fontSize: 30, bold: true, color: NAVY });
   s.addText('OFERTA DE SERVICIO', { x: 0.6, y: 1.7, w: 9, h: 0.7, fontFace: 'Arial', fontSize: 32, bold: true, color: NAVY });
   s.addText(`${normNames}  ·  Modelo ${r.modelo}${esImpl ? `  ·  Cronograma ${r.meses} meses` : ''}`, { x: 0.6, y: 2.5, w: 9, h: 0.4, fontFace: 'Arial', fontSize: 15, bold: true, color: 'D8910E' });
   s.addText([{ text: cli.empresa || '—', options: { fontSize: 22, bold: true, color: INK, breakLine: true } },
@@ -175,6 +177,50 @@ async function generarPPTX(r, cli, anexo) {
     const items = anexo.map(b => ({ text: b.bloque, options: { fontSize: 13, bold: true, color: NAVY, bullet: { code: '2022' }, breakLine: true, paraSpaceAfter: 6 } }));
     s.addText(items, { x: 0.7, y: 1.1, w: 8.6, h: 4.0, fontFace: 'Arial', valign: 'top' });
     s.addText('Detalle de subprocesos en el Anexo I del PDF.', { x: 0.7, y: 5.2, w: 9, h: 0.3, fontFace: 'Arial', fontSize: 9, color: '8896AD' });
+  }
+
+  // --- Slide 4: confidencialidad y protección de datos ---
+  s = p.addSlide(); s.background = { color: 'FFFFFF' };
+  s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: NAVY } });
+  s.addText('Confidencialidad y protección de datos', { x: 0.6, y: 0.4, w: 9, h: 0.5, fontFace: 'Arial', fontSize: 22, bold: true, color: NAVY });
+  const clausulasPpt = [
+    'Deber de secreto sin límite temporal, que subsiste tras finalizar el contrato.',
+    'La información se usa exclusivamente para este proyecto; no se cede a terceros.',
+    'Encargo de tratamiento conforme al art. 28 del RGPD y a la LOPDGDD.',
+    'Medidas de seguridad: control de accesos, cifrado y trazabilidad.',
+    'Personal sujeto a compromiso de confidencialidad por escrito.',
+    'Al finalizar: devolución o supresión segura de la información, a tu elección.',
+    'La documentación del sistema es propiedad del cliente.',
+  ].map(t => ({ text: t, options: { fontSize: 12, color: INK, bullet: { code: '2022' }, breakLine: true, paraSpaceAfter: 8 } }));
+  s.addText(clausulasPpt, { x: 0.7, y: 1.1, w: 8.6, h: 3.9, fontFace: 'Arial', valign: 'top' });
+  s.addImage({ data: 'image/png;base64,' + LOGO_TUCONSULTOR, x: 0.6, y: 5.05, w: 1.1, h: 1.1 * 54 / 300 });
+  s.addText('CIF B84867670 · hola@tuconsultor.com', { x: 1.85, y: 5.13, w: 7, h: 0.3, fontFace: 'Arial', fontSize: 9, color: '8896AD' });
+
+  // --- Slide 5: otros sistemas que podemos implantar (comercial) ---
+  const CAT_PPT = [
+    ['9001', 'ISO 9001 · Calidad', 'Procesos bajo control y mejora continua. Requisito habitual en licitaciones.'],
+    ['14001', 'ISO 14001 · Medio ambiente', 'Compromiso ambiental demostrable. Cada vez más exigida en contratación pública.'],
+    ['45001', 'ISO 45001 · Seguridad y salud', 'Menos siniestralidad y seguridad jurídica en prevención.'],
+    ['27001', 'ISO 27001 · Seguridad de la información', 'Protección frente a ciberataques. Clave con administraciones públicas.'],
+    ['42001', 'ISO 42001 · Inteligencia artificial', 'IA responsable, alineada con el Reglamento Europeo de IA.'],
+    ['56001', 'ISO 56001 · Innovación', 'De las ideas sueltas a una cartera gestionada. Facilita ayudas a la I+D+i.'],
+    ['21001', 'ISO 21001 · Organizaciones educativas', 'El estudiante en el centro. Diferenciación para centros formativos.'],
+    ['9004', 'ISO 9004 · Éxito sostenido', 'El siguiente nivel tras la 9001: excelencia y sostenibilidad del negocio.'],
+  ];
+  const otrasPpt = CAT_PPT.filter(([id]) => !(r.normas || []).includes(id));
+  if (otrasPpt.length) {
+    s = p.addSlide(); s.background = { color: 'FFFFFF' };
+    s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.12, fill: { color: ORANGE } });
+    s.addText('Otros sistemas que podemos implantar', { x: 0.6, y: 0.35, w: 9, h: 0.5, fontFace: 'Arial', fontSize: 22, bold: true, color: NAVY });
+    s.addText('Integrarlos con un único socio ahorra tiempo y coste frente a hacerlo por separado.', { x: 0.6, y: 0.85, w: 9, h: 0.3, fontFace: 'Arial', fontSize: 11, color: 'D8910E' });
+    const its = [];
+    for (const [, titulo, desc] of otrasPpt.slice(0, 7)) {
+      its.push({ text: titulo, options: { fontSize: 12, bold: true, color: NAVY, bullet: { code: '2022' }, breakLine: true } });
+      its.push({ text: desc, options: { fontSize: 9.5, color: MUTED, breakLine: true, paraSpaceAfter: 7, indentLevel: 1 } });
+    }
+    s.addText(its, { x: 0.7, y: 1.3, w: 8.6, h: 3.7, fontFace: 'Arial', valign: 'top' });
+    s.addImage({ data: 'image/png;base64,' + LOGO_TUCONSULTOR, x: 0.6, y: 5.05, w: 1.1, h: 1.1 * 54 / 300 });
+    s.addText(`Escríbenos a hola@tuconsultor.com y lo estudiamos contigo.`, { x: 1.85, y: 5.13, w: 7, h: 0.3, fontFace: 'Arial', fontSize: 9, color: '8896AD' });
   }
 
   return await p.write({ outputType: 'nodebuffer' });

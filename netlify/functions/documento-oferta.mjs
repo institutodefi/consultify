@@ -2,6 +2,7 @@
 // portada con tabla de datos, objeto, plan por meses, dedicación por bloque,
 // presupuesto con cuotas, condiciones, firma y Anexo I (tareas por bloque, sin horas).
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { LOGO_CONSULTIFY, LOGO_CONSULTIFY_BLANCO, LOGO_TUCONSULTOR, LOGO_TUCONSULTOR_BLANCO } from './logos-oferta.mjs';
 
 const NAVY = rgb(0.024, 0.106, 0.271);
 const NAVY2 = rgb(0.039, 0.165, 0.424);
@@ -25,6 +26,12 @@ export async function generarPDFOferta(r, cli, anexo) {
   const pdf = await PDFDocument.create();
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const reg = await pdf.embedFont(StandardFonts.Helvetica);
+  // Logos reales (PNG incrustados) para dar acabado de dossier.
+  let imgConsultify = null, imgTuConsultor = null, imgConsultifyBlanco = null, imgTuConsultorBlanco = null;
+  try { imgConsultify = await pdf.embedPng(Buffer.from(LOGO_CONSULTIFY, 'base64')); } catch { /* sigue sin logo */ }
+  try { imgConsultifyBlanco = await pdf.embedPng(Buffer.from(LOGO_CONSULTIFY_BLANCO, 'base64')); } catch { /* noop */ }
+  try { imgTuConsultor = await pdf.embedPng(Buffer.from(LOGO_TUCONSULTOR, 'base64')); } catch { /* noop */ }
+  try { imgTuConsultorBlanco = await pdf.embedPng(Buffer.from(LOGO_TUCONSULTOR_BLANCO, 'base64')); } catch { /* noop */ }
   const W = 595, H = 842, M = 50;
   const em = emisor();
   const esImpl = r.modelo === 'Implantación';
@@ -45,24 +52,35 @@ export async function generarPDFOferta(r, cli, anexo) {
     return lines;
   };
   const cabecera = () => {
-    page.drawText('Consultify', { x: M, y: H - 48, size: 18, font: bold, color: NAVY });
-    // Nombre de empresa alineado a la derecha, SIN invadir el logo: se reduce el
-    // tamaño y, si aún no cabe, se trunca con elipsis. Antes se salía de la página.
-    const xLogoFin = M + bold.widthOfTextAtSize('Consultify', 18) + 16;
+    // Logo Consultify (imagen real). Si no cargara, se usa el texto como respaldo.
+    if (imgConsultify) {
+      const lw = 108, lh = lw * (imgConsultify.height / imgConsultify.width);
+      page.drawImage(imgConsultify, { x: M, y: H - 40 - lh / 2, width: lw, height: lh });
+    } else {
+      page.drawText('Consultify', { x: M, y: H - 48, size: 18, font: bold, color: NAVY });
+    }
+    const xLogoFin = M + 108 + 16;
     const anchoMax = (W - M) - xLogoFin;
-    let txt = String(cli.empresa || '—'), size = 11;
+    let txt = String(cli.empresa || '—'), size = 10;
     while (size > 6.5 && bold.widthOfTextAtSize(txt, size) > anchoMax) size -= 0.5;
     if (bold.widthOfTextAtSize(txt, size) > anchoMax) {
       while (txt.length > 1 && bold.widthOfTextAtSize(txt + '…', size) > anchoMax) txt = txt.slice(0, -1);
       txt += '…';
     }
-    page.drawText(txt, { x: W - M - bold.widthOfTextAtSize(txt, size), y: H - 46, size, font: bold, color: NAVY });
+    page.drawText(txt, { x: W - M - bold.widthOfTextAtSize(txt, size), y: H - 44, size, font: bold, color: MUTED });
     page.drawRectangle({ x: M, y: H - 62, width: W - 2 * M, height: 2.5, color: ORANGE });
   };
   const pie = (num) => {
-    page.drawText(`${em.nombre} · CIF ${em.cif} · ${em.email}`, { x: M, y: 36, size: 7.5, font: reg, color: MUTED });
+    page.drawRectangle({ x: M, y: 52, width: W - 2 * M, height: 0.6, color: rgb(0.88, 0.90, 0.94) });
+    if (imgTuConsultor) {
+      const lw = 74, lh = lw * (imgTuConsultor.height / imgTuConsultor.width);
+      page.drawImage(imgTuConsultor, { x: M, y: 30, width: lw, height: lh });
+      page.drawText(`${em.nombre} · CIF ${em.cif} · ${em.email}`, { x: M + lw + 10, y: 36, size: 7, font: reg, color: MUTED });
+    } else {
+      page.drawText(`${em.nombre} · CIF ${em.cif} · ${em.email}`, { x: M, y: 36, size: 7.5, font: reg, color: MUTED });
+    }
     page.drawText(`Página ${num}`, { x: W - M - reg.widthOfTextAtSize(`Página ${num}`, 7.5), y: 36, size: 7.5, font: reg, color: MUTED });
-    page.drawText('Hecho con amor en Madrid por TuConsultor · Desde 2006 gestionando con el corazón.', { x: M, y: 24, size: 7.5, font: reg, color: ORANGE_D });
+    page.drawText('Desde 2006 gestionando con el corazón.', { x: M, y: 22, size: 6.5, font: reg, color: ORANGE_D });
   };
   let pageNum = 1;
   const nuevaPagina = () => { pie(pageNum); page = pdf.addPage([W, H]); pageNum++; cabecera(); y = H - 90; };
@@ -73,7 +91,87 @@ export async function generarPDFOferta(r, cli, anexo) {
     for (const ln of wrap(txt, reg, size, W - 2 * M)) { espacio(16); page.drawText(ln, { x: M, y, size, font: reg, color: INK }); y -= 14; }
   };
 
-  // ============ PÁGINA 1 ============
+  // ============ PORTADA (página completa) ============
+  // Fondo navy con degradado sutil, logo blanco, cliente y servicio destacados.
+  {
+    // Fondo base
+    page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: NAVY });
+    // Degradado simulado: franjas de navy que aclaran hacia abajo
+    for (let i = 0; i < 40; i++) {
+      const t = i / 40;
+      page.drawRectangle({
+        x: 0, y: H - (i + 1) * (H / 40), width: W, height: H / 40 + 1,
+        color: rgb(0.024 + t * 0.02, 0.106 + t * 0.055, 0.271 + t * 0.15),
+      });
+    }
+    // Acento naranja diagonal (bloques decorativos)
+    page.drawRectangle({ x: 0, y: H - 6, width: W, height: 6, color: ORANGE });
+    page.drawRectangle({ x: W - 130, y: 0, width: 130, height: 4, color: ORANGE });
+
+    // Logo Consultify en blanco, grande
+    if (imgConsultifyBlanco) {
+      const lw = 190, lh = lw * (imgConsultifyBlanco.height / imgConsultifyBlanco.width);
+      page.drawImage(imgConsultifyBlanco, { x: M, y: H - 120, width: lw, height: lh });
+    } else {
+      page.drawText('Consultify', { x: M, y: H - 100, size: 26, font: bold, color: rgb(1, 1, 1) });
+    }
+
+    // Etiqueta superior
+    page.drawText('PROPUESTA DE SERVICIOS', { x: M, y: H - 210, size: 9, font: bold, color: ORANGE });
+    page.drawRectangle({ x: M, y: H - 220, width: 46, height: 2, color: ORANGE });
+
+    // Título grande
+    page.drawText('OFERTA DE', { x: M, y: H - 262, size: 38, font: bold, color: rgb(1, 1, 1) });
+    page.drawText('SERVICIO', { x: M, y: H - 304, size: 38, font: bold, color: ORANGE });
+
+    // Servicio (normas + modelo) muy visible
+    let yy = H - 360;
+    for (const ln of wrap(normNames, bold, 17, W - 2 * M)) {
+      page.drawText(ln, { x: M, y: yy, size: 17, font: bold, color: rgb(1, 1, 1) });
+      yy -= 22;
+    }
+    page.drawText(`Modelo ${r.modelo}${esImpl ? ` · ${r.meses} meses` : ''}`, { x: M, y: yy - 4, size: 12, font: reg, color: rgb(0.62, 0.71, 0.88) });
+
+    // Bloque del cliente — destacado sobre panel
+    const panelY = 200, panelH = 128;
+    page.drawRectangle({ x: M, y: panelY, width: W - 2 * M, height: panelH, color: rgb(1, 1, 1), opacity: 0.07 });
+    page.drawRectangle({ x: M, y: panelY, width: 3.5, height: panelH, color: ORANGE });
+
+    page.drawText('PREPARADA PARA', { x: M + 18, y: panelY + panelH - 26, size: 8, font: bold, color: ORANGE });
+    // Nombre del cliente: grande, con salto de línea si hace falta (nunca cortado)
+    let cy = panelY + panelH - 50;
+    const lineasCli = wrap(String(cli.empresa || '—'), bold, 15, W - 2 * M - 36);
+    for (const ln of lineasCli.slice(0, 3)) {
+      page.drawText(ln, { x: M + 18, y: cy, size: 15, font: bold, color: rgb(1, 1, 1) });
+      cy -= 19;
+    }
+    // Datos secundarios del cliente
+    const meta = [cli.cif ? `CIF ${cli.cif}` : null, cli.contacto || null].filter(Boolean).join('   ·   ');
+    if (meta) page.drawText(meta, { x: M + 18, y: cy - 2, size: 9.5, font: reg, color: rgb(0.62, 0.71, 0.88) });
+
+    // Pie de portada: nº de oferta, fecha, comercial
+    page.drawRectangle({ x: M, y: 118, width: W - 2 * M, height: 0.8, color: rgb(1, 1, 1), opacity: 0.18 });
+    const pieItems = [
+      ['Nº DE OFERTA', cli.ref || '—'],
+      ['FECHA', HOY()],
+      ['CONSULTOR', cli.comercial || 'Alejandro'],
+    ];
+    pieItems.forEach(([et, va], i) => {
+      const px = M + i * ((W - 2 * M) / 3);
+      page.drawText(et, { x: px, y: 96, size: 7, font: bold, color: ORANGE });
+      page.drawText(String(va), { x: px, y: 80, size: 10, font: bold, color: rgb(1, 1, 1) });
+    });
+
+    // Logo TuConsultor (blanco) abajo
+    if (imgTuConsultorBlanco) {
+      const lw = 92, lh = lw * (imgTuConsultorBlanco.height / imgTuConsultorBlanco.width);
+      page.drawImage(imgTuConsultorBlanco, { x: M, y: 34, width: lw, height: lh });
+      page.drawText('Desde 2006 gestionando con el corazón.', { x: M + lw + 12, y: 40, size: 7.5, font: reg, color: rgb(0.62, 0.71, 0.88) });
+    }
+  }
+
+  // ============ PÁGINA 1 (contenido) ============
+  page = pdf.addPage([W, H]); pageNum = 2;
   cabecera();
   y = H - 100;
 
@@ -180,7 +278,7 @@ export async function generarPDFOferta(r, cli, anexo) {
     'Importe cerrado: precio fijo por el alcance descrito, con independencia del nº de sesiones.',
     'Incluye: documentación del sistema, formación al equipo, auditoría interna y acompañamiento a la certificación.',
     'No incluye: tasas de la entidad certificadora ni acompañamiento presencial a la auditoría externa (600 €/jornada).',
-    'Confidencialidad: toda la información facilitada se trata conforme al RGPD y se destina exclusivamente al proyecto.',
+    'Validez de la oferta: 30 días naturales desde su fecha de emisión.',
   ];
   for (const c of condiciones) {
     espacio(28);
@@ -190,6 +288,26 @@ export async function generarPDFOferta(r, cli, anexo) {
     y -= 3;
   }
   y -= 20;
+
+  // 6. Confidencialidad y protección de datos (cláusulas completas)
+  espacio(200);
+  h2('6. Confidencialidad y protección de datos');
+  const clausulas = [
+    ['Deber de secreto', 'Ambas partes se obligan a mantener la más estricta confidencialidad sobre cuanta información, documentación y datos conozcan como consecuencia de la presente relación, sin límite temporal, subsistiendo esta obligación tras la finalización del contrato.'],
+    ['Uso limitado', 'La información facilitada por el cliente se destina exclusivamente a la ejecución del proyecto descrito y no será cedida, comunicada ni utilizada para ninguna otra finalidad sin su consentimiento expreso y por escrito.'],
+    ['Tratamiento de datos personales', `${em.nombre} actuará como encargado del tratamiento respecto de los datos personales a los que acceda por cuenta del cliente (responsable), conforme al art. 28 del Reglamento (UE) 2016/679 (RGPD) y a la LO 3/2018 (LOPDGDD), formalizándose el correspondiente contrato de encargo.`],
+    ['Medidas de seguridad', 'Se aplican medidas técnicas y organizativas apropiadas para garantizar la confidencialidad, integridad y disponibilidad de la información, incluyendo control de accesos, cifrado de la información sensible y trazabilidad de las actuaciones.'],
+    ['Personal', 'El personal asignado al proyecto está sujeto a compromiso de confidencialidad por escrito, con idéntico alcance al aquí descrito.'],
+    ['Devolución o supresión', 'Finalizado el proyecto, y a elección del cliente, la información y los datos serán devueltos o suprimidos de forma segura, salvo obligación legal de conservación.'],
+    ['Propiedad intelectual', 'La documentación del sistema de gestión elaborada durante el proyecto es propiedad del cliente. Las metodologías, plantillas y herramientas propias de Consultify permanecen bajo su titularidad y se ceden en uso para el proyecto.'],
+  ];
+  for (const [titulo, texto] of clausulas) {
+    espacio(46);
+    page.drawText(titulo, { x: M, y, size: 9.5, font: bold, color: NAVY }); y -= 13;
+    for (const ln of wrap(texto, reg, 8.8, W - 2 * M)) { espacio(14); page.drawText(ln, { x: M, y, size: 8.8, font: reg, color: INK }); y -= 11.5; }
+    y -= 7;
+  }
+  y -= 10;
 
   // Firma
   espacio(70);
@@ -231,7 +349,116 @@ export async function generarPDFOferta(r, cli, anexo) {
     y -= 12;
   }
 
+  // ============ ANEXO II · Otros sistemas de gestión (comercial) ============
+  // Muestra las normas que el cliente NO ha contratado, como oportunidad de ampliación.
+  const CATALOGO_NORMAS = [
+    ['9001', 'ISO 9001 · Calidad', 'La base de todo sistema de gestión: procesos bajo control, clientes satisfechos y mejora continua. Es el estándar más reconocido del mundo y suele ser requisito en licitaciones y grandes clientes.'],
+    ['14001', 'ISO 14001 · Medio ambiente', 'Demuestra el compromiso ambiental de la organización: consumo, residuos y huella bajo control. Cada vez más exigida en contratación pública y por clientes con criterios ESG.'],
+    ['45001', 'ISO 45001 · Seguridad y salud laboral', 'Reduce la siniestralidad y refuerza la cultura preventiva. Aporta seguridad jurídica frente a la normativa de prevención y mejora el clima laboral.'],
+    ['27001', 'ISO 27001 · Seguridad de la información', 'Protege la información frente a ciberataques y fugas de datos. Imprescindible para trabajar con administraciones públicas y sectores regulados.'],
+    ['42001', 'ISO 42001 · Inteligencia artificial', 'El primer estándar internacional de gestión de la IA. Permite adoptar IA de forma responsable y demostrarlo ante clientes y reguladores, en línea con el Reglamento Europeo de IA.'],
+    ['56001', 'ISO 56001 · Gestión de la innovación', 'Sistematiza la innovación: de las ideas sueltas a una cartera gestionada con resultados medibles. Facilita el acceso a ayudas y deducciones fiscales por I+D+i.'],
+    ['21001', 'ISO 21001 · Organizaciones educativas', 'Específica para centros formativos: pone al estudiante en el centro y ordena la gestión académica. Diferencia frente a otros centros.'],
+    ['9004', 'ISO 9004 · Éxito sostenido', 'El siguiente nivel tras la 9001: orientada a la sostenibilidad del negocio a largo plazo y a la excelencia en la gestión.'],
+  ];
+  const contratadas = r.normas || [];
+  const otras = CATALOGO_NORMAS.filter(([id]) => !contratadas.includes(id));
+  if (otras.length) {
+    nuevaPagina();
+    page.drawText('Anexo II · Otros sistemas que podemos implantar', { x: M, y, size: 18, font: bold, color: NAVY }); y -= 22;
+    page.drawText('Crece con un único socio y un único sistema integrado', { x: M, y, size: 10, font: bold, color: ORANGE_D }); y -= 26;
+    parrafo('Los sistemas de gestión comparten una estructura común. Integrarlos con nosotros significa un solo equipo, una sola documentación y un ahorro real frente a implantarlos por separado. Estos son los que podemos sumar a tu proyecto:');
+    y -= 10;
+    for (const [, titulo, desc] of otras) {
+      espacio(52);
+      page.drawRectangle({ x: M, y: y - 2, width: 3, height: 14, color: ORANGE });
+      page.drawText(titulo, { x: M + 10, y, size: 10.5, font: bold, color: NAVY }); y -= 14;
+      for (const ln of wrap(desc, reg, 8.8, W - 2 * M - 10)) { espacio(13); page.drawText(ln, { x: M + 10, y, size: 8.8, font: reg, color: INK }); y -= 11.5; }
+      y -= 9;
+    }
+    // Bloque de contacto comercial
+    espacio(70);
+    y -= 6;
+    page.drawRectangle({ x: M, y: y - 44, width: W - 2 * M, height: 52, color: SOFT });
+    page.drawText('¿Quieres ampliar tu sistema de gestión?', { x: M + 14, y: y - 8, size: 11, font: bold, color: NAVY });
+    page.drawText(`Escríbenos a ${em.email} y estudiamos contigo la mejor combinación.`, { x: M + 14, y: y - 24, size: 9, font: reg, color: INK });
+    page.drawText('Integrar varias normas a la vez reduce el coste y el esfuerzo frente a hacerlo por separado.', { x: M + 14, y: y - 37, size: 8.5, font: reg, color: ORANGE_D });
+    y -= 56;
+  }
+
   pie(pageNum);
+
+  // ============ CONTRAPORTADA (página completa) ============
+  {
+    page = pdf.addPage([W, H]);
+    page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: NAVY });
+    for (let i = 0; i < 40; i++) {
+      const t = i / 40;
+      page.drawRectangle({
+        x: 0, y: H - (i + 1) * (H / 40), width: W, height: H / 40 + 1,
+        color: rgb(0.024 + t * 0.02, 0.106 + t * 0.055, 0.271 + t * 0.15),
+      });
+    }
+    page.drawRectangle({ x: 0, y: H - 6, width: W, height: 6, color: ORANGE });
+
+    // Logo grande centrado
+    if (imgConsultifyBlanco) {
+      const lw = 210, lh = lw * (imgConsultifyBlanco.height / imgConsultifyBlanco.width);
+      page.drawImage(imgConsultifyBlanco, { x: (W - lw) / 2, y: H - 200, width: lw, height: lh });
+    }
+
+    // Mensaje central
+    const centrado = (txt, yy, size, font, color) => {
+      const wtxt = font.widthOfTextAtSize(txt, size);
+      page.drawText(txt, { x: (W - wtxt) / 2, y: yy, size, font, color });
+    };
+    centrado('Gracias por confiar en nosotros', H - 280, 22, bold, rgb(1, 1, 1));
+    page.drawRectangle({ x: (W - 60) / 2, y: H - 296, width: 60, height: 2, color: ORANGE });
+
+    const mensaje = 'Llevamos desde 2006 acompañando a organizaciones como la tuya en su camino hacia la excelencia. No implantamos sistemas: construimos formas de trabajar que perduran.';
+    let my = H - 330;
+    for (const ln of wrap(mensaje, reg, 11, W - 2 * M - 60)) {
+      const wl = reg.widthOfTextAtSize(ln, 11);
+      page.drawText(ln, { x: (W - wl) / 2, y: my, size: 11, font: reg, color: rgb(0.72, 0.79, 0.92) });
+      my -= 17;
+    }
+
+    // Tres pilares (valores)
+    const pilares = [
+      ['Cercanía', 'Un equipo que conoce\ntu organización'],
+      ['Rigor', 'Metodología probada\nen cientos de proyectos'],
+      ['Resultados', 'Certificación a la primera\ny sistemas que se usan'],
+    ];
+    const colW = (W - 2 * M) / 3;
+    pilares.forEach(([tit, desc], i) => {
+      const cx = M + i * colW + colW / 2;
+      const wt = bold.widthOfTextAtSize(tit, 12);
+      page.drawRectangle({ x: cx - 12, y: 400, width: 24, height: 2.5, color: ORANGE });
+      page.drawText(tit, { x: cx - wt / 2, y: 372, size: 12, font: bold, color: rgb(1, 1, 1) });
+      desc.split('\n').forEach((ln, j) => {
+        const wl = reg.widthOfTextAtSize(ln, 8.5);
+        page.drawText(ln, { x: cx - wl / 2, y: 354 - j * 12, size: 8.5, font: reg, color: rgb(0.62, 0.71, 0.88) });
+      });
+    });
+
+    // Panel de contacto
+    const pY = 190, pH = 118;
+    page.drawRectangle({ x: M, y: pY, width: W - 2 * M, height: pH, color: rgb(1, 1, 1), opacity: 0.07 });
+    page.drawRectangle({ x: M, y: pY + pH - 3, width: W - 2 * M, height: 3, color: ORANGE });
+    centrado('¿Hablamos?', pY + pH - 34, 15, bold, rgb(1, 1, 1));
+    centrado(em.email, pY + pH - 60, 13, bold, ORANGE);
+    centrado('Paseo de la Castellana 18, Planta 7 · 28046 Madrid', pY + pH - 80, 9, reg, rgb(0.62, 0.71, 0.88));
+    centrado('consultify.pro', pY + pH - 97, 9.5, bold, rgb(0.72, 0.79, 0.92));
+
+    // Pie de contraportada
+    if (imgTuConsultorBlanco) {
+      const lw = 100, lh = lw * (imgTuConsultorBlanco.height / imgTuConsultorBlanco.width);
+      page.drawImage(imgTuConsultorBlanco, { x: (W - lw) / 2, y: 96, width: lw, height: lh });
+    }
+    centrado(`${em.nombre} · CIF ${em.cif}`, 74, 7.5, reg, rgb(0.55, 0.63, 0.80));
+    centrado('Desde 2006 gestionando con el corazón.', 58, 7.5, reg, ORANGE);
+  }
+
   return await pdf.save();
 }
 

@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listTable, insertRow, updateRow, deleteRow, siguienteCodigoCliente, holdedFn, brevoFn } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
+import { useAuth } from '../../lib/auth.jsx';
 import SemaforoCobros from './SemaforoCobros.jsx';
 
 const VACIO = { codigo: '', cif_matriz: '', empresa: '', contacto: '', contacto_apellidos: '', email: '', telefono: '', director_proyecto_id: '', jefe_cuenta_id: '' };
 
 export default function Clientes() {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const puedeBorrar = role === 'superadmin' || role === 'admin'; // solo administradores
   const [clientes, setClientes] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [centros, setCentros] = useState([]);
@@ -130,6 +133,25 @@ export default function Clientes() {
       else setMsg(r.error || 'No se pudieron actualizar los cobros.');
     } catch { setMsg('Error al actualizar cobros.'); }
     finally { setCobrosBusy(false); }
+  }
+
+  // Elimina un cliente (solo administradores). Irreversible → doble confirmación.
+  async function borrarCliente(c) {
+    if (!puedeBorrar || !c) return;
+    const proy = proyectos.filter(p => String(p.cliente_id) === String(c.id)).length;
+    const aviso = proy > 0
+      ? `\n\n⚠️ Este cliente tiene ${proy} proyecto(s) asociado(s). Revisa antes de borrar.`
+      : '';
+    if (!window.confirm(`¿Eliminar definitivamente el cliente "${c.empresa}"?${aviso}\n\nEsta acción no se puede deshacer.`)) return;
+    setMsg(null);
+    try {
+      await deleteRow('clientes', c.id);
+      setSel(''); setForm(null);
+      setMsg(`Cliente "${c.empresa}" eliminado.`);
+      cargar();
+    } catch (e) {
+      setMsg(`No se pudo eliminar: ${e?.message || e}. Puede que tenga proyectos u ofertas asociados.`);
+    }
   }
 
   async function diagnosticarBrevo() {
@@ -301,6 +323,7 @@ export default function Clientes() {
             <button onClick={diagnosticarBrevo} disabled={brevoBusy} className="rounded-xl border border-dashed border-navy-200 !px-3 !py-2 text-xs font-bold text-navy-400 hover:bg-navy-50 disabled:opacity-40" title="Diagnóstico de la conexión con Brevo">🔍 Brevo</button>
             {cliente && <button onClick={() => setForm({ ...VACIO, ...cliente })} className="btn-ghost !px-4 !py-2">✎ Editar cliente</button>}
             {cliente && <button onClick={() => navigate('/consultores/planificador', { state: { clientePrefill: cliente } })} className="btn-orange !px-4 !py-2" title="Crear una oferta con los datos de este cliente">📄 Lanzar oferta</button>}
+            {cliente && puedeBorrar && <button onClick={() => borrarCliente(cliente)} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-500 hover:bg-red-50" title="Eliminar cliente (solo administradores)">🗑 Eliminar</button>}
           </div>
         </div>
       </div>
