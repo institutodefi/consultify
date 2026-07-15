@@ -9,6 +9,8 @@ function demo() {
     proyectos: demoClone('proyectos'), presupuestos: demoClone('presupuestos'),
     procesos_internos: demoClone('procesos_internos'),
     procesos_subprocesos: [],
+    procesos_bandas: [],
+    procesos_riesgos: [],
     tareas_catalogo: catalogoFilas(), agenda_tareas: [], cliente_tareas: [], proyectos_cliente: [], cliente_contactos: [], vacaciones: [], festivos: [],
   };
   return demoState;
