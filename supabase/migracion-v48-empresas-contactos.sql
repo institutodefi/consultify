@@ -76,12 +76,14 @@ create index if not exists empresa_contactos_contacto_idx on public.empresa_cont
 -- =============================================================================
 
 -- 4.1 · Cada cliente → una empresa tipo 'cliente'
-insert into public.empresas (nombre, cif, es_cliente, es_proveedor, direccion, codigo, holded_id, cliente_id_old, creado)
+--        (la tabla 'clientes' no tiene columna 'direccion', así que la empresa
+--         se crea sin dirección; se podrá rellenar luego desde la ficha.)
+insert into public.empresas (nombre, cif, es_cliente, es_proveedor, codigo, holded_id, cliente_id_old, creado)
 select
   c.empresa,
   coalesce(c.cif_matriz, c.cif),
   true, false,
-  c.direccion, c.codigo, c.holded_id,
+  c.codigo, c.holded_id,
   c.id, c.creado
 from public.clientes c
 where not exists (select 1 from public.empresas e where e.cliente_id_old = c.id);
@@ -98,12 +100,14 @@ with clientes_sin_migrar as (
     select 1 from public.empresa_contactos ec where ec.empresa_id = e.id
   )
 )
-insert into public.contactos (nombre, apellidos, email, telefono, creado)
+insert into public.contactos (nombre, apellidos, email, telefono, brevo_id, brevo_sincronizado_en, creado)
 select
   coalesce(nullif(trim(csm.contacto), ''), csm.empresa),
   csm.contacto_apellidos,
   csm.email,
   csm.telefono,
+  csm.brevo_id,
+  csm.brevo_sincronizado_en,
   csm.creado
 from clientes_sin_migrar csm;
 
