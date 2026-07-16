@@ -3,6 +3,8 @@ import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import Dashboard from './consultores/Dashboard.jsx';
 import Equipo from './consultores/Equipo.jsx';
 import Clientes from './consultores/Clientes.jsx';
+import Empresas from './consultores/Empresas.jsx';
+import Contactos from './consultores/Contactos.jsx';
 import Ofertas from './consultores/Ofertas.jsx';
 import ProyectosConfig from './consultores/ProyectosConfig.jsx';
 import Agenda from './consultores/Agenda.jsx';
@@ -32,6 +34,8 @@ const Icon = ({ name, className = 'h-5 w-5' }) => {
     'user-cog': <><circle cx="9" cy="7" r="4" /><path d="M2 21v-2a4 4 0 0 1 4-4h5" /><circle cx="18" cy="16" r="3" /><path d="M18 12v1M18 19v1M21.5 14l-.9.5M15.4 17.5l-.9.5M21.5 18l-.9-.5M15.4 14.5l-.9-.5" /></>,
     'key': <><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.7 12.3 21 2M16 7l3 3M18 5l3 3" /></>,
     'repeat': <><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></>,
+    'building': <><rect x="4" y="2" width="16" height="20" rx="2" /><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01" /></>,
+    'contact': <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M15 8h3M15 12h3M7 16h10" /></>,
   };
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -133,6 +137,8 @@ export default function ConsultorPortal() {
               <Route path="mis-datos" element={<MisDatos />} />
               <Route path="sistemas" element={<Guard ok={verEquipo}><Sistemas /></Guard>} />
               <Route path="clientes" element={<Guard ok={verClientes}><Clientes /></Guard>} />
+              <Route path="empresas" element={<Guard ok={verClientes}><Empresas /></Guard>} />
+              <Route path="contactos" element={<Guard ok={verClientes}><Contactos /></Guard>} />
               <Route path="ofertas" element={<Guard ok={verClientes}><Ofertas /></Guard>} />
               <Route path="*" element={<Navigate to="." replace />} />
             </Routes>

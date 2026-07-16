@@ -11,6 +11,9 @@ function demo() {
     procesos_subprocesos: [],
     procesos_bandas: [],
     procesos_riesgos: [],
+    empresas: [],
+    contactos: [],
+    empresa_contactos: [],
     tareas_catalogo: catalogoFilas(), agenda_tareas: [], cliente_tareas: [], proyectos_cliente: [], cliente_contactos: [], vacaciones: [], festivos: [],
   };
   return demoState;
