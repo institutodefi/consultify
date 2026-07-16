@@ -27,6 +27,12 @@
   to = "/.netlify/functions/agenda-feed"
   status = 200
 
+# Feed RSS del blog (para envíos automáticos por Brevo)
+[[redirects]]
+  from = "/blog/rss.xml"
+  to = "/.netlify/functions/blog-rss"
+  status = 200
+
 # Generación automática de oferta (PDF + PPTX)
 [[redirects]]
   from = "/api/generar-oferta"

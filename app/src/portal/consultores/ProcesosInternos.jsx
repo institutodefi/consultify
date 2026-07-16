@@ -11,6 +11,31 @@ function nivelRiesgo(p, i) {
 }
 const PALETA = ['#061B45', '#0A2A6C', '#F5A623', '#0e7490', '#7c3aed', '#dc2626', '#16a34a', '#be185d'];
 
+// Fases del ciclo del proceso (un proceso puede estar en varias).
+const FASES = [
+  { id: 'pre', label: 'Pre', desc: 'Antes / preparación', color: '#7c3aed' },
+  { id: 'ongoing', label: 'Ongoing', desc: 'Durante / ejecución', color: '#0e7490' },
+  { id: 'post', label: 'Post', desc: 'Después / cierre', color: '#be185d' },
+];
+const FASE_BY_ID = Object.fromEntries(FASES.map(f => [f.id, f]));
+
+// Nombre completo de un miembro del equipo.
+const nombreCompleto = (c) => `${c.nombre || ''} ${c.apellidos || ''}`.trim();
+
+// Selector de responsable a partir del equipo dado de alta (tabla consultores).
+function SelectResponsable({ equipo, value, onChange, className = '' }) {
+  return (
+    <select value={value || ''} onChange={e => onChange(e.target.value)}
+      className={`rounded border border-navy-100 px-2 py-1 text-[11px] ${className}`}>
+      <option value="">— Responsable —</option>
+      {equipo.map(c => {
+        const n = nombreCompleto(c);
+        return <option key={c.id} value={n}>{n}{c.tipo_equipo && c.tipo_equipo !== 'consultor' ? ` (${c.tipo_equipo})` : ''}</option>;
+      })}
+    </select>
+  );
+}
+
 export default function ProcesosInternos() {
   const { role, demo } = useAuth();
   const puedeEditar = ['superadmin', 'admin'].includes(role);
@@ -18,6 +43,7 @@ export default function ProcesosInternos() {
   const [procs, setProcs] = useState([]);
   const [subs, setSubs] = useState([]);
   const [riesgos, setRiesgos] = useState([]);
+  const [equipo, setEquipo] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [msg, setMsg] = useState(null);
   const [vista, setVista] = useState('mapa');
@@ -36,9 +62,11 @@ export default function ProcesosInternos() {
         listTable('procesos_subprocesos').catch(() => []),
         listTable('procesos_riesgos').catch(() => []),
       ]);
+      const eq = await listTable('consultores').catch(() => []);
       b.sort((x, y) => (x.orden ?? 100) - (y.orden ?? 100));
       p.sort((x, y) => (x.orden ?? 100) - (y.orden ?? 100));
       setBandas(b); setProcs(p); setSubs(s || []); setRiesgos(r || []);
+      setEquipo((eq || []).filter(c => c.activo !== false).sort((a, b2) => `${a.nombre} ${a.apellidos || ''}`.localeCompare(`${b2.nombre} ${b2.apellidos || ''}`)));
     } catch { setBandas([]); setProcs([]); setSubs([]); setRiesgos([]); }
     finally { setCargando(false); }
   }, []);
@@ -87,10 +115,10 @@ export default function ProcesosInternos() {
       const orden = procsDe(banda.id).reduce((mx, p) => Math.max(mx, p.orden ?? 0), 0) + 10;
       const codigo = siguienteCodigoProceso(banda);
       const nuevo = await insertRow('procesos_internos', {
-        nombre: 'Nuevo proceso', banda_id: banda.id, codigo, activo: true, orden, color: banda.color,
+        nombre: 'Nuevo proceso', banda_id: banda.id, codigo, activo: true, orden, color: banda.color, fases: ['ongoing'],
       });
       await cargar();
-      if (nuevo?.id) setEditProc({ id: nuevo.id, nombre: 'Nuevo proceso', codigo, responsable: '', descripcion: '', banda_id: banda.id });
+      if (nuevo?.id) setEditProc({ id: nuevo.id, nombre: 'Nuevo proceso', codigo, responsable: '', descripcion: '', banda_id: banda.id, fases: ['ongoing'] });
     } catch (e) { setMsg({ err: true, t: 'No se pudo crear el proceso: ' + (e.message || '') }); }
   }
   async function guardarProceso() {
@@ -98,6 +126,7 @@ export default function ProcesosInternos() {
     try {
       await updateRow('procesos_internos', e.id, {
         nombre: e.nombre, responsable: e.responsable || null, descripcion: e.descripcion || null, banda_id: e.banda_id,
+        fases: (e.fases && e.fases.length) ? e.fases : ['ongoing'],
       });
       setEditProc(null); cargar();
     } catch (er) { setMsg({ err: true, t: 'No se pudo guardar: ' + (er.message || '') }); }
@@ -203,10 +232,10 @@ export default function ProcesosInternos() {
                 {procsDe(banda.id).map(p => (
                   <ProcesoCard key={p.id} p={p} banda={banda} puedeEditar={puedeEditar}
                     editando={editProc?.id === p.id} editProc={editProc} setEditProc={setEditProc}
-                    onEdit={() => setEditProc({ id: p.id, nombre: p.nombre || '', codigo: p.codigo, responsable: p.responsable || '', descripcion: p.descripcion || '', banda_id: p.banda_id })}
+                    onEdit={() => setEditProc({ id: p.id, nombre: p.nombre || '', codigo: p.codigo, responsable: p.responsable || '', descripcion: p.descripcion || '', banda_id: p.banda_id, fases: p.fases || ['ongoing'] })}
                     onGuardar={guardarProceso} onCancelar={() => setEditProc(null)} onEliminar={() => eliminarProceso(p)}
                     onDragStart={() => setDragId(p.id)} onDragEnd={() => { setDragId(null); setDropB(null); }}
-                    bandas={bandas}
+                    bandas={bandas} equipo={equipo}
                     subN={subsDe(p.id).length}
                     onAbrirPanel={() => setPanelSub(panelSub === p.id ? null : p.id)}
                     panelAbierto={panelSub === p.id} />
@@ -216,7 +245,7 @@ export default function ProcesosInternos() {
               {/* Panel de subprocesos + riesgos del proceso abierto en esta banda */}
               {panelSub && procsDe(banda.id).some(p => p.id === panelSub) && (
                 <PanelSubprocesos
-                  proc={procs.find(p => p.id === panelSub)} banda={banda} puedeEditar={puedeEditar}
+                  proc={procs.find(p => p.id === panelSub)} banda={banda} puedeEditar={puedeEditar} equipo={equipo}
                   subs={subsDe(panelSub)} riesgosDe={riesgosDe} codigoSub={codigoSub}
                   onAddSub={() => addSub(procs.find(p => p.id === panelSub))} onGuardarSub={guardarSub} onDelSub={delSub}
                   onAddRiesgo={addRiesgo} onGuardarRiesgo={guardarRiesgo} onDelRiesgo={delRiesgo} />
@@ -254,7 +283,7 @@ function BandaEditor({ banda, onGuardar, onCancelar }) {
 }
 
 // ---------- Tarjeta de proceso ----------
-function ProcesoCard({ p, banda, puedeEditar, editando, editProc, setEditProc, onEdit, onGuardar, onCancelar, onEliminar, onDragStart, onDragEnd, bandas, subN, onAbrirPanel, panelAbierto }) {
+function ProcesoCard({ p, banda, puedeEditar, editando, editProc, setEditProc, onEdit, onGuardar, onCancelar, onEliminar, onDragStart, onDragEnd, bandas, equipo, subN, onAbrirPanel, panelAbierto }) {
   if (editando) {
     return (
       <div className="w-full max-w-md rounded-xl border-2 bg-white p-3" style={{ borderColor: banda.color }}>
@@ -263,11 +292,26 @@ function ProcesoCard({ p, banda, puedeEditar, editando, editProc, setEditProc, o
           <label className="text-[10px] font-bold uppercase text-navy-400">Nombre
             <input className="input !mt-1 !py-1.5" value={editProc.nombre} onChange={e => setEditProc({ ...editProc, nombre: e.target.value })} /></label>
           <label className="text-[10px] font-bold uppercase text-navy-400">Responsable
-            <input className="input !mt-1 !py-1.5" value={editProc.responsable} onChange={e => setEditProc({ ...editProc, responsable: e.target.value })} /></label>
+            <SelectResponsable equipo={equipo} value={editProc.responsable} onChange={v => setEditProc({ ...editProc, responsable: v })} className="!mt-1 w-full !text-[12px] !py-1.5" /></label>
           <label className="text-[10px] font-bold uppercase text-navy-400">Banda
             <select className="input !mt-1 !py-1.5" value={editProc.banda_id} onChange={e => setEditProc({ ...editProc, banda_id: e.target.value })}>
               {bandas.map(b => <option key={b.id} value={b.id}>{b.titulo}</option>)}
             </select></label>
+          <div>
+            <span className="text-[10px] font-bold uppercase text-navy-400">Fases del proceso</span>
+            <div className="mt-1 flex gap-1.5">
+              {FASES.map(f => {
+                const on = (editProc.fases || []).includes(f.id);
+                return (
+                  <button key={f.id} type="button"
+                    onClick={() => setEditProc({ ...editProc, fases: on ? (editProc.fases || []).filter(x => x !== f.id) : [...(editProc.fases || []), f.id] })}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold transition ${on ? 'text-white' : 'text-navy-400'}`}
+                    style={on ? { background: f.color, borderColor: f.color } : { borderColor: '#cbd5e1' }}
+                    title={f.desc}>{f.label}</button>
+                );
+              })}
+            </div>
+          </div>
           <label className="text-[10px] font-bold uppercase text-navy-400">Descripción
             <textarea className="input !mt-1 !py-1.5" rows={2} value={editProc.descripcion} onChange={e => setEditProc({ ...editProc, descripcion: e.target.value })} /></label>
           <div className="flex justify-end gap-2">
@@ -288,7 +332,15 @@ function ProcesoCard({ p, banda, puedeEditar, editando, editProc, setEditProc, o
           <button onClick={onEliminar} title="Eliminar" className="text-[11px] text-navy-300 hover:text-red-600">✕</button>
         </div>
       )}
-      <div className="text-[9.5px] font-extrabold tracking-wide" style={{ color: banda.color }}>{p.codigo}</div>
+      <div className="flex items-center justify-between gap-1">
+        <div className="text-[9.5px] font-extrabold tracking-wide" style={{ color: banda.color }}>{p.codigo}</div>
+        <div className="flex gap-1">
+          {(p.fases || ['ongoing']).map(fid => {
+            const f = FASE_BY_ID[fid]; if (!f) return null;
+            return <span key={fid} className="rounded px-1 py-0.5 text-[8px] font-extrabold uppercase text-white" style={{ background: f.color }} title={f.desc}>{f.label}</span>;
+          })}
+        </div>
+      </div>
       <div className="pr-8 text-[13px] font-extrabold leading-tight text-navy-900">{p.nombre}</div>
       {p.responsable && <div className="mt-1 text-[10.5px] font-bold" style={{ color: banda.color }}>{p.responsable}</div>}
       {p.descripcion && <div className="mt-1.5 border-t border-dashed border-navy-100 pt-1.5 text-[10.5px] leading-snug text-navy-400">{p.descripcion}</div>}
@@ -300,7 +352,7 @@ function ProcesoCard({ p, banda, puedeEditar, editando, editProc, setEditProc, o
 }
 
 // ---------- Panel de subprocesos con sus riesgos ----------
-function PanelSubprocesos({ proc, banda, puedeEditar, subs, riesgosDe, onAddSub, onGuardarSub, onDelSub, onAddRiesgo, onGuardarRiesgo, onDelRiesgo }) {
+function PanelSubprocesos({ proc, banda, puedeEditar, equipo, subs, riesgosDe, onAddSub, onGuardarSub, onDelSub, onAddRiesgo, onGuardarRiesgo, onDelRiesgo }) {
   return (
     <div className="mt-4 rounded-xl border border-navy-100 bg-navy-50/40 p-4">
       <div className="mb-3 flex items-center gap-2">
@@ -319,8 +371,7 @@ function PanelSubprocesos({ proc, banda, puedeEditar, subs, riesgosDe, onAddSub,
                   className="flex-1 rounded border border-navy-100 px-2 py-1 text-[12px] font-semibold" placeholder="Nombre del subproceso" />
               ) : <span className="flex-1 text-[12px] font-semibold text-navy-800">{s.nombre}</span>}
               {puedeEditar && <>
-                <input defaultValue={s.responsable || ''} onBlur={e => e.target.value !== (s.responsable || '') && onGuardarSub(s.id, { responsable: e.target.value })}
-                  className="w-28 rounded border border-navy-100 px-2 py-1 text-[11px]" placeholder="Responsable" />
+                <SelectResponsable equipo={equipo} value={s.responsable || ''} onChange={v => onGuardarSub(s.id, { responsable: v })} className="w-32" />
                 <button onClick={() => onDelSub(s.id)} className="text-[11px] text-navy-300 hover:text-red-600">✕</button>
               </>}
             </div>
@@ -390,6 +441,10 @@ function ListaProcesos({ bandas, procs, subs, riesgos, subsDe, riesgosDe }) {
             <div className="flex items-center gap-2">
               <span className="rounded px-2 py-0.5 text-[10px] font-extrabold text-white" style={{ background: b?.color || '#0A2A6C' }}>{p.codigo}</span>
               <h3 className="text-base font-extrabold text-navy-900">{p.nombre}</h3>
+              {(p.fases || ['ongoing']).map(fid => {
+                const f = FASE_BY_ID[fid]; if (!f) return null;
+                return <span key={fid} className="rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-white" style={{ background: f.color }}>{f.label}</span>;
+              })}
               {b && <span className="text-xs font-bold text-navy-400">{b.titulo}</span>}
               {p.responsable && <span className="ml-auto text-xs font-bold text-navy-500">{p.responsable}</span>}
             </div>

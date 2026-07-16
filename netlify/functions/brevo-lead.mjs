@@ -30,7 +30,7 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
 
-  const { email, nombre = '', empresa = '', telefono = '', cif = '', cargo = '', numero_oferta = '', comercial = 'Alejandro', normas = [], modelo = '', precio = 0, tipo = 'mes', meses, tiene9001 = false, consent } = body;
+  const { email, nombre = '', empresa = '', telefono = '', cif = '', cargo = '', numero_oferta = '', comercial = 'Alejandro', normas = [], modelo = '', precio = 0, tipo = 'mes', meses, tiene9001 = false, mensaje = '', origen = '', consent } = body;
   if (!email || !consent) return Response.json({ ok: false, error: 'Email y consentimiento RGPD obligatorios' }, { status: 400 });
 
   const attributes = {
@@ -56,6 +56,9 @@ export default async (req) => {
   const nombresNormas = normas.map((id) => NORMA_NOMBRE[id] || id).join(' + ');
   const sufijoPrecio = tipo === 'mes' ? ' €/mes' : (tipo === 'fraccionado' ? ' € (proyecto)' : ' € (único)');
   attributes.REQUERIMIENTO = `${nombresNormas || '—'} · Modelo ${modelo} · ${precio}${sufijoPrecio}`;
+  // Datos del formulario del blog (si vienen)
+  if (mensaje) attributes.MENSAJE = mensaje;
+  if (origen) attributes.ORIGEN = origen;
 
   // Lista de destino: si hay lista de doble opt-in (temporal), el contacto entra ahí
   // y la automatización de Brevo lo moverá a la final tras confirmar. Si no, lista final directa.

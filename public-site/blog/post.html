@@ -41,6 +41,21 @@ article h1{font-size:34px;line-height:1.2;font-weight:800;color:var(--navy-900);
 .cta{margin:34px 0 0;background:linear-gradient(160deg,var(--navy-900),var(--navy-800));color:#fff;border-radius:18px;padding:28px}
 .cta p{margin:0 0 16px;font-size:17px;font-weight:600}
 .cta .btn{font-size:15px}
+.form-contacto{margin:34px 0 0;border:1px solid #e6e9f0;border-radius:18px;padding:26px;background:#f8fafc}
+.form-contacto h3{margin:0 0 4px;font-size:20px;font-weight:800;color:var(--navy-900)}
+.form-contacto .sub{margin:0 0 16px;font-size:14px;color:#64748b}
+.form-contacto .fila{display:flex;gap:10px;margin-bottom:10px}
+.form-contacto input,.form-contacto textarea{width:100%;border:1px solid #d7deea;border-radius:10px;padding:11px 13px;font-size:14px;font-family:inherit;box-sizing:border-box}
+.form-contacto textarea{margin-bottom:10px;resize:vertical}
+.form-contacto input:focus,.form-contacto textarea:focus{outline:none;border-color:var(--orange,#F5A623)}
+.form-contacto .consent{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:#475569;margin-bottom:14px;line-height:1.5}
+.form-contacto .consent input{width:auto;margin-top:2px}
+.form-contacto .btn-enviar{background:var(--orange,#F5A623);color:#061B45;font-weight:800;font-size:15px;border:0;border-radius:12px;padding:13px 28px;cursor:pointer}
+.form-contacto .btn-enviar:disabled{opacity:.6;cursor:default}
+.form-contacto .estado{margin-top:12px;font-size:13.5px;font-weight:600}
+.form-contacto .estado.ok{color:#166534}
+.form-contacto .estado.err{color:#dc2626}
+@media(max-width:560px){.form-contacto .fila{flex-direction:column;gap:10px}}
 .loading{color:var(--muted);padding:60px 0;text-align:center}
 .foot{background:var(--navy-900);color:#9db4e0;font-size:13px;text-align:center;padding:26px 0;margin-top:20px}
 @media(max-width:560px){article h1{font-size:26px}}
@@ -105,9 +120,71 @@ async function cargar(){
     '<div class="fecha">'+fechaES(post.fecha_publicacion)+' · '+esc(post.autor||'TuConsultor')+'</div>'+
     '<h1>'+esc(post.titulo)+'</h1>'+
     '<div class="contenido">'+(post.contenido_html||'')+'</div>'+
-    ctaHtml(post.cta);
+    ctaHtml(post.cta)+
+    formularioHtml();
+  montarFormulario();
+}
+function formularioHtml(){
+  return ''+
+  '<div class="form-contacto" id="form-contacto">'+
+    '<h3>¿Hablamos de tu proyecto?</h3>'+
+    '<p class="sub">Déjanos tus datos y te contactamos sin compromiso.</p>'+
+    '<div class="fila">'+
+      '<input id="fc-nombre" type="text" placeholder="Nombre" autocomplete="name">'+
+      '<input id="fc-empresa" type="text" placeholder="Empresa" autocomplete="organization">'+
+    '</div>'+
+    '<div class="fila">'+
+      '<input id="fc-email" type="email" placeholder="Email*" autocomplete="email">'+
+      '<input id="fc-tel" type="tel" placeholder="Teléfono" autocomplete="tel">'+
+    '</div>'+
+    '<textarea id="fc-msg" rows="3" placeholder="¿En qué podemos ayudarte?"></textarea>'+
+    '<label class="consent"><input type="checkbox" id="fc-consent"> '+
+      'He leído y acepto la <a href="/legal/privacidad.html" target="_blank">Política de Privacidad</a> '+
+      'y el tratamiento de mis datos para atender mi consulta y recibir comunicaciones.</label>'+
+    '<button type="button" id="fc-enviar" class="btn-enviar">Enviar</button>'+
+    '<div id="fc-estado" class="estado"></div>'+
+  '</div>';
+}
+function montarFormulario(){
+  var btn = document.getElementById('fc-enviar');
+  if(!btn) return;
+  btn.addEventListener('click', async function(){
+    var estado = document.getElementById('fc-estado');
+    var email = (document.getElementById('fc-email').value||'').trim();
+    var consent = document.getElementById('fc-consent').checked;
+    if(!email){ estado.className='estado err'; estado.textContent='El email es obligatorio.'; return; }
+    if(!consent){ estado.className='estado err'; estado.textContent='Debes aceptar la política de privacidad.'; return; }
+    btn.disabled = true; estado.className='estado'; estado.textContent='Enviando…';
+    try{
+      var resp = await fetch('/.netlify/functions/brevo-lead', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          email: email,
+          nombre: (document.getElementById('fc-nombre').value||'').trim(),
+          empresa: (document.getElementById('fc-empresa').value||'').trim(),
+          telefono: (document.getElementById('fc-tel').value||'').trim(),
+          mensaje: (document.getElementById('fc-msg').value||'').trim(),
+          origen: 'blog',
+          consent: true
+        })
+      });
+      var j = await resp.json().catch(function(){ return null; });
+      if(j && j.ok){
+        estado.className='estado ok';
+        estado.innerHTML='✅ ¡Gracias! Te hemos enviado un correo para <strong>confirmar tu suscripción</strong>. Revisa tu bandeja (y el spam, por si acaso).';
+        document.getElementById('form-contacto').querySelectorAll('input,textarea').forEach(function(el){ el.value=''; if(el.type==='checkbox') el.checked=false; });
+      } else {
+        estado.className='estado err';
+        estado.textContent = (j && j.error) ? j.error : 'No se pudo enviar. Inténtalo de nuevo o escríbenos a hola@tuconsultor.com.';
+      }
+    }catch(e){
+      estado.className='estado err'; estado.textContent='Error de conexión. Escríbenos a hola@tuconsultor.com.';
+    }
+    btn.disabled = false;
+  });
 }
 cargar();
 </script>
+  <script src="../whatsapp-flotante.js" defer></script>
 </body>
 </html>
