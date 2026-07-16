@@ -69,12 +69,41 @@ export default function Contactos() {
   }
 
   // Sincronizar a Brevo SOLO si tiene email y consentimiento
+  // Sincroniza en bloque los contactos con email Y consentimiento (uno a uno).
+  async function sincronizarTodos() {
+    const elegibles = contactos.filter(c => c.email && c.consentimiento_marketing);
+    if (elegibles.length === 0) { setMsg({ err: true, t: 'No hay contactos con email y consentimiento para enviar.' }); return; }
+    if (!window.confirm(`Se enviarán ${elegibles.length} contacto(s) a Brevo (los que tienen email y consentimiento). ¿Continuar?`)) return;
+    setSync(true); setMsg(null);
+    let ok = 0, err = 0;
+    for (const c of elegibles) {
+      try {
+        const emps = empresasDe(c.id);
+        const ppal = (emps.find(x => x.vinc.principal) || emps[0])?.e;
+        const r = await brevoFn({ action: 'sincronizar_cliente', cliente: {
+          email: c.email, contacto: c.nombre, contacto_apellidos: c.apellidos,
+          empresa: ppal?.nombre || '', cif: ppal?.cif || '',
+        } });
+        if (r?.ok) { ok++; await updateRow('contactos', c.id, { brevo_sincronizado_en: new Date().toISOString() }); }
+        else err++;
+      } catch { err++; }
+    }
+    setMsg({ t: `✓ ${ok} contacto(s) enviados a Brevo${err ? ` · ${err} con error` : ''}. Recibirán el email de confirmación (doble opt-in).` });
+    setSync(false); cargar();
+  }
+
   async function sincronizarBrevo(c) {
     if (!c.email) { setMsg({ err: true, t: 'El contacto no tiene email.' }); return; }
     if (!c.consentimiento_marketing) { setMsg({ err: true, t: 'El contacto no ha dado consentimiento de marketing (RGPD).' }); return; }
     setSync(true); setMsg(null);
     try {
-      const r = await brevoFn({ action: 'sincronizar_cliente', cliente: { email: c.email, contacto: c.nombre, contacto_apellidos: c.apellidos } });
+      // Empresa principal (o la primera) del contacto, para segmentar en Brevo.
+      const emps = empresasDe(c.id);
+      const ppal = (emps.find(x => x.vinc.principal) || emps[0])?.e;
+      const r = await brevoFn({ action: 'sincronizar_cliente', cliente: {
+        email: c.email, contacto: c.nombre, contacto_apellidos: c.apellidos,
+        empresa: ppal?.nombre || '', cif: ppal?.cif || '',
+      } });
       if (r?.ok) {
         await updateRow('contactos', c.id, { brevo_sincronizado_en: new Date().toISOString(), brevo_id: r.id || c.brevo_id });
         setMsg({ t: '✓ Enviado a Brevo (lista de doble opt-in). Recibirá el email de confirmación.' }); cargar();
@@ -91,7 +120,10 @@ export default function Contactos() {
           <h1 className="mt-1 text-2xl font-extrabold tracking-tight">Contactos</h1>
           <p className="mt-1 text-sm font-medium text-navy-400">Personas del CRM. Un contacto puede pertenecer a varias empresas. Solo se envían a Brevo los que tienen email y consentimiento.</p>
         </div>
-        {puedeEditar && <button onClick={() => { setForm({ ...VACIO }); setSel(null); }} className="btn-orange">+ Nuevo contacto</button>}
+        {puedeEditar && <div className="flex gap-2">
+          <button onClick={sincronizarTodos} disabled={sync} className="rounded-xl border border-navy-200 px-4 py-2 text-sm font-bold text-navy-600 hover:bg-navy-50 disabled:opacity-40" title="Enviar a Brevo todos los contactos con email y consentimiento">{sync ? 'Enviando…' : '✉ Sincronizar todos'}</button>
+          <button onClick={() => { setForm({ ...VACIO }); setSel(null); }} className="btn-orange">+ Nuevo contacto</button>
+        </div>}
       </div>
 
       {demo && <div className="rounded-xl bg-brand-orange/10 p-3 text-xs font-semibold text-brand-orangeDark">Modo demo: los cambios no se guardan.</div>}

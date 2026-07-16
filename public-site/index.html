@@ -365,7 +365,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&family=Noto+Sans+Arabic:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&family=Rubik:wght@400;500;600;700;800;900&family=Noto+Sans+Arabic:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
 <style>
   :root {
     --navy-900: #061B45;
@@ -383,6 +383,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
+  /* Rubik para titulares y marca; Manrope para el resto (cuerpo). */
+  h1, h2, h3, .rubik { font-family: 'Rubik', 'Manrope', system-ui, sans-serif; }
+  .btn-orbita { display:inline-flex; align-items:center; gap:7px; font-family:'Rubik','Manrope',sans-serif; font-weight:600; }
+  .btn-orbita .orbita-ic { height:20px; width:auto; display:block; }
   body {
     font-family: 'Manrope', system-ui, sans-serif;
     background: var(--white);
@@ -1212,7 +1216,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <button data-lang="en" aria-pressed="false" aria-label="English">EN</button>
         <button data-lang="ar" aria-pressed="false" aria-label="العربية" lang="ar">عربي</button>
       </div>
-      <a href="/app/acceso" class="btn btn-ghost" style="margin-right:8px" data-i18n="nav.access" data-evt="click_acceso" data-evt-loc="nav">Acceso</a>
+      <a href="/app/acceso" class="btn btn-ghost btn-orbita" style="margin-right:8px" data-i18n="nav.access" data-evt="click_acceso" data-evt-loc="nav"><img src="/orbita-icono.png" alt="" class="orbita-ic" />Órbita</a>
       <a href="/app/calculadora" class="btn btn-orange" data-i18n="nav.cta" data-evt="click_calculadora" data-evt-loc="nav">Calcula tu precio</a>
     </div>
   </div>
@@ -1872,7 +1876,7 @@ const i18n = {
     'nav.blog': 'Blog',
     'nav.cta': 'Calcula tu precio',
     'nav.calc': 'Calculadora',
-    'nav.access': 'Acceso',
+    'nav.access': 'Órbita',
 
     'hero.tag': 'El Spotify de la consultoría',
     'hero.h1.1': 'Consultoría ISO',
@@ -2258,7 +2262,7 @@ const i18n = {
     'nav.blog': 'المدونة',
     'nav.cta': 'احسب سعرك',
     'nav.calc': 'الحاسبة',
-    'nav.access': 'تسجيل الدخول',
+    'nav.access': 'Órbita',
 
     'hero.tag': 'سبوتيفاي الاستشارات',
     'hero.h1.1': 'الاستشارات،',

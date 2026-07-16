@@ -114,7 +114,8 @@ export default function Acceso() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-extrabold text-navy-900">Acceso a Consultify</h1>
+        <img src="/app/orbita-horizontal.png" alt="Órbita" className="mx-auto mb-3 h-14 w-auto" />
+        <h1 className="font-orbita text-2xl font-extrabold text-navy-900">El ecosistema digital de TuConsultor</h1>
         <p className="mt-1 text-sm font-medium text-navy-400">Elige tu tipo de acceso.</p>
         {demo && (
           <p className="mx-auto mt-3 max-w-xl rounded-xl bg-brand-orange/10 p-3 text-xs font-semibold text-brand-orangeDark">

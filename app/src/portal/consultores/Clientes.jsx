@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listTable, insertRow, updateRow, deleteRow, siguienteCodigoCliente, holdedFn, brevoFn } from '../../lib/data.js';
+import { listTable, insertRow, updateRow, deleteRow, siguienteCodigoCliente, holdedFn } from '../../lib/data.js';
 import { NORMAS, NORMA_BY_ID } from '../../lib/calcEngine.js';
 import { useAuth } from '../../lib/auth.jsx';
 import SemaforoCobros from './SemaforoCobros.jsx';
@@ -24,7 +24,6 @@ export default function Clientes() {
   const [holdedMsg, setHoldedMsg] = useState(null);
   const [holdedBusy, setHoldedBusy] = useState(false);
   const [cobrosBusy, setCobrosBusy] = useState(false);
-  const [brevoBusy, setBrevoBusy] = useState(false);
   const [busca, setBusca] = useState('');
   const [porPagina, setPorPagina] = useState('25');
   const [pag, setPag] = useState(0);
@@ -102,12 +101,9 @@ export default function Clientes() {
         if (yaExiste) { await updateRow('clientes', yaExiste.id, datos); setSel(yaExiste.id); }
         else { const nuevo = await insertRow('clientes', datos); if (nuevo?.id) setSel(nuevo.id); }
       }
-      // Sincronización automática con Brevo (no bloquea el guardado si falla).
-      if (datos.email) {
-        brevoFn({ action: 'sincronizar_cliente', cliente: datos })
-          .then(r => { if (!r.ok) console.warn('Brevo:', r.error); })
-          .catch(() => {});
-      }
+      // NOTA: la sincronización con Brevo ya NO se hace desde Clientes.
+      // Brevo se alimenta EXCLUSIVAMENTE desde la lista de Contactos individuales
+      // (CRM → Contactos), y solo para quienes tienen email + consentimiento RGPD.
       setForm(null); cargar();
     } catch (err) { setMsg(err.message); }
   }
@@ -152,33 +148,6 @@ export default function Clientes() {
     } catch (e) {
       setMsg(`No se pudo eliminar: ${e?.message || e}. Puede que tenga proyectos u ofertas asociados.`);
     }
-  }
-
-  async function diagnosticarBrevo() {
-    setBrevoBusy(true); setMsg(null);
-    try {
-      const r = await brevoFn({ action: 'diagnostico' });
-      setMsg('Diagnóstico Brevo: ' + JSON.stringify(r.diagnostico || r));
-    } catch { setMsg('Error en diagnóstico de Brevo.'); }
-    finally { setBrevoBusy(false); }
-  }
-
-  async function sincronizarBrevo() {
-    setBrevoBusy(true); setMsg(null);
-    try {
-      const r = await brevoFn({ action: 'sincronizar_todos' });
-      if (r.ok) {
-        let t = `Brevo: ${r.subidos} cliente(s) sincronizados`;
-        if (r.sin_email) t += ` · ${r.sin_email} sin email (no se pueden enviar)`;
-        if (r.errores) t += ` · ${r.errores} con error`;
-        if (r.errores && r.primer_error) t += ` — causa: ${r.primer_error}`;
-        if (r.lista_encontrada) t += ` · en lista "${r.lista_nombre}" (#${r.lista_id})`;
-        else t += ` · ⚠️ lista "${r.lista_nombre}" no encontrada`;
-        if (r.primer_error) t += ` · error Brevo: ${r.primer_error}`;
-        setMsg(t);
-      } else setMsg(r.error || 'No se pudo sincronizar con Brevo.');
-    } catch { setMsg('Error al sincronizar con Brevo.'); }
-    finally { setBrevoBusy(false); }
   }
 
   async function buscarEnHolded() {
@@ -319,8 +288,6 @@ export default function Clientes() {
           <div className="flex gap-2">
             <button onClick={nuevoCliente} className="btn-orange !px-4 !py-2">+ Nuevo cliente</button>
             <button onClick={actualizarCobros} disabled={cobrosBusy} className="rounded-xl border border-navy-200 !px-4 !py-2 text-sm font-bold text-navy-600 hover:bg-navy-50 disabled:opacity-40" title="Consultar Holded y actualizar el semáforo de facturas de todos los clientes">{cobrosBusy ? 'Actualizando…' : '🔄 Actualizar cobros'}</button>
-            <button onClick={sincronizarBrevo} disabled={brevoBusy} className="rounded-xl border border-navy-200 !px-4 !py-2 text-sm font-bold text-navy-600 hover:bg-navy-50 disabled:opacity-40" title="Enviar todos los clientes con email a Brevo">{brevoBusy ? 'Sincronizando…' : '✉ Sincronizar con Brevo'}</button>
-            <button onClick={diagnosticarBrevo} disabled={brevoBusy} className="rounded-xl border border-dashed border-navy-200 !px-3 !py-2 text-xs font-bold text-navy-400 hover:bg-navy-50 disabled:opacity-40" title="Diagnóstico de la conexión con Brevo">🔍 Brevo</button>
             {cliente && <button onClick={() => setForm({ ...VACIO, ...cliente })} className="btn-ghost !px-4 !py-2">✎ Editar cliente</button>}
             {cliente && <button onClick={() => navigate('/consultores/planificador', { state: { clientePrefill: cliente } })} className="btn-orange !px-4 !py-2" title="Crear una oferta con los datos de este cliente">📄 Lanzar oferta</button>}
             {cliente && puedeBorrar && <button onClick={() => borrarCliente(cliente)} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-500 hover:bg-red-50" title="Eliminar cliente (solo administradores)">🗑 Eliminar</button>}

@@ -30,11 +30,16 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: 'JSON inválido' }, { status: 400 }); }
 
-  const { email, nombre = '', empresa = '', telefono = '', cif = '', cargo = '', numero_oferta = '', comercial = 'Alejandro', normas = [], modelo = '', precio = 0, tipo = 'mes', meses, tiene9001 = false, mensaje = '', origen = '', consent } = body;
-  if (!email || !consent) return Response.json({ ok: false, error: 'Email y consentimiento RGPD obligatorios' }, { status: 400 });
+  const { email, nombre = '', apellidos = '', empresa = '', telefono = '', cif = '', cargo = '', numero_oferta = '', comercial = 'Alejandro', normas = [], modelo = '', precio = 0, tipo = 'mes', meses, tiene9001 = false, mensaje = '', origen = '', consent } = body;
+  // Email siempre obligatorio. El consentimiento es obligatorio para MARKETING,
+  // pero un contacto de WhatsApp puede registrarse sin consentimiento (solo como
+  // contacto operativo, sin entrar en la lista de doble opt-in).
+  if (!email) return Response.json({ ok: false, error: 'Email obligatorio' }, { status: 400 });
+  if (!consent && origen !== 'whatsapp') return Response.json({ ok: false, error: 'Email y consentimiento RGPD obligatorios' }, { status: 400 });
 
   const attributes = {
     NOMBRE: nombre,
+    APELLIDOS: apellidos || undefined,
     EMPRESA: empresa,
     SMS: telefono || undefined,
     CIF: cif || undefined,
@@ -62,15 +67,20 @@ export default async (req) => {
 
   // Lista de destino: si hay lista de doble opt-in (temporal), el contacto entra ahí
   // y la automatización de Brevo lo moverá a la final tras confirmar. Si no, lista final directa.
+  // IMPORTANTE: solo se añade a la lista de marketing si dio CONSENTIMIENTO.
+  // Sin consentimiento (posible en WhatsApp) el contacto se registra pero NO entra en ninguna lista.
   const listaDestino = process.env.BREVO_LIST_DOI_ID || process.env.BREVO_LIST_ID;
   const usaDOI = !!process.env.BREVO_LIST_DOI_ID;
-  attributes.DOI_PENDIENTE = usaDOI; // marca útil para segmentar pendientes de confirmar
+  const entraEnLista = !!consent && !!listaDestino;
+  attributes.DOI_PENDIENTE = entraEnLista && usaDOI;
+  if (origen) attributes.ORIGEN = origen;
+  attributes.CONSENT_MARKETING = !!consent;
 
   const payload = {
     email,
     attributes,
     updateEnabled: true,
-    ...(listaDestino ? { listIds: [Number(listaDestino)] } : {}),
+    ...(entraEnLista ? { listIds: [Number(listaDestino)] } : {}),
   };
 
   const r = await fetch('https://api.brevo.com/v3/contacts', {
